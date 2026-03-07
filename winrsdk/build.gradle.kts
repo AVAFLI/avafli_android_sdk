@@ -1,0 +1,128 @@
+plugins {
+    alias(libs.plugins.android.library)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
+    `maven-publish`
+}
+
+android {
+    namespace = "com.avafli.winrsdk"
+    compileSdk = 35
+
+    defaultConfig {
+        minSdk = 26
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        consumerProguardFiles("consumer-rules.pro")
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
+    buildFeatures {
+        compose = true
+    }
+
+    publishing {
+        singleVariant("release") {
+            withSourcesJar()
+            withJavadocJar()
+        }
+    }
+}
+
+dependencies {
+    // Core
+    implementation(libs.core.ktx)
+    implementation(libs.lifecycle.runtime.ktx)
+    implementation(libs.lifecycle.viewmodel.compose)
+    implementation(libs.lifecycle.runtime.compose)
+
+    // Compose
+    implementation(platform(libs.compose.bom))
+    implementation(libs.compose.ui)
+    implementation(libs.compose.ui.graphics)
+    implementation(libs.compose.ui.tooling.preview)
+    implementation(libs.compose.material3)
+    implementation(libs.compose.animation)
+    implementation(libs.activity.compose)
+    debugImplementation(libs.compose.ui.tooling)
+
+    // Networking
+    implementation(libs.okhttp)
+    implementation(libs.kotlinx.serialization.json)
+
+    // Coroutines
+    implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.kotlinx.coroutines.android)
+
+    // Secure Storage
+    implementation(libs.security.crypto)
+
+    // Optional: Ad ID
+    compileOnly(libs.play.services.ads.identifier)
+
+    // Optional: FCM
+    compileOnly(libs.firebase.messaging)
+
+    // Testing
+    testImplementation(libs.junit)
+    testImplementation(libs.mockk)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.okhttp.mockwebserver)
+}
+
+afterEvaluate {
+    publishing {
+        publications {
+            create<MavenPublication>("release") {
+                from(components["release"])
+                groupId = "com.avafli"
+                artifactId = "winrsdk"
+                version = "1.0.0"
+
+                pom {
+                    name.set("WINR SDK")
+                    description.set("Sweepstakes & prizing SDK for Android app publishers")
+                    url.set("https://github.com/avafli/winr-android-sdk")
+
+                    licenses {
+                        license {
+                            name.set("MIT License")
+                            url.set("https://opensource.org/licenses/MIT")
+                        }
+                    }
+
+                    developers {
+                        developer {
+                            id.set("avafli")
+                            name.set("Avafli")
+                        }
+                    }
+
+                    scm {
+                        connection.set("scm:git:github.com/avafli/winr-android-sdk.git")
+                        developerConnection.set("scm:git:ssh://github.com/avafli/winr-android-sdk.git")
+                        url.set("https://github.com/avafli/winr-android-sdk/tree/main")
+                    }
+                }
+            }
+        }
+    }
+}
