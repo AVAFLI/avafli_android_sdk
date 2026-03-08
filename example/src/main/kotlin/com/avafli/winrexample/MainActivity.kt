@@ -36,13 +36,7 @@ class MainActivity : ComponentActivity() {
         )
 
         // Optional: Set user info
-        WINR.setUser(
-            WINRUser(
-                id = "user-123",
-                firstName = "John",
-                email = "john@example.com"
-            )
-        )
+        WINR.setUser(WINRUser(id = "user-123"))
 
         setContent {
             ExampleApp()

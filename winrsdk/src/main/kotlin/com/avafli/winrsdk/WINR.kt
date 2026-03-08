@@ -98,7 +98,7 @@ object WINR {
                         firstName = winrUser.firstName,
                         lastName = winrUser.lastName,
                         phone = winrUser.phone,
-                        smsConsent = winrUser.smsConsent,
+                        smsConsent = winrUser.isSMSPermissioned,
                         maidId = maidId
                     )
                 } catch (e: Exception) {
