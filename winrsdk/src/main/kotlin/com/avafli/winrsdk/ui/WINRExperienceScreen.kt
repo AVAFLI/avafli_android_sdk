@@ -1,22 +1,28 @@
 package com.avafli.winrsdk.ui
 
-import androidx.compose.animation.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.avafli.winrsdk.WINRBranding
 import com.avafli.winrsdk.ui.components.*
 import com.avafli.winrsdk.ui.theme.WINRTheme
 
 /**
- * Main Compose screen for the WINR experience.
- * Presented as a ModalBottomSheet.
+ * Main Compose screen for the WINR experience — matches iOS WINRExperienceView.swift.
+ * State-machine driven: Email → Streak → Bonus → Complete.
+ * Presented as a ModalBottomSheet with gradient background and floating header.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -32,125 +38,255 @@ internal fun WINRExperienceScreen(
         ModalBottomSheet(
             onDismissRequest = onDismiss,
             sheetState = sheetState,
-            containerColor = MaterialTheme.colorScheme.background,
-            dragHandle = {
-                Surface(
-                    modifier = Modifier.padding(vertical = 8.dp),
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f),
-                    shape = RoundedCornerShape(2.dp)
-                ) {
-                    Box(modifier = Modifier.size(width = 40.dp, height = 4.dp))
-                }
-            },
+            containerColor = Color.Transparent,
+            dragHandle = null,
             shape = RoundedCornerShape(topStart = branding.cornerRadius.dp, topEnd = branding.cornerRadius.dp)
         ) {
-            WINRExperienceContent(
+            WINRExperienceBody(
                 uiState = uiState,
-                onClaim = { viewModel.claimDailyEntries() },
-                onWatchAd = { viewModel.watchAdAndDouble() },
-                onSubmitEmail = { viewModel.submitEmail(it) }
+                branding = branding,
+                viewModel = viewModel,
+                onDismiss = onDismiss
             )
         }
     }
 }
 
 @Composable
-private fun WINRExperienceContent(
+private fun WINRExperienceBody(
     uiState: ExperienceUiState,
-    onClaim: () -> Unit,
-    onWatchAd: () -> Unit,
-    onSubmitEmail: (String) -> Unit
+    branding: WINRBranding,
+    viewModel: WINRExperienceViewModel,
+    onDismiss: () -> Unit
 ) {
-    if (uiState.isLoading) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(300.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-        }
-        return
-    }
+    val isHowItWorks = uiState.screen is ExperienceScreen.HowItWorks
+    val showsInfo = uiState.screen is ExperienceScreen.Streak ||
+            uiState.screen is ExperienceScreen.EmailCapture
 
-    val campaign = uiState.campaign
-    if (campaign == null) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        // ── Background layer ──
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(200.dp),
-            contentAlignment = Alignment.Center
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            branding.backgroundColor,
+                            branding.backgroundColor.copy(alpha = 0.94f)
+                        )
+                    )
+                )
         ) {
-            Text(
-                text = uiState.error ?: "No active campaign",
-                color = MaterialTheme.colorScheme.error
+            // Radial accent glow
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(420.dp)
+                    .background(
+                        Brush.radialGradient(
+                            colors = listOf(
+                                branding.accentGlowColor.copy(alpha = 0.35f),
+                                Color.Transparent
+                            ),
+                            radius = 420f
+                        )
+                    )
             )
         }
-        return
-    }
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState())
-            .padding(bottom = 32.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // Header
-        ExperienceHeader(
-            campaign = campaign,
-            totalEntries = uiState.totalEntries
-        )
+        // ── Main content ──
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(top = 50.dp) // space under header
+        ) {
+            when (val screen = uiState.screen) {
+                is ExperienceScreen.Loading -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            CircularProgressIndicator(
+                                color = branding.accentGlowColor
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = "Loading today's reward…",
+                                color = branding.primaryTextColor
+                            )
+                        }
+                    }
+                }
 
-        // Streak Dashboard
-        StreakDashboard(
-            campaign = campaign,
-            streakState = uiState.streakState,
-            modifier = Modifier.padding(horizontal = 16.dp)
-        )
+                is ExperienceScreen.EmailCapture -> {
+                    EmailCaptureView(
+                        branding = branding,
+                        rulesUrl = uiState.campaign?.rulesUrl,
+                        prizeValue = uiState.campaign?.prizeValue,
+                        onSubmit = { viewModel.submitEmail(it) },
+                        onSkip = { viewModel.skipEmailCapture() }
+                    )
+                }
 
-        // Claim Card
-        ExperienceCard(
-            onClaim = onClaim,
-            isClaiming = uiState.isClaiming,
-            hasClaimed = uiState.hasClaimed,
-            entriesEarned = uiState.entriesEarned,
-            canDouble = uiState.canDouble && !uiState.isDoubled,
-            onWatchAd = onWatchAd
-        )
+                is ExperienceScreen.Streak -> {
+                    StreakDashboard(
+                        branding = branding,
+                        streakState = screen.streakState,
+                        entriesToday = screen.entriesToday,
+                        ladder = screen.ladder,
+                        claimedToday = uiState.claimedToday,
+                        campaign = uiState.campaign,
+                        onClaim = { viewModel.claimDailyEntries() },
+                        onDone = onDismiss
+                    )
+                }
 
-        // Error message
-        uiState.error?.let { error ->
-            AnimatedVisibility(visible = true, enter = fadeIn()) {
-                Text(
-                    text = error,
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
+                is ExperienceScreen.Bonus -> {
+                    BonusEntriesView(
+                        branding = branding,
+                        entries = screen.grant.entries,
+                        onClaim = { viewModel.watchAdAndDouble() },
+                        onSkip = { viewModel.skipBonus() }
+                    )
+                }
+
+                is ExperienceScreen.MilestoneCelebration -> {
+                    WINRExperienceCard(branding = branding) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            screen.milestone.badge?.let { badge ->
+                                Text(text = badge, fontSize = 48.sp)
+                            }
+                            Text(
+                                text = "Milestone Reached!",
+                                color = branding.primaryTextColor,
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.Black
+                            )
+                            Text(
+                                text = "Day ${screen.milestone.day} streak — +${screen.milestone.bonusEntries} bonus entries!",
+                                color = branding.mutedTextColor,
+                                textAlign = TextAlign.Center
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp)
+                                    .clip(RoundedCornerShape(branding.cornerRadius.dp))
+                                    .background(branding.primaryButtonColor)
+                                    .clickable { viewModel.dismissMilestoneCelebration() },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "Continue",
+                                    color = branding.primaryButtonTextColor,
+                                    fontSize = 17.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+                    }
+                }
+
+                is ExperienceScreen.Completed -> {
+                    WINRExperienceCard(branding = branding) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            Text(
+                                text = "Entries Claimed!",
+                                color = branding.primaryTextColor,
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.Black
+                            )
+                            Text(
+                                text = "+${screen.grant.totalEntries} entries added to this month's drawing.",
+                                color = branding.mutedTextColor,
+                                textAlign = TextAlign.Center
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp)
+                                    .clip(RoundedCornerShape(branding.cornerRadius.dp))
+                                    .background(branding.primaryButtonColor)
+                                    .clickable { onDismiss() },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "Close",
+                                    color = branding.primaryButtonTextColor,
+                                    fontSize = 17.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+                    }
+                }
+
+                is ExperienceScreen.HowItWorks -> {
+                    HowItWorksView(
+                        branding = branding,
+                        onPrimary = { viewModel.primaryFromHowItWorks() }
+                    )
+                }
+
+                is ExperienceScreen.Error -> {
+                    WINRExperienceCard(branding = branding) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Text(
+                                text = "Something went wrong.",
+                                color = branding.primaryTextColor,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "Please try again later.",
+                                color = branding.mutedTextColor
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp)
+                                    .clip(RoundedCornerShape(branding.cornerRadius.dp))
+                                    .background(branding.primaryButtonColor)
+                                    .clickable { onDismiss() },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "Close",
+                                    color = branding.primaryButtonTextColor,
+                                    fontSize = 17.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
 
-        // Bonus section
-        BonusEntriesView(
-            streakConfig = campaign.streakConfig,
-            weeklyDaysCompleted = uiState.streakState.weeklyDaysCompleted,
-            monthlyDaysCompleted = uiState.streakState.monthlyDaysCompleted,
-            weeklyBonusEarned = uiState.streakState.weeklyBonusEarned,
-            monthlyBonusEarned = uiState.streakState.monthlyBonusEarned
+        // ── Header (floating overlay at top) ──
+        ExperienceHeader(
+            branding = branding,
+            showsBack = isHowItWorks,
+            showsInfo = showsInfo && !isHowItWorks,
+            onBack = { viewModel.hideHowItWorks() },
+            onInfo = { viewModel.showHowItWorks() },
+            onClose = onDismiss,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(horizontal = 15.dp, vertical = 15.dp)
         )
-
-        // Email capture
-        EmailCaptureView(
-            onSubmitEmail = onSubmitEmail,
-            isSubmitting = uiState.isSubmittingEmail,
-            isSubmitted = uiState.emailSubmitted
-        )
-
-        // How it works
-        HowItWorksView(rulesUrl = campaign.rulesUrl)
-
-        // Bottom padding for navigation bar
-        Spacer(modifier = Modifier.height(16.dp))
     }
 }

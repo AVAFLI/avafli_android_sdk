@@ -2,11 +2,19 @@ package com.avafli.winrsdk.ui.theme
 
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import com.avafli.winrsdk.WINRBranding
 
 /**
+ * CompositionLocal providing WINRBranding throughout the tree.
+ */
+internal val LocalWINRBranding = staticCompositionLocalOf { WINRBranding() }
+
+/**
  * Material 3 theme derived from WINRBranding configuration.
+ * Provides both Material theming and direct access to [WINRBranding] via [LocalWINRBranding].
  */
 @Composable
 internal fun WINRTheme(
@@ -14,22 +22,24 @@ internal fun WINRTheme(
     content: @Composable () -> Unit
 ) {
     val colorScheme = darkColorScheme(
-        primary = branding.primaryColor,
+        primary = branding.primaryButtonColor,
         secondary = branding.secondaryColor,
         background = branding.backgroundColor,
-        surface = branding.surfaceColor,
-        onPrimary = branding.onPrimaryColor,
-        onBackground = branding.onBackgroundColor,
-        onSurface = branding.onBackgroundColor,
+        surface = branding.cardBackgroundColor,
+        onPrimary = branding.primaryButtonTextColor,
+        onBackground = branding.primaryTextColor,
+        onSurface = branding.primaryTextColor,
         error = branding.errorColor,
-        surfaceVariant = branding.surfaceColor.copy(alpha = 0.7f),
-        onSurfaceVariant = branding.onBackgroundColor.copy(alpha = 0.7f),
-        outline = branding.onBackgroundColor.copy(alpha = 0.3f)
+        surfaceVariant = branding.cardBackgroundColor.copy(alpha = 0.7f),
+        onSurfaceVariant = branding.primaryTextColor.copy(alpha = 0.7f),
+        outline = branding.cardBorderColor
     )
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = Typography(),
-        content = content
-    )
+    CompositionLocalProvider(LocalWINRBranding provides branding) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = Typography(),
+            content = content
+        )
+    }
 }
