@@ -210,6 +210,7 @@ internal class WinrApi(
     private fun parseSdkConfig(obj: JsonObject): SdkConfig {
         val brandingJson = obj["branding"]?.jsonObject
         val copyJson = obj["copy"]?.jsonObject
+        val mediaJson = obj["media"]?.jsonObject
 
         val branding = brandingJson?.let {
             SdkBranding(
@@ -244,7 +245,9 @@ internal class WinrApi(
             )
         }
 
-        return SdkConfig(branding = branding, copy = copy)
+        val media = mediaJson?.let { parseSdkMedia(it) }
+
+        return SdkConfig(branding = branding, copy = copy, media = media)
     }
 
     private fun parseMilestone(obj: JsonObject): Milestone {
@@ -259,6 +262,7 @@ internal class WinrApi(
         return EmailCaptureCopy(
             title = obj["title"]?.jsonPrimitive?.contentOrNull,
             subtitle = obj["subtitle"]?.jsonPrimitive?.contentOrNull,
+            prizeHeadline = obj["prizeHeadline"]?.jsonPrimitive?.contentOrNull,
             emailLabel = obj["emailLabel"]?.jsonPrimitive?.contentOrNull,
             emailPlaceholder = obj["emailPlaceholder"]?.jsonPrimitive?.contentOrNull,
             ageGateText = obj["ageGateText"]?.jsonPrimitive?.contentOrNull,
@@ -272,6 +276,7 @@ internal class WinrApi(
     private fun parseStreakDashboardCopy(obj: JsonObject): StreakDashboardCopy {
         return StreakDashboardCopy(
             streakMessage = obj["streakMessage"]?.jsonPrimitive?.contentOrNull,
+            prizeHeadline = obj["prizeHeadline"]?.jsonPrimitive?.contentOrNull,
             upcomingLabel = obj["upcomingLabel"]?.jsonPrimitive?.contentOrNull,
             claimButton = obj["claimButton"]?.jsonPrimitive?.contentOrNull,
             dayRewardLabel = obj["dayRewardLabel"]?.jsonPrimitive?.contentOrNull,
@@ -345,6 +350,24 @@ internal class WinrApi(
     private fun parseLoadingCopy(obj: JsonObject): LoadingCopy {
         return LoadingCopy(
             text = obj["text"]?.jsonPrimitive?.contentOrNull
+        )
+    }
+
+    private fun parseSdkMedia(obj: JsonObject): SdkMedia {
+        return SdkMedia(
+            emailCapture = obj["emailCapture"]?.jsonObject?.let { parseScreenMedia(it) },
+            streakDashboard = obj["streakDashboard"]?.jsonObject?.let { parseScreenMedia(it) },
+            bonusEntries = obj["bonusEntries"]?.jsonObject?.let { parseScreenMedia(it) },
+            milestone = obj["milestone"]?.jsonObject?.let { parseScreenMedia(it) },
+            completed = obj["completed"]?.jsonObject?.let { parseScreenMedia(it) },
+            howItWorks = obj["howItWorks"]?.jsonObject?.let { parseScreenMedia(it) }
+        )
+    }
+
+    private fun parseScreenMedia(obj: JsonObject): ScreenMedia {
+        return ScreenMedia(
+            imageUrl = obj["imageUrl"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotEmpty() },
+            lottieUrl = obj["lottieUrl"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotEmpty() }
         )
     }
 

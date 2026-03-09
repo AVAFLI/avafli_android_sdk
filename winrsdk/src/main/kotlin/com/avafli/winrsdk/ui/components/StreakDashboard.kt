@@ -77,7 +77,8 @@ internal fun StreakDashboard(
             // ── Prize banner ──
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text = sdkCopy?.streakDashboard?.streakMessage
+                    text = sdkCopy?.streakDashboard?.prizeHeadline
+                        ?: sdkCopy?.streakDashboard?.streakMessage
                         ?: sdkCopy?.streakMessage
                         ?: sdkCopy?.welcomeTitle
                         ?: campaign?.prizeValue?.let { "WIN $it!" }

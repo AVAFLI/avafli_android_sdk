@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.avafli.winrsdk.WINRBranding
 import com.avafli.winrsdk.domain.SdkCopy
+import com.avafli.winrsdk.domain.ScreenMedia
 
 /**
  * Email capture screen — matches iOS EmailCaptureView pixel-for-pixel.
@@ -70,7 +71,8 @@ internal fun EmailCaptureView(
             modifier = Modifier.padding(top = 8.dp)
         ) {
             Text(
-                text = sdkCopy?.emailCapture?.title
+                text = sdkCopy?.emailCapture?.prizeHeadline
+                    ?: sdkCopy?.emailCapture?.title
                     ?: sdkCopy?.welcomeTitle
                     ?: prizeValue?.let { "WIN $it!" }
                     ?: "WIN PRIZES!",
@@ -333,4 +335,42 @@ internal fun WINRLogoView(
     }
 
     // TODO: Add URL-based logo loading via Coil/AsyncImage if needed
+}
+
+/**
+ * Per-screen hero media display.
+ * Provides structure for imageUrl/lottieUrl support.
+ * Integrating apps can add Coil or other image loading libraries to implement full media loading.
+ */
+@Composable
+internal fun HeroMedia(
+    media: ScreenMedia?,
+    defaultContent: @Composable () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    when {
+        media?.imageUrl?.isNotEmpty() == true -> {
+            // TODO: Integrating apps can use Coil AsyncImage here:
+            // AsyncImage(
+            //     model = media.imageUrl,
+            //     contentDescription = "Hero image",
+            //     modifier = modifier,
+            //     contentScale = ContentScale.Crop
+            // )
+            
+            // For now, show placeholder or default content
+            defaultContent()
+        }
+        media?.lottieUrl?.isNotEmpty() == true -> {
+            // TODO: Integrating apps can use Lottie animation here:
+            // LottieAnimation(
+            //     composition = rememberLottieComposition(LottieCompositionSpec.Url(media.lottieUrl)),
+            //     modifier = modifier
+            // )
+            
+            // For now, show placeholder or default content
+            defaultContent()
+        }
+        else -> defaultContent()
+    }
 }

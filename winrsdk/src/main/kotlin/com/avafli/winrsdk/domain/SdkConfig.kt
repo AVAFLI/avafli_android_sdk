@@ -6,7 +6,8 @@ package com.avafli.winrsdk.domain
  */
 data class SdkConfig(
     val branding: SdkBranding? = null,
-    val copy: SdkCopy? = null
+    val copy: SdkCopy? = null,
+    val media: SdkMedia? = null
 )
 
 /**
@@ -49,6 +50,7 @@ data class SdkCopy(
 data class EmailCaptureCopy(
     val title: String? = null,
     val subtitle: String? = null,
+    val prizeHeadline: String? = null,
     val emailLabel: String? = null,
     val emailPlaceholder: String? = null,
     val ageGateText: String? = null,
@@ -60,6 +62,7 @@ data class EmailCaptureCopy(
 
 data class StreakDashboardCopy(
     val streakMessage: String? = null,
+    val prizeHeadline: String? = null,
     val upcomingLabel: String? = null,
     val claimButton: String? = null,
     val dayRewardLabel: String? = null,
@@ -119,4 +122,26 @@ data class HowItWorksCopy(
 
 data class LoadingCopy(
     val text: String? = null
+)
+
+/**
+ * Server-driven media overrides for screen backgrounds and hero areas.
+ * All fields are optional — nil values fall back to hardcoded defaults.
+ */
+data class SdkMedia(
+    val emailCapture: ScreenMedia? = null,
+    val streakDashboard: ScreenMedia? = null,
+    val bonusEntries: ScreenMedia? = null,
+    val milestone: ScreenMedia? = null,
+    val completed: ScreenMedia? = null,
+    val howItWorks: ScreenMedia? = null
+)
+
+/**
+ * Per-screen media URLs that can be used for hero images or backgrounds.
+ * Either imageUrl or lottieUrl (or both) can be set.
+ */
+data class ScreenMedia(
+    val imageUrl: String? = null,
+    val lottieUrl: String? = null
 )
