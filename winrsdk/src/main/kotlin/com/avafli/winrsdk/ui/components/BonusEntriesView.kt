@@ -14,6 +14,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.avafli.winrsdk.WINRBranding
+import com.avafli.winrsdk.domain.SdkCopy
 
 /**
  * Bonus entries screen — matches iOS BonusEntriesView.swift.
@@ -23,6 +24,7 @@ import com.avafli.winrsdk.WINRBranding
 internal fun BonusEntriesView(
     branding: WINRBranding,
     entries: Int,
+    sdkCopy: SdkCopy? = null,
     onClaim: () -> Unit,
     onSkip: () -> Unit,
     modifier: Modifier = Modifier
@@ -34,7 +36,7 @@ internal fun BonusEntriesView(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = "BONUS ENTRIES",
+            text = sdkCopy?.bonusTitle ?: "BONUS ENTRIES",
             color = branding.primaryTextColor,
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold
@@ -43,7 +45,8 @@ internal fun BonusEntriesView(
         Spacer(modifier = Modifier.height(20.dp))
 
         Text(
-            text = "Watch a short video to double today's $entries entries.",
+            text = sdkCopy?.bonusSubtitle
+                ?: "Watch a short video to double today's $entries entries.",
             color = branding.primaryTextColor.copy(alpha = 0.9f),
             fontSize = 16.sp,
             textAlign = TextAlign.Center

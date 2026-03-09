@@ -1,6 +1,7 @@
 package com.avafli.winrsdk
 
 import androidx.compose.ui.graphics.Color
+import com.avafli.winrsdk.domain.SdkBranding
 
 /**
  * Branding configuration for white-labeling the WINR experience.
@@ -92,4 +93,43 @@ data class WINRBranding(
 
     /** Error / destructive action color. */
     val errorColor: Color = Color(0xFFCF6679)
-)
+) {
+
+    /**
+     * Merge server-driven branding overrides from [SdkBranding].
+     * Server values override code-level defaults; nil/missing fields fall back to this instance.
+     */
+    fun applyingServerBranding(serverBranding: SdkBranding?): WINRBranding {
+        if (serverBranding == null) return this
+
+        val serverPrimary = parseColor(serverBranding.primaryColor)
+        val serverSecondary = parseColor(serverBranding.secondaryColor)
+        val serverBg = parseColor(serverBranding.backgroundColor)
+        val serverLogoUrl = serverBranding.logoUrl
+
+        return this.copy(
+            primaryColor = serverPrimary ?: this.primaryColor,
+            primaryButtonColor = serverPrimary ?: this.primaryButtonColor,
+            secondaryColor = serverSecondary ?: this.secondaryColor,
+            secondaryButtonColor = serverSecondary ?: this.secondaryButtonColor,
+            accentGlowColor = serverSecondary ?: this.accentGlowColor,
+            backgroundColor = serverBg ?: this.backgroundColor,
+            logoUrl = serverLogoUrl ?: this.logoUrl
+        )
+    }
+
+    companion object {
+        /**
+         * Parse a hex color string (e.g. "#FF6C63FF", "#6C63FF") into a Compose [Color].
+         * Returns null if the string is blank or unparseable.
+         */
+        fun parseColor(hex: String?): Color? {
+            if (hex.isNullOrBlank()) return null
+            return try {
+                Color(android.graphics.Color.parseColor(hex))
+            } catch (_: Exception) {
+                null
+            }
+        }
+    }
+}

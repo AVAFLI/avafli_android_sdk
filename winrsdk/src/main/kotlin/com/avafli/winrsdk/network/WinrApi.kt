@@ -4,6 +4,9 @@ import com.avafli.winrsdk.WINRError
 import com.avafli.winrsdk.domain.Campaign
 import com.avafli.winrsdk.domain.DailyEntryGrant
 import com.avafli.winrsdk.domain.Milestone
+import com.avafli.winrsdk.domain.SdkBranding
+import com.avafli.winrsdk.domain.SdkConfig
+import com.avafli.winrsdk.domain.SdkCopy
 import com.avafli.winrsdk.services.Logger
 import kotlinx.serialization.json.*
 
@@ -47,23 +50,27 @@ internal class WinrApi(
         val uuid = response["uuid"]?.jsonPrimitive?.contentOrNull
             ?: throw WINRError.RegistrationFailed("Missing uuid in response")
         val campaign = response["campaign"]?.let { parseCampaign(it.jsonObject) }
+        val sdkConfig = response["sdkConfig"]?.jsonObject?.let { parseSdkConfig(it) }
 
         return RegisterDeviceResponse(
             token = token,
             refreshToken = refreshToken,
             uuid = uuid,
-            campaign = campaign
+            campaign = campaign,
+            sdkConfig = sdkConfig
         )
     }
 
     /**
-     * Get the active campaign.
+     * Get the active campaign and latest SDK config.
      */
-    suspend fun getActiveCampaign(): Campaign {
+    suspend fun getActiveCampaign(): GetActiveCampaignResponse {
         val response = networkClient.authenticatedPost("getActiveCampaign")
         val campaignJson = response["campaign"]?.jsonObject
             ?: throw WINRError.NoCampaign()
-        return parseCampaign(campaignJson)
+        val campaign = parseCampaign(campaignJson)
+        val sdkConfig = response["sdkConfig"]?.jsonObject?.let { parseSdkConfig(it) }
+        return GetActiveCampaignResponse(campaign = campaign, sdkConfig = sdkConfig)
     }
 
     /**
@@ -166,7 +173,13 @@ internal class WinrApi(
         val token: String,
         val refreshToken: String,
         val uuid: String,
-        val campaign: Campaign?
+        val campaign: Campaign?,
+        val sdkConfig: SdkConfig? = null
+    )
+
+    data class GetActiveCampaignResponse(
+        val campaign: Campaign,
+        val sdkConfig: SdkConfig? = null
     )
 
     data class ClaimDailyEntriesResponse(
@@ -192,6 +205,35 @@ internal class WinrApi(
 
     private fun parseCampaign(obj: JsonObject): Campaign {
         return json.decodeFromJsonElement(Campaign.serializer(), obj)
+    }
+
+    private fun parseSdkConfig(obj: JsonObject): SdkConfig {
+        val brandingJson = obj["branding"]?.jsonObject
+        val copyJson = obj["copy"]?.jsonObject
+
+        val branding = brandingJson?.let {
+            SdkBranding(
+                primaryColor = it["primaryColor"]?.jsonPrimitive?.contentOrNull,
+                secondaryColor = it["secondaryColor"]?.jsonPrimitive?.contentOrNull,
+                backgroundColor = it["backgroundColor"]?.jsonPrimitive?.contentOrNull,
+                logoUrl = it["logoUrl"]?.jsonPrimitive?.contentOrNull,
+                fontFamily = it["fontFamily"]?.jsonPrimitive?.contentOrNull
+            )
+        }
+
+        val copy = copyJson?.let {
+            SdkCopy(
+                welcomeTitle = it["welcomeTitle"]?.jsonPrimitive?.contentOrNull,
+                welcomeSubtitle = it["welcomeSubtitle"]?.jsonPrimitive?.contentOrNull,
+                claimButtonTitle = it["claimButtonTitle"]?.jsonPrimitive?.contentOrNull,
+                bonusTitle = it["bonusTitle"]?.jsonPrimitive?.contentOrNull,
+                bonusSubtitle = it["bonusSubtitle"]?.jsonPrimitive?.contentOrNull,
+                completedTitle = it["completedTitle"]?.jsonPrimitive?.contentOrNull,
+                completedSubtitle = it["completedSubtitle"]?.jsonPrimitive?.contentOrNull
+            )
+        }
+
+        return SdkConfig(branding = branding, copy = copy)
     }
 
     private fun parseMilestone(obj: JsonObject): Milestone {

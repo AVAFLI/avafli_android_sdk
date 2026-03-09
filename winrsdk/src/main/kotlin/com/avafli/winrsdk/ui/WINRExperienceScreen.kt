@@ -16,6 +16,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.avafli.winrsdk.WINRBranding
+import com.avafli.winrsdk.domain.SdkCopy
 import com.avafli.winrsdk.ui.components.*
 import com.avafli.winrsdk.ui.theme.WINRTheme
 
@@ -124,6 +125,7 @@ private fun WINRExperienceBody(
                         branding = branding,
                         rulesUrl = uiState.campaign?.rulesUrl,
                         prizeValue = uiState.campaign?.prizeValue,
+                        sdkCopy = uiState.sdkCopy,
                         onSubmit = { viewModel.submitEmail(it) },
                         onSkip = { viewModel.skipEmailCapture() }
                     )
@@ -137,6 +139,7 @@ private fun WINRExperienceBody(
                         ladder = screen.ladder,
                         claimedToday = uiState.claimedToday,
                         campaign = uiState.campaign,
+                        sdkCopy = uiState.sdkCopy,
                         onClaim = { viewModel.claimDailyEntries() },
                         onDone = onDismiss
                     )
@@ -146,6 +149,7 @@ private fun WINRExperienceBody(
                     BonusEntriesView(
                         branding = branding,
                         entries = screen.grant.entries,
+                        sdkCopy = uiState.sdkCopy,
                         onClaim = { viewModel.watchAdAndDouble() },
                         onSkip = { viewModel.skipBonus() }
                     )
@@ -200,13 +204,14 @@ private fun WINRExperienceBody(
                             verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
                             Text(
-                                text = "Entries Claimed!",
+                                text = uiState.sdkCopy?.completedTitle ?: "Entries Claimed!",
                                 color = branding.primaryTextColor,
                                 fontSize = 22.sp,
                                 fontWeight = FontWeight.Black
                             )
                             Text(
-                                text = "+${screen.grant.totalEntries} entries added to this month's drawing.",
+                                text = uiState.sdkCopy?.completedSubtitle
+                                    ?: "+${screen.grant.totalEntries} entries added to this month's drawing.",
                                 color = branding.mutedTextColor,
                                 textAlign = TextAlign.Center
                             )

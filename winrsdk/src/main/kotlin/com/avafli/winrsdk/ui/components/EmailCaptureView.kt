@@ -27,6 +27,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.avafli.winrsdk.WINRBranding
+import com.avafli.winrsdk.domain.SdkCopy
 
 /**
  * Email capture screen — matches iOS EmailCaptureView pixel-for-pixel.
@@ -36,6 +37,7 @@ internal fun EmailCaptureView(
     branding: WINRBranding,
     rulesUrl: String?,
     prizeValue: String?,
+    sdkCopy: SdkCopy? = null,
     onSubmit: (String) -> Unit,
     onSkip: () -> Unit,
     modifier: Modifier = Modifier
@@ -68,7 +70,9 @@ internal fun EmailCaptureView(
             modifier = Modifier.padding(top = 8.dp)
         ) {
             Text(
-                text = prizeValue?.let { "WIN $it!" } ?: "WIN PRIZES!",
+                text = sdkCopy?.welcomeTitle
+                    ?: prizeValue?.let { "WIN $it!" }
+                    ?: "WIN PRIZES!",
                 color = branding.secondaryTextColor,
                 fontSize = 26.sp,
                 fontWeight = FontWeight.Black,
@@ -77,7 +81,8 @@ internal fun EmailCaptureView(
             )
             Spacer(modifier = Modifier.height(10.dp))
             Text(
-                text = "Just submit this entry form for your FREE chance to win.",
+                text = sdkCopy?.welcomeSubtitle
+                    ?: "Just submit this entry form for your FREE chance to win.",
                 color = branding.mutedTextColor,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Medium,

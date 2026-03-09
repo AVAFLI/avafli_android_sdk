@@ -25,6 +25,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.avafli.winrsdk.WINRBranding
+import com.avafli.winrsdk.domain.SdkCopy
 import com.avafli.winrsdk.domain.StreakState
 
 /**
@@ -40,6 +41,7 @@ internal fun StreakDashboard(
     ladder: List<Int>,
     claimedToday: Boolean,
     campaign: com.avafli.winrsdk.domain.Campaign?,
+    sdkCopy: SdkCopy? = null,
     onClaim: () -> Unit,
     onDone: () -> Unit,
     modifier: Modifier = Modifier
@@ -75,7 +77,9 @@ internal fun StreakDashboard(
             // ── Prize banner ──
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text = campaign?.prizeValue?.let { "WIN $it!" } ?: "WIN PRIZES!",
+                    text = sdkCopy?.welcomeTitle
+                        ?: campaign?.prizeValue?.let { "WIN $it!" }
+                        ?: "WIN PRIZES!",
                     color = Color.White,
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Black,
@@ -83,7 +87,8 @@ internal fun StreakDashboard(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Keep your daily streak alive to unlock more entries.",
+                    text = sdkCopy?.welcomeSubtitle
+                        ?: "Keep your daily streak alive to unlock more entries.",
                     color = branding.mutedTextColor,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
@@ -257,7 +262,7 @@ internal fun StreakDashboard(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Claim $entriesToday Entries",
+                        text = sdkCopy?.claimButtonTitle ?: "Claim $entriesToday Entries",
                         color = branding.primaryButtonTextColor,
                         fontSize = 17.sp,
                         fontWeight = FontWeight.SemiBold

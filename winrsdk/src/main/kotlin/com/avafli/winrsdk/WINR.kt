@@ -6,6 +6,7 @@ import android.content.Intent
 import android.provider.Settings
 import com.avafli.winrsdk.domain.Campaign
 import com.avafli.winrsdk.domain.DailyEntryGrant
+import com.avafli.winrsdk.domain.SdkConfig
 import com.avafli.winrsdk.network.NetworkClient
 import com.avafli.winrsdk.network.WinrApi
 import com.avafli.winrsdk.rewards.AdProviderFactory
@@ -35,6 +36,7 @@ object WINR {
     private var adProvider: RewardedVideoProvider? = null
     private var user: WINRUser? = null
     private var cachedCampaign: Campaign? = null
+    private var cachedSdkConfig: SdkConfig? = null
     private var pendingCallback: ((Result<DailyEntryGrant>) -> Unit)? = null
 
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
@@ -164,6 +166,7 @@ object WINR {
             secureStorage?.clearAll()
             preferencesStorage?.clearAll()
             cachedCampaign = null
+            cachedSdkConfig = null
             user = null
             logger?.info("User account deleted successfully")
             Result.success(Unit)
@@ -184,8 +187,11 @@ object WINR {
     }
 
     internal fun getBranding(): WINRBranding {
-        return config?.branding ?: WINRBranding()
+        val baseBranding = config?.branding ?: WINRBranding()
+        return baseBranding.applyingServerBranding(cachedSdkConfig?.branding)
     }
+
+    internal fun getSdkConfig(): SdkConfig? = cachedSdkConfig
 
     internal fun getCachedCampaign(): Campaign? = cachedCampaign
 
@@ -203,9 +209,11 @@ object WINR {
         // Skip if we already have a valid token
         if (secureStorage?.getToken() != null) {
             logger?.debug("Device already registered, skipping")
-            // Fetch latest campaign
+            // Fetch latest campaign + sdkConfig
             try {
-                cachedCampaign = api?.getActiveCampaign()
+                val activeCampaignResponse = api?.getActiveCampaign()
+                cachedCampaign = activeCampaignResponse?.campaign
+                cachedSdkConfig = activeCampaignResponse?.sdkConfig ?: cachedSdkConfig
                 setupAdProvider()
             } catch (e: Exception) {
                 logger?.warn("Failed to refresh campaign: ${e.message}")
@@ -233,6 +241,7 @@ object WINR {
         secureStorage?.saveUuid(response.uuid)
 
         cachedCampaign = response.campaign
+        cachedSdkConfig = response.sdkConfig
         setupAdProvider()
 
         logger?.info("Device registered successfully (uuid: ${response.uuid})")

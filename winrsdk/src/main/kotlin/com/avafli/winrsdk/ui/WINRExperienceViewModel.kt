@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.avafli.winrsdk.domain.Campaign
 import com.avafli.winrsdk.domain.DailyEntryGrant
 import com.avafli.winrsdk.domain.Milestone
+import com.avafli.winrsdk.domain.SdkConfig
+import com.avafli.winrsdk.domain.SdkCopy
 import com.avafli.winrsdk.domain.StreakEngine
 import com.avafli.winrsdk.domain.StreakState
 import com.avafli.winrsdk.network.WinrApi
@@ -40,6 +42,7 @@ internal data class ExperienceUiState(
     val screen: ExperienceScreen = ExperienceScreen.Loading,
     val claimedToday: Boolean = false,
     val campaign: Campaign? = null,
+    val sdkCopy: SdkCopy? = null,
     // Legacy flat fields kept for backward compat
     val isLoading: Boolean = true,
     val streakState: StreakState = StreakState(),
@@ -66,9 +69,14 @@ internal class WINRExperienceViewModel(
 
     private var streakEngine: StreakEngine? = null
     private var onResult: ((Result<DailyEntryGrant>) -> Unit)? = null
+    private var sdkConfig: SdkConfig? = null
 
     /** Saved primary screen so "How It Works" can navigate back. */
     private var lastPrimaryScreen: ExperienceScreen? = null
+
+    fun setSdkConfig(config: SdkConfig?) {
+        sdkConfig = config
+    }
 
     fun setResultCallback(callback: ((Result<DailyEntryGrant>) -> Unit)?) {
         onResult = callback
@@ -79,7 +87,17 @@ internal class WINRExperienceViewModel(
     fun loadCampaign(existingCampaign: Campaign?) {
         viewModelScope.launch {
             try {
-                val campaign = existingCampaign ?: api.getActiveCampaign()
+                val campaign: Campaign
+                if (existingCampaign != null) {
+                    campaign = existingCampaign
+                } else {
+                    val response = api.getActiveCampaign()
+                    campaign = response.campaign
+                    // Update sdkConfig from latest response
+                    if (response.sdkConfig != null) {
+                        sdkConfig = response.sdkConfig
+                    }
+                }
                 streakEngine = StreakEngine(campaign)
 
                 val savedState = loadStreakState()
@@ -95,6 +113,7 @@ internal class WINRExperienceViewModel(
                         screen = ExperienceScreen.EmailCapture,
                         isLoading = false,
                         campaign = campaign,
+                        sdkCopy = sdkConfig?.copy,
                         streakState = state,
                         hasClaimed = alreadyClaimed,
                         claimedToday = alreadyClaimed,
@@ -125,6 +144,7 @@ internal class WINRExperienceViewModel(
             screen = ExperienceScreen.Streak(state, entriesToday, ladder),
             isLoading = false,
             campaign = campaign,
+            sdkCopy = sdkConfig?.copy,
             streakState = state,
             hasClaimed = claimed,
             claimedToday = claimed,
