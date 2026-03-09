@@ -36,7 +36,9 @@ internal fun BonusEntriesView(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = sdkCopy?.bonusTitle ?: "BONUS ENTRIES",
+            text = sdkCopy?.bonusEntries?.title 
+                ?: sdkCopy?.bonusTitle
+                ?: "BONUS ENTRIES",
             color = branding.primaryTextColor,
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold
@@ -45,8 +47,10 @@ internal fun BonusEntriesView(
         Spacer(modifier = Modifier.height(20.dp))
 
         Text(
-            text = sdkCopy?.bonusSubtitle
-                ?: "Watch a short video to double today's $entries entries.",
+            text = (sdkCopy?.bonusEntries?.subtitle 
+                ?: sdkCopy?.bonusSubtitle
+                ?: "Watch a short video to double today's {entries} entries.")
+                .replace("{entries}", entries.toString()),
             color = branding.primaryTextColor.copy(alpha = 0.9f),
             fontSize = 16.sp,
             textAlign = TextAlign.Center
@@ -65,7 +69,9 @@ internal fun BonusEntriesView(
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = "WATCH & CLAIM ${entries * 2} ENTRIES",
+                text = (sdkCopy?.bonusEntries?.watchButton ?: "WATCH & CLAIM {total} ENTRIES")
+                    .replace("{total}", (entries * 2).toString())
+                    .replace("{entries}", entries.toString()),
                 color = branding.backgroundColor,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold
@@ -76,7 +82,8 @@ internal fun BonusEntriesView(
 
         // Skip button
         Text(
-            text = "No thanks, continue with $entries entries",
+            text = (sdkCopy?.bonusEntries?.skipText ?: "No thanks, continue with {entries} entries")
+                .replace("{entries}", entries.toString()),
             color = branding.primaryTextColor.copy(alpha = 0.7f),
             fontSize = 14.sp,
             modifier = Modifier.clickable { onSkip() }

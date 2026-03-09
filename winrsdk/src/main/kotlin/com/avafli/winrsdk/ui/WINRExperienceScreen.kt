@@ -113,7 +113,7 @@ private fun WINRExperienceBody(
                             )
                             Spacer(modifier = Modifier.height(16.dp))
                             Text(
-                                text = "Loading today's reward…",
+                                text = uiState.sdkCopy?.loading?.text ?: "Loading today's reward…",
                                 color = branding.primaryTextColor
                             )
                         }
@@ -166,13 +166,15 @@ private fun WINRExperienceBody(
                                 Text(text = badge, fontSize = 48.sp)
                             }
                             Text(
-                                text = "Milestone Reached!",
+                                text = uiState.sdkCopy?.milestone?.title ?: "Milestone Reached!",
                                 color = branding.primaryTextColor,
                                 fontSize = 22.sp,
                                 fontWeight = FontWeight.Black
                             )
                             Text(
-                                text = "Day ${screen.milestone.day} streak — +${screen.milestone.bonusEntries} bonus entries!",
+                                text = (uiState.sdkCopy?.milestone?.subtitle ?: "Day {day} streak — +{bonus} bonus entries!")
+                                    .replace("{day}", screen.milestone.day.toString())
+                                    .replace("{bonus}", screen.milestone.bonusEntries.toString()),
                                 color = branding.mutedTextColor,
                                 textAlign = TextAlign.Center
                             )
@@ -186,7 +188,7 @@ private fun WINRExperienceBody(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = "Continue",
+                                    text = uiState.sdkCopy?.milestone?.continueButton ?: "Continue",
                                     color = branding.primaryButtonTextColor,
                                     fontSize = 17.sp,
                                     fontWeight = FontWeight.SemiBold
@@ -204,14 +206,18 @@ private fun WINRExperienceBody(
                             verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
                             Text(
-                                text = uiState.sdkCopy?.completedTitle ?: "Entries Claimed!",
+                                text = uiState.sdkCopy?.completed?.title 
+                                    ?: uiState.sdkCopy?.completedTitle 
+                                    ?: "Entries Claimed!",
                                 color = branding.primaryTextColor,
                                 fontSize = 22.sp,
                                 fontWeight = FontWeight.Black
                             )
                             Text(
-                                text = uiState.sdkCopy?.completedSubtitle
-                                    ?: "+${screen.grant.totalEntries} entries added to this month's drawing.",
+                                text = (uiState.sdkCopy?.completed?.subtitle 
+                                    ?: uiState.sdkCopy?.completedSubtitle
+                                    ?: "+{total} entries added to this month's drawing.")
+                                    .replace("{total}", screen.grant.totalEntries.toString()),
                                 color = branding.mutedTextColor,
                                 textAlign = TextAlign.Center
                             )
@@ -225,7 +231,7 @@ private fun WINRExperienceBody(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = "Close",
+                                    text = uiState.sdkCopy?.completed?.closeButton ?: "Close",
                                     color = branding.primaryButtonTextColor,
                                     fontSize = 17.sp,
                                     fontWeight = FontWeight.SemiBold
@@ -238,6 +244,7 @@ private fun WINRExperienceBody(
                 is ExperienceScreen.HowItWorks -> {
                     HowItWorksView(
                         branding = branding,
+                        sdkCopy = uiState.sdkCopy,
                         onPrimary = { viewModel.primaryFromHowItWorks() }
                     )
                 }
@@ -250,13 +257,13 @@ private fun WINRExperienceBody(
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             Text(
-                                text = "Something went wrong.",
+                                text = uiState.sdkCopy?.error?.title ?: "Something went wrong.",
                                 color = branding.primaryTextColor,
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
                             Text(
-                                text = "Please try again later.",
+                                text = uiState.sdkCopy?.error?.subtitle ?: "Please try again later.",
                                 color = branding.mutedTextColor
                             )
                             Box(
@@ -269,7 +276,7 @@ private fun WINRExperienceBody(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = "Close",
+                                    text = uiState.sdkCopy?.error?.closeButton ?: "Close",
                                     color = branding.primaryButtonTextColor,
                                     fontSize = 17.sp,
                                     fontWeight = FontWeight.SemiBold

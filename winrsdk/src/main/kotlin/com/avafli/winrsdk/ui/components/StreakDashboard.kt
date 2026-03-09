@@ -77,7 +77,9 @@ internal fun StreakDashboard(
             // ── Prize banner ──
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text = sdkCopy?.welcomeTitle
+                    text = sdkCopy?.streakDashboard?.streakMessage
+                        ?: sdkCopy?.streakMessage
+                        ?: sdkCopy?.welcomeTitle
                         ?: campaign?.prizeValue?.let { "WIN $it!" }
                         ?: "WIN PRIZES!",
                     color = Color.White,
@@ -87,7 +89,8 @@ internal fun StreakDashboard(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = sdkCopy?.welcomeSubtitle
+                    text = sdkCopy?.streakDashboard?.claimDescription
+                        ?: sdkCopy?.welcomeSubtitle
                         ?: "Keep your daily streak alive to unlock more entries.",
                     color = branding.mutedTextColor,
                     fontSize = 12.sp,
@@ -101,7 +104,7 @@ internal fun StreakDashboard(
             // ── Streak tiles carousel ──
             Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
-                    text = "Upcoming rewards",
+                    text = sdkCopy?.streakDashboard?.upcomingLabel ?: "Upcoming rewards",
                     color = branding.secondaryTextColor,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -122,7 +125,8 @@ internal fun StreakDashboard(
                             entries = entries,
                             isClaimed = day < currentDay || (day == currentDay && claimedToday),
                             isToday = day == currentDay && !claimedToday,
-                            branding = branding
+                            branding = branding,
+                            sdkCopy = sdkCopy
                         )
                     }
                 }
@@ -133,7 +137,7 @@ internal fun StreakDashboard(
                 Spacer(modifier = Modifier.height(14.dp))
                 Column(modifier = Modifier.padding(horizontal = 6.dp)) {
                     Text(
-                        text = "Bonus Progress",
+                        text = sdkCopy?.streakDashboard?.bonusProgressLabel ?: "Bonus Progress",
                         color = branding.secondaryTextColor,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold
@@ -145,19 +149,21 @@ internal fun StreakDashboard(
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         BonusProgressPill(
-                            label = "Week",
+                            label = sdkCopy?.streakDashboard?.weekLabel ?: "Week",
                             current = streakState.weeklyDaysCompleted,
                             target = config.weeklyBonusThreshold,
                             bonus = config.weeklyBonusEntries,
                             branding = branding,
+                            sdkCopy = sdkCopy,
                             modifier = Modifier.weight(1f)
                         )
                         BonusProgressPill(
-                            label = "Month",
+                            label = sdkCopy?.streakDashboard?.monthLabel ?: "Month",
                             current = streakState.monthlyDaysCompleted,
                             target = config.monthlyBonusThreshold,
                             bonus = config.monthlyBonusEntries,
                             branding = branding,
+                            sdkCopy = sdkCopy,
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -194,13 +200,13 @@ internal fun StreakDashboard(
                 )
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = "Today's entries claimed!",
+                    text = sdkCopy?.alreadyClaimed?.title ?: "Today's entries claimed!",
                     color = branding.secondaryTextColor,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
-                    text = "Come back tomorrow to continue your streak.",
+                    text = sdkCopy?.alreadyClaimed?.subtitle ?: "Come back tomorrow to continue your streak.",
                     color = branding.mutedTextColor,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
@@ -223,7 +229,7 @@ internal fun StreakDashboard(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Done",
+                        text = sdkCopy?.alreadyClaimed?.doneButton ?: "Done",
                         color = branding.secondaryTextColor,
                         fontSize = 17.sp,
                         fontWeight = FontWeight.SemiBold
@@ -232,13 +238,15 @@ internal fun StreakDashboard(
             } else {
                 // ── Unclaimed state ──
                 Text(
-                    text = "Day $currentDay reward",
+                    text = (sdkCopy?.streakDashboard?.dayRewardLabel ?: "Day {day} reward")
+                        .replace("{day}", currentDay.toString()),
                     color = branding.secondaryTextColor,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
-                    text = "Claim $entriesToday entries for today's visit to keep your streak alive.",
+                    text = (sdkCopy?.streakDashboard?.claimDescription ?: "Claim {entries} entries for today's visit to keep your streak alive.")
+                        .replace("{entries}", entriesToday.toString()),
                     color = branding.mutedTextColor,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
@@ -262,7 +270,10 @@ internal fun StreakDashboard(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = sdkCopy?.claimButtonTitle ?: "Claim $entriesToday Entries",
+                        text = (sdkCopy?.streakDashboard?.claimButton 
+                            ?: sdkCopy?.dailyClaimButton 
+                            ?: "Claim {entries} Entries")
+                            .replace("{entries}", entriesToday.toString()),
                         color = branding.primaryButtonTextColor,
                         fontSize = 17.sp,
                         fontWeight = FontWeight.SemiBold
@@ -282,6 +293,7 @@ private fun BonusProgressPill(
     target: Int,
     bonus: Int,
     branding: WINRBranding,
+    sdkCopy: SdkCopy? = null,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -329,14 +341,16 @@ private fun BonusProgressPill(
 
         if (current >= target) {
             Text(
-                text = "✓ Bonus earned!",
+                text = (sdkCopy?.streakDashboard?.bonusEarnedText ?: "✓ Bonus earned!")
+                    .replace("{bonus}", bonus.toString()),
                 color = branding.accentGlowColor,
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Medium
             )
         } else {
             Text(
-                text = "+$bonus entries",
+                text = (sdkCopy?.streakDashboard?.entriesLabel ?: "+{bonus} entries")
+                    .replace("{bonus}", bonus.toString()),
                 color = branding.mutedTextColor,
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Medium

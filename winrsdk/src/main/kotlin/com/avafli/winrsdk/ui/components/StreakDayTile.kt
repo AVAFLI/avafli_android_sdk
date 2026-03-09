@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.avafli.winrsdk.WINRBranding
+import com.avafli.winrsdk.domain.SdkCopy
 
 /**
  * Full-size streak day tile (130×160) — matches iOS StreakDayTile.swift.
@@ -32,6 +33,7 @@ internal fun StreakDayTile(
     isClaimed: Boolean,
     isToday: Boolean,
     branding: WINRBranding,
+    sdkCopy: SdkCopy? = null,
     modifier: Modifier = Modifier
 ) {
     val cr = branding.cornerRadius + 4f
@@ -132,7 +134,8 @@ internal fun StreakDayTile(
                     else -> branding.cardBackgroundColor.copy(alpha = 0.9f)
                 }
                 Text(
-                    text = "DAY $dayNumber",
+                    text = (sdkCopy?.streakDashboard?.dayRewardLabel ?: "DAY {day}")
+                        .replace("{day}", dayNumber.toString()),
                     color = if (isToday) branding.primaryButtonTextColor else branding.secondaryTextColor,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
@@ -157,7 +160,7 @@ internal fun StreakDayTile(
 
             // "Entries" label
             Text(
-                text = "Entries",
+                text = sdkCopy?.streakDashboard?.entriesLabel ?: "Entries",
                 color = when {
                     isToday -> Color.White.copy(alpha = 0.9f)
                     isClaimed -> branding.primaryTextColor.copy(alpha = 0.85f)
@@ -198,6 +201,7 @@ internal fun CompactStreakTile(
     isClaimed: Boolean,
     isToday: Boolean,
     branding: WINRBranding,
+    sdkCopy: SdkCopy? = null,
     modifier: Modifier = Modifier
 ) {
     val cr = branding.cornerRadius
@@ -291,7 +295,8 @@ internal fun CompactStreakTile(
                     else -> branding.cardBackgroundColor.copy(alpha = 0.85f)
                 }
                 Text(
-                    text = "DAY $dayNumber",
+                    text = (sdkCopy?.streakDashboard?.dayRewardLabel ?: "DAY {day}")
+                        .replace("{day}", dayNumber.toString()),
                     color = if (isToday) branding.primaryButtonTextColor else branding.secondaryTextColor,
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Bold,
@@ -316,7 +321,7 @@ internal fun CompactStreakTile(
 
             // "Entries" label
             Text(
-                text = "Entries",
+                text = sdkCopy?.streakDashboard?.entriesLabel ?: "Entries",
                 color = when {
                     isToday -> Color.White.copy(alpha = 0.85f)
                     isClaimed -> branding.primaryTextColor.copy(alpha = 0.8f)

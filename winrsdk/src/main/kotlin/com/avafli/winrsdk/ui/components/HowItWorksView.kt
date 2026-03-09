@@ -20,6 +20,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.avafli.winrsdk.WINRBranding
+import com.avafli.winrsdk.domain.SdkCopy
 
 /**
  * "How It Works" screen — matches iOS WINRExperienceHowItWorksView.swift.
@@ -28,14 +29,23 @@ import com.avafli.winrsdk.WINRBranding
 @Composable
 internal fun HowItWorksView(
     branding: WINRBranding,
+    sdkCopy: SdkCopy? = null,
     onPrimary: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val steps = listOf(
-        Triple("📅", "Visit Daily", "Open the app each day to claim your daily entries."),
-        Triple("🔥", "Build Your Streak", "Keep your streak alive — the longer it goes, the more entries you earn each day."),
-        Triple("▶️", "Watch & Double", "Watch an optional short video to double your daily entries."),
-        Triple("🎁", "Win Prizes", "Your entries go into the monthly prize drawing. More entries = better odds!"),
+        Triple("📅", 
+            sdkCopy?.howItWorks?.step1Title ?: "Visit Daily",
+            sdkCopy?.howItWorks?.step1Desc ?: "Open the app each day to claim your daily entries."),
+        Triple("🔥", 
+            sdkCopy?.howItWorks?.step2Title ?: "Build Your Streak",
+            sdkCopy?.howItWorks?.step2Desc ?: "Keep your streak alive — the longer it goes, the more entries you earn each day."),
+        Triple("▶️", 
+            sdkCopy?.howItWorks?.step3Title ?: "Watch & Double",
+            sdkCopy?.howItWorks?.step3Desc ?: "Watch an optional short video to double your daily entries."),
+        Triple("🎁", 
+            sdkCopy?.howItWorks?.step4Title ?: "Win Prizes",
+            sdkCopy?.howItWorks?.step4Desc ?: "Your entries go into the monthly prize drawing. More entries = better odds!"),
     )
 
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
@@ -57,14 +67,14 @@ internal fun HowItWorksView(
                 Text(text = "🎰", fontSize = 48.sp)
                 Spacer(modifier = Modifier.height(10.dp))
                 Text(
-                    text = "How It Works",
+                    text = sdkCopy?.howItWorks?.title ?: "How It Works",
                     color = branding.primaryTextColor,
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Black
                 )
                 Spacer(modifier = Modifier.height(10.dp))
                 Text(
-                    text = "Earn entries every day for a chance to win big.",
+                    text = sdkCopy?.howItWorks?.subtitle ?: "Earn entries every day for a chance to win big.",
                     color = branding.mutedTextColor,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
@@ -106,7 +116,7 @@ internal fun HowItWorksView(
             ) {
                 Text(text = "💡", fontSize = 20.sp)
                 Text(
-                    text = "Pro tip: A 5-day streak earns a weekly bonus of extra entries!",
+                    text = sdkCopy?.howItWorks?.tipText ?: "Pro tip: A 5-day streak earns a weekly bonus of extra entries!",
                     color = branding.mutedTextColor,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium
@@ -146,7 +156,7 @@ internal fun HowItWorksView(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "Got It!",
+                    text = sdkCopy?.howItWorks?.gotItButton ?: "Got It!",
                     color = branding.primaryButtonTextColor,
                     fontSize = 17.sp,
                     fontWeight = FontWeight.SemiBold

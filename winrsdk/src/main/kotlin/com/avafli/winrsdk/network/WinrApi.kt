@@ -6,7 +6,7 @@ import com.avafli.winrsdk.domain.DailyEntryGrant
 import com.avafli.winrsdk.domain.Milestone
 import com.avafli.winrsdk.domain.SdkBranding
 import com.avafli.winrsdk.domain.SdkConfig
-import com.avafli.winrsdk.domain.SdkCopy
+import com.avafli.winrsdk.domain.*
 import com.avafli.winrsdk.services.Logger
 import kotlinx.serialization.json.*
 
@@ -223,13 +223,24 @@ internal class WinrApi(
 
         val copy = copyJson?.let {
             SdkCopy(
+                // Parse nested per-screen copy objects
+                emailCapture = it["emailCapture"]?.jsonObject?.let { parseEmailCaptureCopy(it) },
+                streakDashboard = it["streakDashboard"]?.jsonObject?.let { parseStreakDashboardCopy(it) },
+                alreadyClaimed = it["alreadyClaimed"]?.jsonObject?.let { parseAlreadyClaimedCopy(it) },
+                bonusEntries = it["bonusEntries"]?.jsonObject?.let { parseBonusEntriesCopy(it) },
+                milestone = it["milestone"]?.jsonObject?.let { parseMilestoneCopy(it) },
+                completed = it["completed"]?.jsonObject?.let { parseCompletedCopy(it) },
+                error = it["error"]?.jsonObject?.let { parseErrorCopy(it) },
+                howItWorks = it["howItWorks"]?.jsonObject?.let { parseHowItWorksCopy(it) },
+                loading = it["loading"]?.jsonObject?.let { parseLoadingCopy(it) },
+                // Parse flat backward compatibility fields
                 welcomeTitle = it["welcomeTitle"]?.jsonPrimitive?.contentOrNull,
                 welcomeSubtitle = it["welcomeSubtitle"]?.jsonPrimitive?.contentOrNull,
-                claimButtonTitle = it["claimButtonTitle"]?.jsonPrimitive?.contentOrNull,
-                bonusTitle = it["bonusTitle"]?.jsonPrimitive?.contentOrNull,
-                bonusSubtitle = it["bonusSubtitle"]?.jsonPrimitive?.contentOrNull,
-                completedTitle = it["completedTitle"]?.jsonPrimitive?.contentOrNull,
-                completedSubtitle = it["completedSubtitle"]?.jsonPrimitive?.contentOrNull
+                dailyClaimButton = it["dailyClaimButton"]?.jsonPrimitive?.contentOrNull,
+                streakMessage = it["streakMessage"]?.jsonPrimitive?.contentOrNull,
+                emailConsentText = it["emailConsentText"]?.jsonPrimitive?.contentOrNull,
+                ageGateText = it["ageGateText"]?.jsonPrimitive?.contentOrNull,
+                rulesLinkText = it["rulesLinkText"]?.jsonPrimitive?.contentOrNull
             )
         }
 
@@ -241,6 +252,99 @@ internal class WinrApi(
             day = obj["day"]?.jsonPrimitive?.int ?: 0,
             bonusEntries = obj["bonusEntries"]?.jsonPrimitive?.int ?: 0,
             badge = obj["badge"]?.jsonPrimitive?.contentOrNull
+        )
+    }
+
+    private fun parseEmailCaptureCopy(obj: JsonObject): EmailCaptureCopy {
+        return EmailCaptureCopy(
+            title = obj["title"]?.jsonPrimitive?.contentOrNull,
+            subtitle = obj["subtitle"]?.jsonPrimitive?.contentOrNull,
+            emailLabel = obj["emailLabel"]?.jsonPrimitive?.contentOrNull,
+            emailPlaceholder = obj["emailPlaceholder"]?.jsonPrimitive?.contentOrNull,
+            ageGateText = obj["ageGateText"]?.jsonPrimitive?.contentOrNull,
+            submitButton = obj["submitButton"]?.jsonPrimitive?.contentOrNull,
+            rulesPrefix = obj["rulesPrefix"]?.jsonPrimitive?.contentOrNull,
+            rulesLinkText = obj["rulesLinkText"]?.jsonPrimitive?.contentOrNull,
+            emailConsentText = obj["emailConsentText"]?.jsonPrimitive?.contentOrNull
+        )
+    }
+
+    private fun parseStreakDashboardCopy(obj: JsonObject): StreakDashboardCopy {
+        return StreakDashboardCopy(
+            streakMessage = obj["streakMessage"]?.jsonPrimitive?.contentOrNull,
+            upcomingLabel = obj["upcomingLabel"]?.jsonPrimitive?.contentOrNull,
+            claimButton = obj["claimButton"]?.jsonPrimitive?.contentOrNull,
+            dayRewardLabel = obj["dayRewardLabel"]?.jsonPrimitive?.contentOrNull,
+            claimDescription = obj["claimDescription"]?.jsonPrimitive?.contentOrNull,
+            entriesLabel = obj["entriesLabel"]?.jsonPrimitive?.contentOrNull,
+            bonusProgressLabel = obj["bonusProgressLabel"]?.jsonPrimitive?.contentOrNull,
+            weekLabel = obj["weekLabel"]?.jsonPrimitive?.contentOrNull,
+            monthLabel = obj["monthLabel"]?.jsonPrimitive?.contentOrNull,
+            bonusEarnedText = obj["bonusEarnedText"]?.jsonPrimitive?.contentOrNull
+        )
+    }
+
+    private fun parseAlreadyClaimedCopy(obj: JsonObject): AlreadyClaimedCopy {
+        return AlreadyClaimedCopy(
+            title = obj["title"]?.jsonPrimitive?.contentOrNull,
+            subtitle = obj["subtitle"]?.jsonPrimitive?.contentOrNull,
+            doneButton = obj["doneButton"]?.jsonPrimitive?.contentOrNull
+        )
+    }
+
+    private fun parseBonusEntriesCopy(obj: JsonObject): BonusEntriesCopy {
+        return BonusEntriesCopy(
+            title = obj["title"]?.jsonPrimitive?.contentOrNull,
+            subtitle = obj["subtitle"]?.jsonPrimitive?.contentOrNull,
+            watchButton = obj["watchButton"]?.jsonPrimitive?.contentOrNull,
+            skipText = obj["skipText"]?.jsonPrimitive?.contentOrNull
+        )
+    }
+
+    private fun parseMilestoneCopy(obj: JsonObject): MilestoneCopy {
+        return MilestoneCopy(
+            title = obj["title"]?.jsonPrimitive?.contentOrNull,
+            subtitle = obj["subtitle"]?.jsonPrimitive?.contentOrNull,
+            continueButton = obj["continueButton"]?.jsonPrimitive?.contentOrNull
+        )
+    }
+
+    private fun parseCompletedCopy(obj: JsonObject): CompletedCopy {
+        return CompletedCopy(
+            title = obj["title"]?.jsonPrimitive?.contentOrNull,
+            subtitle = obj["subtitle"]?.jsonPrimitive?.contentOrNull,
+            closeButton = obj["closeButton"]?.jsonPrimitive?.contentOrNull
+        )
+    }
+
+    private fun parseErrorCopy(obj: JsonObject): ErrorCopy {
+        return ErrorCopy(
+            title = obj["title"]?.jsonPrimitive?.contentOrNull,
+            subtitle = obj["subtitle"]?.jsonPrimitive?.contentOrNull,
+            closeButton = obj["closeButton"]?.jsonPrimitive?.contentOrNull
+        )
+    }
+
+    private fun parseHowItWorksCopy(obj: JsonObject): HowItWorksCopy {
+        return HowItWorksCopy(
+            title = obj["title"]?.jsonPrimitive?.contentOrNull,
+            subtitle = obj["subtitle"]?.jsonPrimitive?.contentOrNull,
+            step1Title = obj["step1Title"]?.jsonPrimitive?.contentOrNull,
+            step1Desc = obj["step1Desc"]?.jsonPrimitive?.contentOrNull,
+            step2Title = obj["step2Title"]?.jsonPrimitive?.contentOrNull,
+            step2Desc = obj["step2Desc"]?.jsonPrimitive?.contentOrNull,
+            step3Title = obj["step3Title"]?.jsonPrimitive?.contentOrNull,
+            step3Desc = obj["step3Desc"]?.jsonPrimitive?.contentOrNull,
+            step4Title = obj["step4Title"]?.jsonPrimitive?.contentOrNull,
+            step4Desc = obj["step4Desc"]?.jsonPrimitive?.contentOrNull,
+            tipText = obj["tipText"]?.jsonPrimitive?.contentOrNull,
+            gotItButton = obj["gotItButton"]?.jsonPrimitive?.contentOrNull
+        )
+    }
+
+    private fun parseLoadingCopy(obj: JsonObject): LoadingCopy {
+        return LoadingCopy(
+            text = obj["text"]?.jsonPrimitive?.contentOrNull
         )
     }
 

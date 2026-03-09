@@ -70,7 +70,8 @@ internal fun EmailCaptureView(
             modifier = Modifier.padding(top = 8.dp)
         ) {
             Text(
-                text = sdkCopy?.welcomeTitle
+                text = sdkCopy?.emailCapture?.title
+                    ?: sdkCopy?.welcomeTitle
                     ?: prizeValue?.let { "WIN $it!" }
                     ?: "WIN PRIZES!",
                 color = branding.secondaryTextColor,
@@ -81,7 +82,8 @@ internal fun EmailCaptureView(
             )
             Spacer(modifier = Modifier.height(10.dp))
             Text(
-                text = sdkCopy?.welcomeSubtitle
+                text = sdkCopy?.emailCapture?.subtitle
+                    ?: sdkCopy?.welcomeSubtitle
                     ?: "Just submit this entry form for your FREE chance to win.",
                 color = branding.mutedTextColor,
                 fontSize = 15.sp,
@@ -98,7 +100,7 @@ internal fun EmailCaptureView(
             modifier = Modifier.padding(horizontal = 20.dp)
         ) {
             Text(
-                text = "Email",
+                text = sdkCopy?.emailCapture?.emailLabel ?: "Email",
                 color = branding.secondaryTextColor.copy(alpha = 0.9f),
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold
@@ -141,7 +143,7 @@ internal fun EmailCaptureView(
                     Box(modifier = Modifier.weight(1f)) {
                         if (email.isEmpty()) {
                             Text(
-                                text = "Ex. johndoe@gmail.com",
+                                text = sdkCopy?.emailCapture?.emailPlaceholder ?: "Ex. johndoe@gmail.com",
                                 color = branding.inputFieldPlaceholderColor,
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Medium
@@ -200,7 +202,9 @@ internal fun EmailCaptureView(
             )
             Spacer(modifier = Modifier.width(10.dp))
             Text(
-                text = "I confirm I am 18 years of age or older",
+                text = sdkCopy?.emailCapture?.ageGateText 
+                    ?: sdkCopy?.ageGateText 
+                    ?: "I confirm I am 18 years of age or older",
                 color = branding.secondaryTextColor.copy(alpha = 0.85f),
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Medium
@@ -248,7 +252,7 @@ internal fun EmailCaptureView(
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = "ENTER NOW",
+                text = sdkCopy?.emailCapture?.submitButton ?: "ENTER NOW",
                 color = branding.primaryButtonTextColor,
                 fontSize = 17.sp,
                 fontWeight = FontWeight.SemiBold
@@ -264,12 +268,14 @@ internal fun EmailCaptureView(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "By entering, you agree to the ",
+                text = sdkCopy?.emailCapture?.rulesPrefix ?: "By entering, you agree to the ",
                 color = branding.mutedTextColor.copy(alpha = 0.7f),
                 fontSize = 11.sp
             )
             Text(
-                text = "Official Rules",
+                text = sdkCopy?.emailCapture?.rulesLinkText 
+                    ?: sdkCopy?.rulesLinkText 
+                    ?: "Official Rules",
                 color = branding.primaryButtonColor,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,
