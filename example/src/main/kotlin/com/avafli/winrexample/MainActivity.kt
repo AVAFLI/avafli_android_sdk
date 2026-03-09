@@ -27,16 +27,17 @@ class MainActivity : ComponentActivity() {
         // Initialize WINR SDK
         WINR.initialize(
             context = this,
-            publisherKey = "YOUR_PUBLISHER_KEY", // Replace with your key
+            publisherKey = "winr_live_50b1b3b801a843d5e1f99593fcad4d14",
             environment = WINREnvironment.Production,
             options = WINROptions(
                 debugLogging = true,
+                enableCertificatePinning = false, // Disabled until pin rotation is automated
                 branding = WINRBranding() // Customize colors here
             )
         )
 
-        // Optional: Set user info
-        WINR.setUser(WINRUser(id = "user-123"))
+        // Set user info
+        WINR.setUser(WINRUser(id = "android-example-user"))
 
         setContent {
             ExampleApp()
