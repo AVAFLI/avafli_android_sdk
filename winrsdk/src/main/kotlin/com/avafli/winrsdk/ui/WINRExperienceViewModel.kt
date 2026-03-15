@@ -2,7 +2,7 @@ package com.avafli.winrsdk.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.avafli.winrsdk.domain.Campaign
+import com.avafli.winrsdk.domain.Giveaway
 import com.avafli.winrsdk.domain.DailyEntryGrant
 import com.avafli.winrsdk.domain.Milestone
 import com.avafli.winrsdk.domain.SdkConfig
@@ -41,7 +41,7 @@ internal sealed class ExperienceScreen {
 internal data class ExperienceUiState(
     val screen: ExperienceScreen = ExperienceScreen.Loading,
     val claimedToday: Boolean = false,
-    val campaign: Campaign? = null,
+    val giveaway: Giveaway? = null,
     val sdkCopy: SdkCopy? = null,
     // Legacy flat fields kept for backward compat
     val isLoading: Boolean = true,
@@ -84,21 +84,21 @@ internal class WINRExperienceViewModel(
 
     // ── Load ──
 
-    fun loadCampaign(existingCampaign: Campaign?) {
+    fun loadGiveaway(existingGiveaway: Giveaway?) {
         viewModelScope.launch {
             try {
-                val campaign: Campaign
-                if (existingCampaign != null) {
-                    campaign = existingCampaign
+                val giveaway: Giveaway
+                if (existingGiveaway != null) {
+                    giveaway = existingGiveaway
                 } else {
-                    val response = api.getActiveCampaign()
-                    campaign = response.campaign
+                    val response = api.getActiveGiveaway()
+                    giveaway = response.giveaway
                     // Update sdkConfig from latest response
                     if (response.sdkConfig != null) {
                         sdkConfig = response.sdkConfig
                     }
                 }
-                streakEngine = StreakEngine(campaign)
+                streakEngine = StreakEngine(giveaway)
 
                 val savedState = loadStreakState()
                 streakEngine?.setState(savedState)
@@ -112,7 +112,7 @@ internal class WINRExperienceViewModel(
                     _uiState.value = _uiState.value.copy(
                         screen = ExperienceScreen.EmailCapture,
                         isLoading = false,
-                        campaign = campaign,
+                        giveaway = giveaway,
                         sdkCopy = sdkConfig?.copy,
                         streakState = state,
                         hasClaimed = alreadyClaimed,
@@ -123,33 +123,33 @@ internal class WINRExperienceViewModel(
                     return@launch
                 }
 
-                moveToStreakDashboard(campaign, state, alreadyClaimed)
+                moveToStreakDashboard(giveaway, state, alreadyClaimed)
             } catch (e: Exception) {
-                logger.error("Failed to load campaign: ${e.message}", e)
+                logger.error("Failed to load giveaway: ${e.message}", e)
                 _uiState.value = _uiState.value.copy(
-                    screen = ExperienceScreen.Error(e.message ?: "Failed to load campaign"),
+                    screen = ExperienceScreen.Error(e.message ?: "Failed to load giveaway"),
                     isLoading = false,
-                    error = e.message ?: "Failed to load campaign"
+                    error = e.message ?: "Failed to load giveaway"
                 )
             }
         }
     }
 
-    private fun moveToStreakDashboard(campaign: Campaign, state: StreakState, claimed: Boolean) {
-        val ladder = campaign.streakLadder.map { it * campaign.maxDailyBaseEntries }
+    private fun moveToStreakDashboard(giveaway: Giveaway, state: StreakState, claimed: Boolean) {
+        val ladder = giveaway.streakLadder.map { it * giveaway.maxDailyBaseEntries }
         val dayIndex = (state.currentDay.coerceAtLeast(1) - 1).coerceIn(0, ladder.size - 1)
         val entriesToday = ladder[dayIndex]
 
         _uiState.value = _uiState.value.copy(
             screen = ExperienceScreen.Streak(state, entriesToday, ladder),
             isLoading = false,
-            campaign = campaign,
+            giveaway = giveaway,
             sdkCopy = sdkConfig?.copy,
             streakState = state,
             hasClaimed = claimed,
             claimedToday = claimed,
             totalEntries = state.totalEntries,
-            canDouble = campaign.doublingEnabled && !claimed,
+            canDouble = giveaway.doublingEnabled && !claimed,
             emailSubmitted = true
         )
     }
@@ -168,10 +168,10 @@ internal class WINRExperienceViewModel(
                         emailSubmitted = true
                     )
                     // Advance to streak dashboard
-                    val campaign = _uiState.value.campaign ?: return@launch
+                    val giveaway = _uiState.value.giveaway ?: return@launch
                     val state = streakEngine?.getState() ?: StreakState()
                     val claimed = streakEngine?.hasClaimedToday() ?: false
-                    moveToStreakDashboard(campaign, state, claimed)
+                    moveToStreakDashboard(giveaway, state, claimed)
                 } else {
                     _uiState.value = _uiState.value.copy(
                         isSubmittingEmail = false,
@@ -205,7 +205,7 @@ internal class WINRExperienceViewModel(
         if (prev != null) {
             _uiState.value = _uiState.value.copy(screen = prev)
         } else {
-            loadCampaign(_uiState.value.campaign)
+            loadGiveaway(_uiState.value.giveaway)
         }
     }
 
@@ -238,13 +238,13 @@ internal class WINRExperienceViewModel(
                 val state = streakEngine?.getState() ?: StreakState()
                 saveStreakState(state)
 
-                val campaign = _uiState.value.campaign
+                val giveaway = _uiState.value.giveaway
 
                 // Check milestone → bonus → complete
                 val nextScreen: ExperienceScreen = when {
                     response.milestone != null ->
                         ExperienceScreen.MilestoneCelebration(response.milestone, grant)
-                    campaign?.doublingEnabled == true ->
+                    giveaway?.doublingEnabled == true ->
                         ExperienceScreen.Bonus(grant)
                     else ->
                         ExperienceScreen.Completed(grant)
@@ -258,7 +258,7 @@ internal class WINRExperienceViewModel(
                     entriesEarned = grant.entries,
                     totalEntries = grant.totalEntries,
                     streakState = state,
-                    canDouble = campaign?.doublingEnabled == true,
+                    canDouble = giveaway?.doublingEnabled == true,
                     lastGrant = grant
                 )
 
@@ -269,9 +269,9 @@ internal class WINRExperienceViewModel(
                 if (e.message?.contains("Already claimed") == true) {
                     // Treat as success — update UI
                     val state = streakEngine?.getState() ?: StreakState()
-                    val campaign = _uiState.value.campaign
-                    val ladder = campaign?.streakLadder?.map {
-                        it * (campaign.maxDailyBaseEntries)
+                    val giveaway = _uiState.value.giveaway
+                    val ladder = giveaway?.streakLadder?.map {
+                        it * (giveaway.maxDailyBaseEntries)
                     } ?: emptyList()
                     val dayIndex = (state.currentDay.coerceAtLeast(1) - 1)
                         .coerceIn(0, ladder.size.coerceAtLeast(1) - 1)
@@ -330,8 +330,8 @@ internal class WINRExperienceViewModel(
 
     fun dismissMilestoneCelebration() {
         val screen = _uiState.value.screen as? ExperienceScreen.MilestoneCelebration ?: return
-        val campaign = _uiState.value.campaign
-        val nextScreen = if (campaign?.doublingEnabled == true) {
+        val giveaway = _uiState.value.giveaway
+        val nextScreen = if (giveaway?.doublingEnabled == true) {
             ExperienceScreen.Bonus(screen.grant)
         } else {
             ExperienceScreen.Completed(screen.grant)

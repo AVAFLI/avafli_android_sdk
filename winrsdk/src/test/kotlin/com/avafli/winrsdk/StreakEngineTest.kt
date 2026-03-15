@@ -8,13 +8,13 @@ import java.time.LocalDate
 
 class StreakEngineTest {
 
-    private lateinit var campaign: Campaign
+    private lateinit var giveaway: Giveaway
     private lateinit var engine: StreakEngine
 
     @Before
     fun setup() {
-        campaign = Campaign(
-            id = "test-campaign",
+        giveaway = Giveaway(
+            id = "test-giveaway",
             title = "Test Sweepstakes",
             prizeDescription = "Win a Prize!",
             streakLadder = listOf(1, 2, 3, 5, 8, 13, 21),
@@ -31,7 +31,7 @@ class StreakEngineTest {
                 Milestone(day = 7, bonusEntries = 25, badge = "streak_7")
             )
         )
-        engine = StreakEngine(campaign)
+        engine = StreakEngine(giveaway)
     }
 
     @Test
@@ -53,8 +53,8 @@ class StreakEngineTest {
 
     @Test
     fun `entry multiplier returns 1 for empty ladder`() {
-        val emptyCampaign = campaign.copy(streakLadder = emptyList())
-        val emptyEngine = StreakEngine(emptyCampaign)
+        val emptyGiveaway = giveaway.copy(streakLadder = emptyList())
+        val emptyEngine = StreakEngine(emptyGiveaway)
         assertEquals(1, emptyEngine.getEntryMultiplier(1))
     }
 
@@ -128,8 +128,8 @@ class StreakEngineTest {
 
     @Test
     fun `double entries does nothing when doubling disabled`() {
-        val noDblCampaign = campaign.copy(doublingEnabled = false)
-        val noDblEngine = StreakEngine(noDblCampaign)
+        val noDblGiveaway = giveaway.copy(doublingEnabled = false)
+        val noDblEngine = StreakEngine(noDblGiveaway)
 
         val grant = DailyEntryGrant(entries = 5, streakDay = 4, totalEntries = 11)
         val result = noDblEngine.doubleEntries(grant)
@@ -202,8 +202,8 @@ class StreakEngineTest {
 
     @Test
     fun `calculate entries uses multiplier and max daily base`() {
-        val campaignWith3Base = campaign.copy(maxDailyBaseEntries = 3)
-        val engine3 = StreakEngine(campaignWith3Base)
+        val giveawayWith3Base = giveaway.copy(maxDailyBaseEntries = 3)
+        val engine3 = StreakEngine(giveawayWith3Base)
         engine3.setState(engine3.getState().copy(currentDay = 4))
 
         // Day 4 multiplier = 5, base = 3 → 15

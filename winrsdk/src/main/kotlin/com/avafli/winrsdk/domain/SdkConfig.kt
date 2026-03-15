@@ -1,7 +1,7 @@
 package com.avafli.winrsdk.domain
 
 /**
- * Server-driven SDK configuration returned by registerDevice / getActiveCampaign.
+ * Server-driven SDK configuration returned by registerDevice / getActiveGiveaway.
  * Contains branding overrides and copy text that the backend controls.
  */
 data class SdkConfig(

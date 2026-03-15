@@ -123,8 +123,8 @@ private fun WINRExperienceBody(
                 is ExperienceScreen.EmailCapture -> {
                     EmailCaptureView(
                         branding = branding,
-                        rulesUrl = uiState.campaign?.rulesUrl,
-                        prizeValue = uiState.campaign?.prizeValue,
+                        rulesUrl = uiState.giveaway?.rulesUrl,
+                        prizeValue = uiState.giveaway?.prizeValue,
                         sdkCopy = uiState.sdkCopy,
                         onSubmit = { viewModel.submitEmail(it) },
                         onSkip = { viewModel.skipEmailCapture() }
@@ -138,7 +138,7 @@ private fun WINRExperienceBody(
                         entriesToday = screen.entriesToday,
                         ladder = screen.ladder,
                         claimedToday = uiState.claimedToday,
-                        campaign = uiState.campaign,
+                        giveaway = uiState.giveaway,
                         sdkCopy = uiState.sdkCopy,
                         onClaim = { viewModel.claimDailyEntries() },
                         onDone = onDismiss

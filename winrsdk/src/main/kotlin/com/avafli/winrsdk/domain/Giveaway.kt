@@ -3,7 +3,7 @@ package com.avafli.winrsdk.domain
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class Campaign(
+data class Giveaway(
     val id: String,
     val title: String,
     val prizeDescription: String,

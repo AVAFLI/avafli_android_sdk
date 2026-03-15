@@ -4,7 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
-import com.avafli.winrsdk.domain.Campaign
+import com.avafli.winrsdk.domain.Giveaway
 import com.avafli.winrsdk.domain.DailyEntryGrant
 import com.avafli.winrsdk.domain.SdkConfig
 import com.avafli.winrsdk.network.NetworkClient
@@ -35,7 +35,7 @@ object WINR {
     private var pushManager: PushNotificationManager? = null
     private var adProvider: RewardedVideoProvider? = null
     private var user: WINRUser? = null
-    private var cachedCampaign: Campaign? = null
+    private var cachedGiveaway: Giveaway? = null
     private var cachedSdkConfig: SdkConfig? = null
     private var pendingCallback: ((Result<DailyEntryGrant>) -> Unit)? = null
 
@@ -165,7 +165,7 @@ object WINR {
             currentApi.deleteUserData()
             secureStorage?.clearAll()
             preferencesStorage?.clearAll()
-            cachedCampaign = null
+            cachedGiveaway = null
             cachedSdkConfig = null
             user = null
             logger?.info("User account deleted successfully")
@@ -193,7 +193,7 @@ object WINR {
 
     internal fun getSdkConfig(): SdkConfig? = cachedSdkConfig
 
-    internal fun getCachedCampaign(): Campaign? = cachedCampaign
+    internal fun getCachedGiveaway(): Giveaway? = cachedGiveaway
 
     internal fun consumePendingCallback(): ((Result<DailyEntryGrant>) -> Unit)? {
         val cb = pendingCallback
@@ -209,14 +209,14 @@ object WINR {
         // Skip if we already have a valid token
         if (secureStorage?.getToken() != null) {
             logger?.debug("Device already registered, skipping")
-            // Fetch latest campaign + sdkConfig
+            // Fetch latest giveaway + sdkConfig
             try {
-                val activeCampaignResponse = api?.getActiveCampaign()
-                cachedCampaign = activeCampaignResponse?.campaign
-                cachedSdkConfig = activeCampaignResponse?.sdkConfig ?: cachedSdkConfig
+                val activeGiveawayResponse = api?.getActiveGiveaway()
+                cachedGiveaway = activeGiveawayResponse?.giveaway
+                cachedSdkConfig = activeGiveawayResponse?.sdkConfig ?: cachedSdkConfig
                 setupAdProvider()
             } catch (e: Exception) {
-                logger?.warn("Failed to refresh campaign: ${e.message}")
+                logger?.warn("Failed to refresh giveaway: ${e.message}")
             }
             return
         }
@@ -240,7 +240,7 @@ object WINR {
         secureStorage?.saveRefreshToken(response.refreshToken)
         secureStorage?.saveUuid(response.uuid)
 
-        cachedCampaign = response.campaign
+        cachedGiveaway = response.giveaway
         cachedSdkConfig = response.sdkConfig
         setupAdProvider()
 
@@ -248,7 +248,7 @@ object WINR {
     }
 
     private fun setupAdProvider() {
-        val adConfig = cachedCampaign?.adConfig ?: return
+        val adConfig = cachedGiveaway?.adConfig ?: return
         adProvider = AdProviderFactory.createProvider(adConfig)
         logger?.debug("Ad provider configured: ${adConfig.provider}")
     }

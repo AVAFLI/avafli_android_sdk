@@ -3,7 +3,7 @@ package com.avafli.winrsdk.rewards
 import com.avafli.winrsdk.domain.AdConfig
 
 /**
- * Factory for creating rewarded video providers based on campaign config.
+ * Factory for creating rewarded video providers based on giveaway config.
  */
 internal object AdProviderFactory {
 

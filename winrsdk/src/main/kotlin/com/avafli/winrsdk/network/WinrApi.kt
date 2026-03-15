@@ -1,7 +1,7 @@
 package com.avafli.winrsdk.network
 
 import com.avafli.winrsdk.WINRError
-import com.avafli.winrsdk.domain.Campaign
+import com.avafli.winrsdk.domain.Giveaway
 import com.avafli.winrsdk.domain.DailyEntryGrant
 import com.avafli.winrsdk.domain.Milestone
 import com.avafli.winrsdk.domain.SdkBranding
@@ -24,7 +24,7 @@ internal class WinrApi(
     }
 
     /**
-     * Register the device and get initial tokens + campaign.
+     * Register the device and get initial tokens + giveaway.
      */
     suspend fun registerDevice(
         apiKey: String,
@@ -49,28 +49,28 @@ internal class WinrApi(
             ?: throw WINRError.RegistrationFailed("Missing refreshToken in response")
         val uuid = response["uuid"]?.jsonPrimitive?.contentOrNull
             ?: throw WINRError.RegistrationFailed("Missing uuid in response")
-        val campaign = response["campaign"]?.let { parseCampaign(it.jsonObject) }
+        val giveaway = response["giveaway"]?.let { parseGiveaway(it.jsonObject) }
         val sdkConfig = response["sdkConfig"]?.jsonObject?.let { parseSdkConfig(it) }
 
         return RegisterDeviceResponse(
             token = token,
             refreshToken = refreshToken,
             uuid = uuid,
-            campaign = campaign,
+            giveaway = giveaway,
             sdkConfig = sdkConfig
         )
     }
 
     /**
-     * Get the active campaign and latest SDK config.
+     * Get the active giveaway and latest SDK config.
      */
-    suspend fun getActiveCampaign(): GetActiveCampaignResponse {
-        val response = networkClient.authenticatedPost("getActiveCampaign")
-        val campaignJson = response["campaign"]?.jsonObject
-            ?: throw WINRError.NoCampaign()
-        val campaign = parseCampaign(campaignJson)
+    suspend fun getActiveGiveaway(): GetActiveGiveawayResponse {
+        val response = networkClient.authenticatedPost("getActiveGiveaway")
+        val giveawayJson = response["giveaway"]?.jsonObject
+            ?: throw WINRError.NoGiveaway()
+        val giveaway = parseGiveaway(giveawayJson)
         val sdkConfig = response["sdkConfig"]?.jsonObject?.let { parseSdkConfig(it) }
-        return GetActiveCampaignResponse(campaign = campaign, sdkConfig = sdkConfig)
+        return GetActiveGiveawayResponse(giveaway = giveaway, sdkConfig = sdkConfig)
     }
 
     /**
@@ -173,12 +173,12 @@ internal class WinrApi(
         val token: String,
         val refreshToken: String,
         val uuid: String,
-        val campaign: Campaign?,
+        val giveaway: Giveaway?,
         val sdkConfig: SdkConfig? = null
     )
 
-    data class GetActiveCampaignResponse(
-        val campaign: Campaign,
+    data class GetActiveGiveawayResponse(
+        val giveaway: Giveaway,
         val sdkConfig: SdkConfig? = null
     )
 
@@ -203,8 +203,8 @@ internal class WinrApi(
 
     // --- Parsing helpers ---
 
-    private fun parseCampaign(obj: JsonObject): Campaign {
-        return json.decodeFromJsonElement(Campaign.serializer(), obj)
+    private fun parseGiveaway(obj: JsonObject): Giveaway {
+        return json.decodeFromJsonElement(Giveaway.serializer(), obj)
     }
 
     private fun parseSdkConfig(obj: JsonObject): SdkConfig {

@@ -12,7 +12,7 @@ Sweepstakes & prizing SDK for Android app publishers. Engage users with daily st
 - 🏆 **Weekly & Monthly Bonuses** — Extra entries for consistent engagement
 - 🎨 **White-Label Theming** — Full branding customization via Material 3
 - 🔒 **Secure Storage** — EncryptedSharedPreferences backed by Android Keystore
-- 📱 **Push Notifications** — FCM integration for campaign updates
+- 📱 **Push Notifications** — FCM integration for giveaway updates
 - 🗑️ **GDPR Compliant** — Right-to-be-forgotten with one API call
 - 🧩 **100% Jetpack Compose** — Modern, declarative UI with no XML
 
@@ -58,7 +58,7 @@ WINR.initialize(context, publisherKey = "YOUR_PUBLISHER_KEY")
 WINR.present(activity)
 ```
 
-That's it! The SDK handles device registration, campaign fetching, streak tracking, and UI presentation.
+That's it! The SDK handles device registration, giveaway fetching, streak tracking, and UI presentation.
 
 ## Configuration
 
@@ -159,7 +159,7 @@ WINROptions(analyticsAdapter = MyAnalytics())
 
 ## Rewarded Video Setup
 
-The SDK supports multiple ad providers. Configure via your campaign dashboard — the SDK auto-detects and initializes the correct provider.
+The SDK supports multiple ad providers. Configure via your giveaway dashboard — the SDK auto-detects and initializes the correct provider.
 
 ### Supported Providers
 
@@ -256,7 +256,7 @@ The SDK includes consumer ProGuard rules that are automatically applied. If you 
 com.avafli.winrsdk/
 ├── WINR.kt                    # Public API singleton
 ├── domain/                    # Business logic
-│   ├── Campaign.kt           # Campaign model
+│   ├── Giveaway.kt           # Giveaway model
 │   ├── StreakEngine.kt        # Streak calculation engine
 │   └── StreakState.kt         # Streak state model
 ├── network/                   # Networking

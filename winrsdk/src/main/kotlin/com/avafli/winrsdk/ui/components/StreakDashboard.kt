@@ -40,7 +40,7 @@ internal fun StreakDashboard(
     entriesToday: Int,
     ladder: List<Int>,
     claimedToday: Boolean,
-    campaign: com.avafli.winrsdk.domain.Campaign?,
+    giveaway: com.avafli.winrsdk.domain.Giveaway?,
     sdkCopy: SdkCopy? = null,
     onClaim: () -> Unit,
     onDone: () -> Unit,
@@ -81,7 +81,7 @@ internal fun StreakDashboard(
                         ?: sdkCopy?.streakDashboard?.streakMessage
                         ?: sdkCopy?.streakMessage
                         ?: sdkCopy?.welcomeTitle
-                        ?: campaign?.prizeValue?.let { "WIN $it!" }
+                        ?: giveaway?.prizeValue?.let { "WIN $it!" }
                         ?: "WIN PRIZES!",
                     color = Color.White,
                     fontSize = 22.sp,
@@ -134,7 +134,7 @@ internal fun StreakDashboard(
             }
 
             // ── Bonus Progress ──
-            campaign?.streakConfig?.let { config ->
+            giveaway?.streakConfig?.let { config ->
                 Spacer(modifier = Modifier.height(14.dp))
                 Column(modifier = Modifier.padding(horizontal = 6.dp)) {
                     Text(

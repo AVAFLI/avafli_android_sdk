@@ -11,8 +11,8 @@ sealed class WINRError(message: String, cause: Throwable? = null) : Exception(me
     /** The provided publisher key is invalid or missing. */
     class InvalidPublisherKey : WINRError("Invalid or missing publisher key.")
 
-    /** No active campaign is available. */
-    class NoCampaign : WINRError("No active campaign found.")
+    /** No active giveaway is available. */
+    class NoGiveaway : WINRError("No active giveaway found.")
 
     /** Network request failed. */
     class NetworkError(message: String, cause: Throwable? = null) : WINRError(message, cause)

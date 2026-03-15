@@ -7,7 +7,7 @@ import java.time.temporal.ChronoUnit
  * Engine that manages streak progression, bonuses, and milestones.
  * Port of the iOS StreakEngine.
  */
-class StreakEngine(private val campaign: Campaign) {
+class StreakEngine(private val giveaway: Giveaway) {
 
     private var state: StreakState = StreakState()
 
@@ -22,9 +22,9 @@ class StreakEngine(private val campaign: Campaign) {
      * Falls back to the last value in the ladder if day exceeds ladder size.
      */
     fun getEntryMultiplier(day: Int): Int {
-        if (campaign.streakLadder.isEmpty()) return 1
-        val index = (day - 1).coerceIn(0, campaign.streakLadder.size - 1)
-        return campaign.streakLadder[index]
+        if (giveaway.streakLadder.isEmpty()) return 1
+        val index = (day - 1).coerceIn(0, giveaway.streakLadder.size - 1)
+        return giveaway.streakLadder[index]
     }
 
     /**
@@ -32,7 +32,7 @@ class StreakEngine(private val campaign: Campaign) {
      */
     fun calculateEntries(): Int {
         val day = state.currentDay.coerceAtLeast(1)
-        return getEntryMultiplier(day) * campaign.maxDailyBaseEntries
+        return getEntryMultiplier(day) * giveaway.maxDailyBaseEntries
     }
 
     /**
@@ -120,7 +120,7 @@ class StreakEngine(private val campaign: Campaign) {
     fun getWeeklyBonusProgress(): Pair<Int, Int> {
         return Pair(
             state.weeklyDaysCompleted,
-            campaign.streakConfig.weeklyBonusThreshold
+            giveaway.streakConfig.weeklyBonusThreshold
         )
     }
 
@@ -130,7 +130,7 @@ class StreakEngine(private val campaign: Campaign) {
     fun getMonthlyBonusProgress(): Pair<Int, Int> {
         return Pair(
             state.monthlyDaysCompleted,
-            campaign.streakConfig.monthlyBonusThreshold
+            giveaway.streakConfig.monthlyBonusThreshold
         )
     }
 
@@ -138,14 +138,14 @@ class StreakEngine(private val campaign: Campaign) {
      * Check if a milestone is reached at the given streak day.
      */
     fun checkMilestone(day: Int): Milestone? {
-        return campaign.milestones?.find { it.day == day }
+        return giveaway.milestones?.find { it.day == day }
     }
 
     /**
      * Double the entries for the current claim (after watching rewarded video).
      */
     fun doubleEntries(currentGrant: DailyEntryGrant): DailyEntryGrant {
-        if (!campaign.doublingEnabled) return currentGrant
+        if (!giveaway.doublingEnabled) return currentGrant
         return currentGrant.copy(
             entries = currentGrant.entries * 2,
             doubled = true
