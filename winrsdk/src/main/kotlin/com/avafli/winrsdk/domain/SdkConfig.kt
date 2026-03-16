@@ -7,7 +7,9 @@ package com.avafli.winrsdk.domain
 data class SdkConfig(
     val branding: SdkBranding? = null,
     val copy: SdkCopy? = null,
-    val media: SdkMedia? = null
+    val media: SdkMedia? = null,
+    /** Feature flag: show bonus entries (watch video) screen in SDK flow. */
+    val bonusEntriesEnabled: Boolean = false
 )
 
 /**

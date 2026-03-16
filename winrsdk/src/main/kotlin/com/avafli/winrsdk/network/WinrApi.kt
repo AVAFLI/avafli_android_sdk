@@ -247,7 +247,9 @@ internal class WinrApi(
 
         val media = mediaJson?.let { parseSdkMedia(it) }
 
-        return SdkConfig(branding = branding, copy = copy, media = media)
+        val bonusEntriesEnabled = try { obj["bonusEntriesEnabled"]?.jsonPrimitive?.boolean ?: false } catch (_: Exception) { false }
+
+        return SdkConfig(branding = branding, copy = copy, media = media, bonusEntriesEnabled = bonusEntriesEnabled)
     }
 
     private fun parseMilestone(obj: JsonObject): Milestone {
