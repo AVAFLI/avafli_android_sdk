@@ -20,6 +20,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.avafli.winrsdk.WINRBranding
+import com.avafli.winrsdk.domain.ScreenMedia
 import com.avafli.winrsdk.domain.SdkCopy
 
 /**
@@ -30,6 +31,7 @@ import com.avafli.winrsdk.domain.SdkCopy
 internal fun HowItWorksView(
     branding: WINRBranding,
     sdkCopy: SdkCopy? = null,
+    heroMedia: ScreenMedia? = null,
     onPrimary: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -64,7 +66,16 @@ internal fun HowItWorksView(
                     .fillMaxWidth()
                     .padding(top = 4.dp)
             ) {
-                Text(text = "🎰", fontSize = 48.sp)
+                // Hero media from server config (image or lottie), fallback to emoji
+                HeroMedia(
+                    media = heroMedia,
+                    defaultContent = {
+                        Text(text = "🎰", fontSize = 48.sp)
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 4.dp)
+                )
                 Spacer(modifier = Modifier.height(10.dp))
                 Text(
                     text = sdkCopy?.howItWorks?.title ?: "How It Works",

@@ -126,7 +126,8 @@ private fun WINRExperienceBody(
                         rulesUrl = uiState.giveaway?.rulesUrl,
                         prizeValue = uiState.giveaway?.prizeValue,
                         sdkCopy = uiState.sdkCopy,
-                        onSubmit = { viewModel.submitEmail(it) },
+                        heroMedia = viewModel.getSdkMediaForScreen("emailCapture"),
+                        onSubmit = { email, marketingConsent -> viewModel.submitEmail(email, marketingConsent) },
                         onSkip = { viewModel.skipEmailCapture() }
                     )
                 }
@@ -245,6 +246,7 @@ private fun WINRExperienceBody(
                     HowItWorksView(
                         branding = branding,
                         sdkCopy = uiState.sdkCopy,
+                        heroMedia = viewModel.getSdkMediaForScreen("howItWorks"),
                         onPrimary = { viewModel.primaryFromHowItWorks() }
                     )
                 }

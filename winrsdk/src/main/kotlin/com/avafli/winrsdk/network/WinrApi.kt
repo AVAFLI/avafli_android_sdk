@@ -114,10 +114,14 @@ internal class WinrApi(
     }
 
     /**
-     * Submit user email.
+     * Submit user email with marketing consent and optional publisher user ID.
      */
-    suspend fun submitEmail(email: String): Boolean {
-        val body = mapOf("email" to JsonPrimitive(email))
+    suspend fun submitEmail(email: String, marketingConsent: Boolean = false, publisherUserId: String? = null): Boolean {
+        val body = buildMap<String, JsonElement> {
+            put("email", JsonPrimitive(email))
+            put("marketingConsent", JsonPrimitive(marketingConsent))
+            publisherUserId?.let { put("publisherUserId", JsonPrimitive(it)) }
+        }
         val response = networkClient.authenticatedPost("submitEmail", body)
         return response["success"]?.jsonPrimitive?.booleanOrNull ?: false
     }

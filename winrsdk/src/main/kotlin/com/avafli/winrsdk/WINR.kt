@@ -181,6 +181,8 @@ object WINR {
         return cb
     }
 
+    internal fun getPublisherUserId(): String? = config?.user?.id
+
     internal fun getAdProvider(): RewardedVideoProvider? = adProvider
 
     // --- Private helpers ---

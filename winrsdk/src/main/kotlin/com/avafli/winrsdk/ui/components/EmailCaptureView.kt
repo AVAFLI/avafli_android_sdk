@@ -39,12 +39,14 @@ internal fun EmailCaptureView(
     rulesUrl: String?,
     prizeValue: String?,
     sdkCopy: SdkCopy? = null,
-    onSubmit: (String) -> Unit,
+    heroMedia: ScreenMedia? = null,
+    onSubmit: (String, Boolean) -> Unit,
     onSkip: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var email by remember { mutableStateOf("") }
     var isAgeConfirmed by remember { mutableStateOf(false) }
+    var isMarketingConsented by remember { mutableStateOf(false) }
     var emailError by remember { mutableStateOf<String?>(null) }
 
     val isEmailValid = remember(email) {
@@ -58,11 +60,20 @@ internal fun EmailCaptureView(
             .padding(top = 2.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Logo placeholder
-        WINRLogoView(
-            branding = branding,
-            useSecondary = false,
-            modifier = Modifier.padding(bottom = 40.dp)
+        // Hero media from server config (image or lottie)
+        HeroMedia(
+            media = heroMedia,
+            defaultContent = {
+                // Logo placeholder (fallback when no hero media)
+                WINRLogoView(
+                    branding = branding,
+                    useSecondary = false,
+                    modifier = Modifier.padding(bottom = 40.dp)
+                )
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp)
         )
 
         // Title + subtitle
@@ -213,6 +224,31 @@ internal fun EmailCaptureView(
             )
         }
 
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Marketing consent checkbox
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .clickable { isMarketingConsented = !isMarketingConsented },
+            verticalAlignment = Alignment.Top
+        ) {
+            Text(
+                text = if (isMarketingConsented) "☑" else "☐",
+                fontSize = 20.sp,
+                color = if (isMarketingConsented) branding.primaryButtonColor else branding.mutedTextColor
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+                text = sdkCopy?.emailCapture?.emailConsentText
+                    ?: "I agree to receive marketing communications and prize notifications",
+                color = branding.secondaryTextColor.copy(alpha = 0.85f),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium
+            )
+        }
+
         Spacer(modifier = Modifier.height(20.dp))
 
         // CTA button
@@ -247,7 +283,7 @@ internal fun EmailCaptureView(
                         !isAgeConfirmed -> emailError = "You must be 18+ to enter"
                         else -> {
                             emailError = null
-                            onSubmit(trimmed)
+                            onSubmit(trimmed, isMarketingConsented)
                         }
                     }
                 },

@@ -6,6 +6,7 @@ import com.avafli.winrsdk.domain.Giveaway
 import com.avafli.winrsdk.domain.DailyEntryGrant
 import com.avafli.winrsdk.domain.Milestone
 import com.avafli.winrsdk.domain.SdkConfig
+import com.avafli.winrsdk.domain.ScreenMedia
 import com.avafli.winrsdk.domain.SdkCopy
 import com.avafli.winrsdk.domain.StreakEngine
 import com.avafli.winrsdk.domain.StreakState
@@ -76,6 +77,18 @@ internal class WINRExperienceViewModel(
 
     fun setSdkConfig(config: SdkConfig?) {
         sdkConfig = config
+    }
+
+    fun getSdkMediaForScreen(screen: String): ScreenMedia? {
+        return when (screen) {
+            "emailCapture" -> sdkConfig?.media?.emailCapture
+            "howItWorks" -> sdkConfig?.media?.howItWorks
+            "streakDashboard" -> sdkConfig?.media?.streakDashboard
+            "bonusEntries" -> sdkConfig?.media?.bonusEntries
+            "milestone" -> sdkConfig?.media?.milestone
+            "completed" -> sdkConfig?.media?.completed
+            else -> null
+        }
     }
 
     fun setResultCallback(callback: ((Result<DailyEntryGrant>) -> Unit)?) {
@@ -156,11 +169,17 @@ internal class WINRExperienceViewModel(
 
     // ── Email ──
 
-    fun submitEmail(email: String) {
+    private var publisherUserId: String? = null
+
+    fun setPublisherUserId(id: String?) {
+        publisherUserId = id
+    }
+
+    fun submitEmail(email: String, marketingConsent: Boolean = false) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isSubmittingEmail = true, error = null)
             try {
-                val success = api.submitEmail(email)
+                val success = api.submitEmail(email, marketingConsent, publisherUserId)
                 if (success) {
                     preferencesStorage.saveEmailSubmitted(true)
                     _uiState.value = _uiState.value.copy(

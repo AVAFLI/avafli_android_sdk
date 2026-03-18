@@ -30,6 +30,7 @@ internal class WINRExperienceActivity : ComponentActivity() {
 
         viewModel.setSdkConfig(sdkConfig)
         viewModel.setResultCallback(callback)
+        viewModel.setPublisherUserId(WINR.getPublisherUserId())
         viewModel.loadGiveaway(giveaway)
 
         setContent {
