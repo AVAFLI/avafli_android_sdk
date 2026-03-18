@@ -3,12 +3,17 @@ package com.avafli.winrsdk
 import android.content.Context
 
 /**
- * Internal configuration holder for the WINR SDK.
+ * Configuration for the WINR SDK.
+ *
+ * @param context Application or Activity context
+ * @param apiKey Your publisher API key
+ * @param environment Target environment (default: Production)
+ * @param options Additional configuration options
  */
-internal data class WINRConfiguration(
+data class WINRConfiguration(
     val context: Context,
-    val publisherKey: String,
-    val environment: WINREnvironment,
+    val apiKey: String,
+    val environment: WINREnvironment = WINREnvironment.Production,
     val options: WINROptions = WINROptions()
 ) {
     val baseUrl: String get() = environment.baseUrl

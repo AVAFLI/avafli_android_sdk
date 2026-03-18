@@ -42,37 +42,25 @@ object WINR {
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     /**
-     * Initialize the WINR SDK.
+     * Configure the WINR SDK.
      *
-     * @param context Application or Activity context
-     * @param publisherKey Your publisher API key
-     * @param environment Target environment (default: Production)
-     * @param options Additional configuration options
+     * @param configuration A [WINRConfiguration] with your API key, environment, and options.
      */
-    fun initialize(
-        context: Context,
-        publisherKey: String,
-        environment: WINREnvironment = WINREnvironment.Production,
-        options: WINROptions = WINROptions()
-    ) {
-        val appContext = context.applicationContext
+    fun configure(configuration: WINRConfiguration) {
+        val appContext = configuration.context.applicationContext
 
-        val configuration = WINRConfiguration(
-            context = appContext,
-            publisherKey = publisherKey,
-            environment = environment,
-            options = options
-        )
+        // Store config with application context
+        val resolvedConfig = configuration.copy(context = appContext)
 
-        this.config = configuration
-        this.logger = Logger(configuration.isDebug)
+        this.config = resolvedConfig
+        this.logger = Logger(resolvedConfig.isDebug)
         this.secureStorage = SecureStorage(appContext)
         this.preferencesStorage = PreferencesStorage(appContext)
-        this.networkClient = NetworkClient(configuration, secureStorage!!, logger!!)
+        this.networkClient = NetworkClient(resolvedConfig, secureStorage!!, logger!!)
         this.api = WinrApi(networkClient!!, logger!!)
         this.pushManager = PushNotificationManager(api!!, logger!!)
 
-        logger?.info("WINR SDK initialized (env: ${environment.name}, debug: ${configuration.isDebug})")
+        logger?.info("WINR SDK configured (env: ${resolvedConfig.environment.name}, debug: ${resolvedConfig.isDebug})")
 
         // Register device in background
         scope.launch {
@@ -222,7 +210,7 @@ object WINR {
         }
 
         val currentApi = api ?: throw WINRError.NotInitialized()
-        val publisherKey = config?.publisherKey ?: throw WINRError.InvalidPublisherKey()
+        val apiKey = config?.apiKey ?: throw WINRError.InvalidPublisherKey()
         val deviceFingerprint = getDeviceFingerprint(context)
         val bundleId = context.packageName
         val timezone = TimeZone.getDefault().id
@@ -230,7 +218,7 @@ object WINR {
         logger?.debug("Registering device...")
 
         val response = currentApi.registerDevice(
-            apiKey = publisherKey,
+            apiKey = apiKey,
             deviceFingerprint = deviceFingerprint,
             bundleId = bundleId,
             timezone = timezone

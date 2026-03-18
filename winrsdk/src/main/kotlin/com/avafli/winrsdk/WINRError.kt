@@ -5,8 +5,8 @@ package com.avafli.winrsdk
  */
 sealed class WINRError(message: String, cause: Throwable? = null) : Exception(message, cause) {
 
-    /** SDK has not been initialized. Call WINR.initialize() first. */
-    class NotInitialized : WINRError("WINR SDK has not been initialized. Call WINR.initialize() first.")
+    /** SDK has not been configured. Call WINR.configure() first. */
+    class NotInitialized : WINRError("WINR SDK has not been configured. Call WINR.configure() first.")
 
     /** The provided publisher key is invalid or missing. */
     class InvalidPublisherKey : WINRError("Invalid or missing publisher key.")

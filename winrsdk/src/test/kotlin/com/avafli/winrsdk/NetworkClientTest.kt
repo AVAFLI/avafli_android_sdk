@@ -30,7 +30,7 @@ class NetworkClientTest {
 
         val config = WINRConfiguration(
             context = mockk(relaxed = true),
-            publisherKey = "test-key",
+            apiKey = "test-key",
             environment = WINREnvironment.Development,
             options = WINROptions(
                 debugLogging = true,

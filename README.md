@@ -25,7 +25,7 @@ WINR is a drop-in SDK that adds sweepstakes and prizing experiences to your Andr
 
 **Key characteristics:**
 
-- **2-line integration** — initialize and present
+- **2-line integration** — configure and present
 - **100% server-driven branding** — colors, logos, copy, and layout configured in your dashboard
 - **Built-in email capture** — the SDK collects and manages user emails; publishers never handle PII
 - **Jetpack Compose UI** — modern Material 3 components, no XML
@@ -75,8 +75,17 @@ The SDK bundles its own ProGuard consumer rules. No additional configuration req
 ## Quick Start
 
 ```kotlin
-// Initialize (once, in Application.onCreate or your launcher Activity)
-WINR.initialize(this, publisherKey = "winr_live_xxxxxxxxxxxxxxxx")
+import com.avafli.winrsdk.WINR
+import com.avafli.winrsdk.WINRConfiguration
+import com.avafli.winrsdk.WINREnvironment
+
+// Configure (once, in Application.onCreate or your launcher Activity)
+val config = WINRConfiguration(
+    context = applicationContext,
+    apiKey = "winr_live_xxxxxxxxxxxxxxxx",
+    environment = WINREnvironment.Production
+)
+WINR.configure(config)
 
 // Present the WINR experience
 WINR.present(activity)
@@ -88,23 +97,25 @@ That's it. The SDK registers the device, fetches active giveaways, renders the e
 
 ## API Reference
 
-### `WINR.initialize`
+### `WINR.configure`
 
-Initializes the SDK. Call once before any other WINR method.
+Configures the SDK. Call once before any other WINR method.
 
 ```kotlin
-WINR.initialize(
-    context = applicationContext,
-    publisherKey = "winr_live_xxxxxxxxxxxxxxxx",
-    environment = WINREnvironment.Production,  // or .Sandbox
-    options = WINROptions()
+WINR.configure(
+    WINRConfiguration(
+        context = applicationContext,
+        apiKey = "winr_live_xxxxxxxxxxxxxxxx",
+        environment = WINREnvironment.Production,  // or .Sandbox
+        options = WINROptions()
+    )
 )
 ```
 
-| Parameter | Type | Required | Description |
+| `WINRConfiguration` Field | Type | Required | Description |
 |---|---|---|---|
 | `context` | `Context` | ✅ | Application or Activity context |
-| `publisherKey` | `String` | ✅ | Your publisher API key (`winr_live_xxx`) |
+| `apiKey` | `String` | ✅ | Your publisher API key (`winr_live_xxx`) |
 | `environment` | `WINREnvironment` | — | `.Production` (default) or `.Sandbox` |
 | `options` | `WINROptions` | — | Additional configuration (see below) |
 
@@ -115,13 +126,13 @@ WINR.initialize(
 | `WINREnvironment.Production` | Live giveaways, real entries |
 | `WINREnvironment.Sandbox` | Testing — no real prizes, entries reset daily |
 
-> **Get your publisher key** from the [WINR Dashboard](https://dashboard.avafli.com) → Settings → API Keys.
+> **Get your API key** from the [WINR Dashboard](https://dashboard.avafli.com) → Settings → API Keys.
 
 ---
 
 ### `WINR.setUser`
 
-Associates a known user with the SDK session. Call after `initialize` and before `present` when user info is available.
+Associates a known user with the SDK session. Call after `configure` and before `present` when user info is available.
 
 ```kotlin
 WINR.setUser(
@@ -170,7 +181,7 @@ The callback receives a `Result<DailyEntryGrant>` with the outcome of the sessio
 
 ### `WINR.registerForPushNotifications`
 
-Registers the device for WINR push notifications via Firebase Cloud Messaging. Call after `initialize`.
+Registers the device for WINR push notifications via Firebase Cloud Messaging. Call after `configure`.
 
 ```kotlin
 WINR.registerForPushNotifications(context)
@@ -221,7 +232,7 @@ Follow the [Firebase Android setup guide](https://firebase.google.com/docs/andro
 ### 2. Register for notifications
 
 ```kotlin
-// After WINR.initialize()
+// After WINR.configure()
 WINR.registerForPushNotifications(context)
 ```
 
@@ -260,13 +271,15 @@ class MyAnalyticsAdapter : AnalyticsAdapter {
 }
 ```
 
-Pass it during initialization:
+Pass it during configuration:
 
 ```kotlin
-WINR.initialize(
-    context = applicationContext,
-    publisherKey = "winr_live_xxxxxxxxxxxxxxxx",
-    options = WINROptions(analyticsAdapter = MyAnalyticsAdapter())
+WINR.configure(
+    WINRConfiguration(
+        context = applicationContext,
+        apiKey = "winr_live_xxxxxxxxxxxxxxxx",
+        options = WINROptions(analyticsAdapter = MyAnalyticsAdapter())
+    )
 )
 ```
 
@@ -377,7 +390,12 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        WINR.initialize(this, publisherKey = "winr_live_xxxxxxxxxxxxxxxx")
+        WINR.configure(
+            WINRConfiguration(
+                context = this,
+                apiKey = "winr_live_xxxxxxxxxxxxxxxx"
+            )
+        )
 
         setContent {
             MaterialTheme {
@@ -397,10 +415,12 @@ class MainActivity : ComponentActivity() {
 Use the sandbox environment during development:
 
 ```kotlin
-WINR.initialize(
-    context = applicationContext,
-    publisherKey = "winr_test_xxxxxxxxxxxxxxxx",
-    environment = WINREnvironment.Sandbox
+WINR.configure(
+    WINRConfiguration(
+        context = applicationContext,
+        apiKey = "winr_test_xxxxxxxxxxxxxxxx",
+        environment = WINREnvironment.Sandbox
+    )
 )
 ```
 

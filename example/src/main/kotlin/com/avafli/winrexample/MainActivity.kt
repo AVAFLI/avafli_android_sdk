@@ -12,6 +12,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.avafli.winrsdk.WINR
 import com.avafli.winrsdk.WINRBranding
+import com.avafli.winrsdk.WINRConfiguration
 import com.avafli.winrsdk.WINREnvironment
 import com.avafli.winrsdk.WINROptions
 import com.avafli.winrsdk.WINRUser
@@ -24,15 +25,17 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Initialize WINR SDK
-        WINR.initialize(
-            context = this,
-            publisherKey = "winr_live_50b1b3b801a843d5e1f99593fcad4d14",
-            environment = WINREnvironment.Production,
-            options = WINROptions(
-                debugLogging = true,
-                enableCertificatePinning = false, // Disabled until pin rotation is automated
-                branding = WINRBranding() // Customize colors here
+        // Configure WINR SDK
+        WINR.configure(
+            WINRConfiguration(
+                context = this,
+                apiKey = "winr_live_50b1b3b801a843d5e1f99593fcad4d14",
+                environment = WINREnvironment.Production,
+                options = WINROptions(
+                    debugLogging = true,
+                    enableCertificatePinning = false, // Disabled until pin rotation is automated
+                    branding = WINRBranding() // Customize colors here
+                )
             )
         )
 
