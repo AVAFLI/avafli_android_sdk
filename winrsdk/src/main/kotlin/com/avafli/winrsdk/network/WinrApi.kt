@@ -130,7 +130,8 @@ internal class WinrApi(
         lastName: String? = null,
         phone: String? = null,
         smsConsent: Boolean = false,
-        maidId: String? = null
+        maidId: String? = null,
+        publisherUserId: String? = null
     ): Boolean {
         val body = buildMap<String, JsonElement> {
             firstName?.let { put("firstName", JsonPrimitive(it)) }
@@ -138,6 +139,7 @@ internal class WinrApi(
             phone?.let { put("phone", JsonPrimitive(it)) }
             put("smsConsent", JsonPrimitive(smsConsent))
             maidId?.let { put("maidId", JsonPrimitive(it)) }
+            publisherUserId?.let { put("publisherUserId", JsonPrimitive(it)) }
         }
 
         val response = networkClient.authenticatedPost("submitUserProfile", body)

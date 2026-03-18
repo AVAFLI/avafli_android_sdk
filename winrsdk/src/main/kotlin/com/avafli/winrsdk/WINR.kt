@@ -89,7 +89,8 @@ object WINR {
                         lastName = winrUser.lastName,
                         phone = winrUser.phone,
                         smsConsent = winrUser.isSMSPermissioned,
-                        maidId = maidId
+                        maidId = maidId,
+                        publisherUserId = winrUser.id
                     )
                 } catch (e: Exception) {
                     logger?.error("Failed to submit user profile: ${e.message}", e)
