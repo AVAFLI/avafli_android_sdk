@@ -11,7 +11,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.avafli.winrsdk.WINR
-import com.avafli.winrsdk.WINRBranding
 import com.avafli.winrsdk.WINRConfiguration
 import com.avafli.winrsdk.WINREnvironment
 import com.avafli.winrsdk.WINROptions
@@ -38,8 +37,7 @@ class MainActivity : ComponentActivity() {
                 ),
                 options = WINROptions(
                     debugLogging = true,
-                    enableCertificatePinning = false, // Disabled until pin rotation is automated
-                    branding = WINRBranding() // Customize colors here
+                    enableCertificatePinning = false // Disabled until pin rotation is automated
                 )
             )
         )
