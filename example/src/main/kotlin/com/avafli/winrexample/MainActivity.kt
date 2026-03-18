@@ -31,6 +31,11 @@ class MainActivity : ComponentActivity() {
                 context = this,
                 apiKey = "winr_live_50b1b3b801a843d5e1f99593fcad4d14",
                 environment = WINREnvironment.Production,
+                user = WINRUser(
+                    id = "android-example-user",
+                    firstName = "Example",
+                    lastName = "User"
+                ),
                 options = WINROptions(
                     debugLogging = true,
                     enableCertificatePinning = false, // Disabled until pin rotation is automated
@@ -38,9 +43,6 @@ class MainActivity : ComponentActivity() {
                 )
             )
         )
-
-        // Set user info
-        WINR.setUser(WINRUser(id = "android-example-user"))
 
         setContent {
             ExampleApp()

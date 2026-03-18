@@ -34,7 +34,6 @@ object WINR {
     private var logger: Logger? = null
     private var pushManager: PushNotificationManager? = null
     private var adProvider: RewardedVideoProvider? = null
-    private var user: WINRUser? = null
     private var cachedGiveaway: Giveaway? = null
     private var cachedSdkConfig: SdkConfig? = null
     private var pendingCallback: ((Result<DailyEntryGrant>) -> Unit)? = null
@@ -62,35 +61,28 @@ object WINR {
 
         logger?.info("WINR SDK configured (env: ${resolvedConfig.environment.name}, debug: ${resolvedConfig.isDebug})")
 
-        // Register device in background
+        // Register device and submit user profile in background
+        val user = resolvedConfig.user
+        logger?.debug("User set: ${user.id}")
+
         scope.launch {
             try {
                 registerDeviceIfNeeded(appContext)
             } catch (e: Exception) {
                 logger?.error("Background device registration failed: ${e.message}", e)
             }
-        }
-    }
 
-    /**
-     * Set user information for the current session.
-     */
-    fun setUser(winrUser: WINRUser) {
-        this.user = winrUser
-        logger?.debug("User set: ${winrUser.id ?: "anonymous"}")
-
-        // Submit user profile if we have a token
-        if (secureStorage?.getToken() != null) {
-            scope.launch {
+            // Submit user profile once we have a token
+            if (secureStorage?.getToken() != null) {
                 try {
                     val maidId = getAdvertisingId()
                     api?.submitUserProfile(
-                        firstName = winrUser.firstName,
-                        lastName = winrUser.lastName,
-                        phone = winrUser.phone,
-                        smsConsent = winrUser.isSMSPermissioned,
+                        firstName = user.firstName,
+                        lastName = user.lastName,
+                        phone = user.phone,
+                        smsConsent = false,
                         maidId = maidId,
-                        publisherUserId = winrUser.id
+                        publisherUserId = user.id
                     )
                 } catch (e: Exception) {
                     logger?.error("Failed to submit user profile: ${e.message}", e)
@@ -156,7 +148,6 @@ object WINR {
             preferencesStorage?.clearAll()
             cachedGiveaway = null
             cachedSdkConfig = null
-            user = null
             logger?.info("User account deleted successfully")
             Result.success(Unit)
         } catch (e: Exception) {

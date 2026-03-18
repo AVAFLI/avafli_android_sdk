@@ -78,20 +78,26 @@ The SDK bundles its own ProGuard consumer rules. No additional configuration req
 import com.avafli.winrsdk.WINR
 import com.avafli.winrsdk.WINRConfiguration
 import com.avafli.winrsdk.WINREnvironment
+import com.avafli.winrsdk.WINRUser
 
-// Configure (once, in Application.onCreate or your launcher Activity)
+// 1. Configure (once, in Application.onCreate or your launcher Activity)
 val config = WINRConfiguration(
     context = applicationContext,
     apiKey = "winr_live_xxxxxxxxxxxxxxxx",
-    environment = WINREnvironment.Production
+    environment = WINREnvironment.Production,
+    user = WINRUser(
+        id = "user_123",
+        firstName = "Jane",
+        lastName = "Doe"
+    )
 )
 WINR.configure(config)
 
-// Present the WINR experience
+// 2. Present the WINR experience
 WINR.present(activity)
 ```
 
-That's it. The SDK registers the device, fetches active giveaways, renders the experience using your dashboard-configured branding, and manages the full entry lifecycle.
+That's it — two steps. The SDK registers the device, submits the user profile, fetches active giveaways, renders the experience using your dashboard-configured branding, and manages the full entry lifecycle.
 
 ---
 
@@ -107,6 +113,12 @@ WINR.configure(
         context = applicationContext,
         apiKey = "winr_live_xxxxxxxxxxxxxxxx",
         environment = WINREnvironment.Production,  // or .Sandbox
+        user = WINRUser(
+            id = "user_abc123",
+            firstName = "Jane",
+            lastName = "Smith",
+            phone = "+15551234567"  // optional
+        ),
         options = WINROptions()
     )
 )
@@ -117,7 +129,15 @@ WINR.configure(
 | `context` | `Context` | ✅ | Application or Activity context |
 | `apiKey` | `String` | ✅ | Your publisher API key (`winr_live_xxx`) |
 | `environment` | `WINREnvironment` | — | `.Production` (default) or `.Sandbox` |
+| `user` | `WINRUser` | ✅ | The authenticated user for this session |
 | `options` | `WINROptions` | — | Additional configuration (see below) |
+
+| `WINRUser` Field | Type | Required | Description |
+|---|---|---|---|
+| `id` | `String` | ✅ | Your internal user identifier |
+| `firstName` | `String` | ✅ | User's first name |
+| `lastName` | `String` | ✅ | User's last name |
+| `phone` | `String?` | — | Phone number (E.164 format) |
 
 **Environments:**
 
@@ -127,30 +147,6 @@ WINR.configure(
 | `WINREnvironment.Sandbox` | Testing — no real prizes, entries reset daily |
 
 > **Get your API key** from the [WINR Dashboard](https://dashboard.avafli.com) → Settings → API Keys.
-
----
-
-### `WINR.setUser`
-
-Associates a known user with the SDK session. Call after `configure` and before `present` when user info is available.
-
-```kotlin
-WINR.setUser(
-    WINRUser(
-        id = "user_abc123",
-        firstName = "Jane",      // optional
-        lastName = "Smith",      // optional
-        phone = "+15551234567"   // optional
-    )
-)
-```
-
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `id` | `String` | ✅ | Your internal user identifier |
-| `firstName` | `String?` | — | User's first name |
-| `lastName` | `String?` | — | User's last name |
-| `phone` | `String?` | — | Phone number (E.164 format) |
 
 > **Note:** Email is captured directly by the SDK within the sweepstakes experience. Publishers do not pass or manage user email addresses.
 
@@ -278,6 +274,11 @@ WINR.configure(
     WINRConfiguration(
         context = applicationContext,
         apiKey = "winr_live_xxxxxxxxxxxxxxxx",
+        user = WINRUser(
+            id = "user_123",
+            firstName = "Jane",
+            lastName = "Doe"
+        ),
         options = WINROptions(analyticsAdapter = MyAnalyticsAdapter())
     )
 )
@@ -393,7 +394,12 @@ class MainActivity : ComponentActivity() {
         WINR.configure(
             WINRConfiguration(
                 context = this,
-                apiKey = "winr_live_xxxxxxxxxxxxxxxx"
+                apiKey = "winr_live_xxxxxxxxxxxxxxxx",
+                user = WINRUser(
+                    id = "user_123",
+                    firstName = "Jane",
+                    lastName = "Doe"
+                )
             )
         )
 
@@ -419,7 +425,12 @@ WINR.configure(
     WINRConfiguration(
         context = applicationContext,
         apiKey = "winr_test_xxxxxxxxxxxxxxxx",
-        environment = WINREnvironment.Sandbox
+        environment = WINREnvironment.Sandbox,
+        user = WINRUser(
+            id = "test_user",
+            firstName = "Test",
+            lastName = "User"
+        )
     )
 )
 ```
