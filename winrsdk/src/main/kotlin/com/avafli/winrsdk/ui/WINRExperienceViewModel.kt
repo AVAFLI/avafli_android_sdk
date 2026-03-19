@@ -23,6 +23,7 @@ import java.util.TimeZone
 
 internal sealed class ExperienceScreen {
     object Loading : ExperienceScreen()
+    object NoActiveGiveaway : ExperienceScreen()
     object EmailCapture : ExperienceScreen()
     data class Streak(
         val streakState: StreakState,
@@ -105,6 +106,17 @@ internal class WINRExperienceViewModel(
                     giveaway = existingGiveaway
                 } else {
                     val response = api.getActiveGiveaway()
+                    // Check if backend returned no active giveaway (like iOS implementation)
+                    if (response.giveaway == null) {
+                        // Clear cached giveaway and set state to NoActiveGiveaway
+                        _uiState.value = _uiState.value.copy(
+                            screen = ExperienceScreen.NoActiveGiveaway,
+                            isLoading = false,
+                            giveaway = null,
+                            sdkCopy = response.sdkConfig?.copy
+                        )
+                        return@launch
+                    }
                     giveaway = response.giveaway
                     // Update sdkConfig from latest response
                     if (response.sdkConfig != null) {

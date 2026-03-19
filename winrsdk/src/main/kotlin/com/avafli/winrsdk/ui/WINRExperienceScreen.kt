@@ -120,6 +120,53 @@ private fun WINRExperienceBody(
                     }
                 }
 
+                is ExperienceScreen.NoActiveGiveaway -> {
+                    WINRExperienceCard(branding = branding) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            // Show publisher logo if available from sdkConfig
+                            uiState.sdkCopy?.let { sdkCopy ->
+                                sdkConfig?.branding?.logoUrl?.let { logoUrl ->
+                                    // TODO: Load and display logo using AsyncImage or similar
+                                    // For now, we'll skip the logo display
+                                }
+                            }
+                            
+                            Text(
+                                text = "No Active Giveaway",
+                                color = branding.primaryTextColor,
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.Black,
+                                textAlign = TextAlign.Center
+                            )
+                            Text(
+                                text = "Check back soon for your next chance to win!",
+                                color = branding.mutedTextColor,
+                                textAlign = TextAlign.Center
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp)
+                                    .clip(RoundedCornerShape(branding.cornerRadius.dp))
+                                    .background(branding.primaryButtonColor)
+                                    .clickable { onDismiss() },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "Close",
+                                    color = branding.primaryButtonTextColor,
+                                    fontSize = 17.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+                    }
+                }
+
                 is ExperienceScreen.EmailCapture -> {
                     EmailCaptureView(
                         branding = branding,

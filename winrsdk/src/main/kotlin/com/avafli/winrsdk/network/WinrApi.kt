@@ -67,8 +67,7 @@ internal class WinrApi(
     suspend fun getActiveGiveaway(): GetActiveGiveawayResponse {
         val response = networkClient.authenticatedPost("getActiveGiveaway")
         val giveawayJson = response["giveaway"]?.jsonObject
-            ?: throw WINRError.NoGiveaway()
-        val giveaway = parseGiveaway(giveawayJson)
+        val giveaway = giveawayJson?.let { parseGiveaway(it) }
         val sdkConfig = response["sdkConfig"]?.jsonObject?.let { parseSdkConfig(it) }
         return GetActiveGiveawayResponse(giveaway = giveaway, sdkConfig = sdkConfig)
     }
@@ -184,7 +183,7 @@ internal class WinrApi(
     )
 
     data class GetActiveGiveawayResponse(
-        val giveaway: Giveaway,
+        val giveaway: Giveaway?,
         val sdkConfig: SdkConfig? = null
     )
 
