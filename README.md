@@ -1,48 +1,54 @@
-<p align="center">
-  <img src="https://avafli.com/winr-logo.png" alt="WINR" width="120" />
-</p>
+# WINR Android SDK
+**Drop-in sweepstakes, prizing, and gamification for your Android app**
 
-<h1 align="center">WINR Android SDK</h1>
-
-<p align="center">
-  <a href="https://jitpack.io/#avafli/winr-android-sdk"><img src="https://jitpack.io/v/avafli/winr-android-sdk.svg" alt="JitPack" /></a>
-  <img src="https://img.shields.io/badge/API-26%2B-brightgreen.svg" alt="API 26+" />
-  <img src="https://img.shields.io/badge/Kotlin-2.1%2B-7F52FF.svg?logo=kotlin&logoColor=white" alt="Kotlin 2.1+" />
-  <img src="https://img.shields.io/badge/Jetpack%20Compose-Material%203-4285F4.svg?logo=jetpackcompose&logoColor=white" alt="Compose" />
-  <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License" />
-</p>
-
-<p align="center">
-  Sweepstakes, gamification, and prizing infrastructure for Android app publishers.<br />
-  Engage your users with daily entry systems, streak rewards, and rewarded video — in two lines of code.
-</p>
+[![JitPack](https://jitpack.io/v/avafli/winr-android-sdk.svg)](https://jitpack.io/#avafli/winr-android-sdk)
+[![API](https://img.shields.io/badge/API-26%2B-brightgreen.svg)](https://android-arsenal.com/api?level=26)
+[![Kotlin](https://img.shields.io/badge/Kotlin-2.1%2B-7F52FF.svg?logo=kotlin&logoColor=white)](https://kotlinlang.org)
+[![Compose](https://img.shields.io/badge/Jetpack%20Compose-Material%203-4285F4.svg?logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
 
 ---
 
 ## Overview
 
-WINR is a drop-in SDK that adds sweepstakes and prizing experiences to your Android app. Publishers integrate the SDK, configure giveaways through the [WINR Dashboard](https://dashboard.avafli.com), and the SDK handles everything else: entry mechanics, streak tracking, email capture, UI rendering, push notifications, and compliance.
+WINR lets you add daily-entry sweepstakes and prize experiences to your app in under 20 lines of code. The entire UI — branding, theming, copy, and prize configuration — is managed server-side from the WINR dashboard. You integrate once; your marketing team controls the rest.
 
-**Key characteristics:**
+**Key capabilities:**
+- **Daily entry sweepstakes** — Users earn entries every day they engage
+- **Bonus entries via rewarded video** — Monetize attention with opt-in ads
+- **Push reminders** — Drive re-engagement with daily nudges (FCM)
+- **Server-driven UI** — Branding, prizes, and copy update without app releases
+- **GDPR/CCPA compliant** — Built-in consent flows and user data deletion
+- **Analytics forwarding** — Route SDK events to your existing analytics stack
 
-- **2-line integration** — configure and present
-- **100% server-driven branding** — colors, logos, copy, and layout configured in your dashboard
-- **Built-in email capture** — the SDK collects and manages user emails; publishers never handle PII
-- **Jetpack Compose UI** — modern Material 3 components, no XML
-- **Secure by default** — certificate pinning, encrypted local storage, GDPR delete
+## Quick Start
 
-## Requirements
+```kotlin
+import com.avafli.winrsdk.WINR
+import com.avafli.winrsdk.WINRConfiguration
+import com.avafli.winrsdk.WINREnvironment
+import com.avafli.winrsdk.WINRUser
 
-| Requirement | Minimum |
-|---|---|
-| Android API | 26 (Android 8.0) |
-| Kotlin | 2.1+ |
-| Jetpack Compose | BOM 2024.01+ |
-| Gradle | 8.0+ |
+// 1. Configure the SDK
+val config = WINRConfiguration(
+    context = applicationContext,
+    apiKey = "YOUR_API_KEY",
+    bundleId = "com.example.myapp",
+    environment = WINREnvironment.Production,
+    user = WINRUser(
+        id = "user_123",
+        firstName = "Jane",
+        lastName = "Doe"
+    )
+)
+WINR.configure(config)
+
+// 2. Present the experience
+WINR.present(activity)
+```
 
 ## Installation
 
-### 1. Add the JitPack repository
+### 1. Add JitPack repository
 
 In your project-level `settings.gradle.kts`:
 
@@ -56,7 +62,7 @@ dependencyResolutionManagement {
 }
 ```
 
-### 2. Add the dependency
+### 2. Add dependency
 
 In your app-level `build.gradle.kts`:
 
@@ -66,98 +72,62 @@ dependencies {
 }
 ```
 
-### 3. Sync and build
+> **Note:** Contact [team@avafli.com](mailto:team@avafli.com) to obtain an API key.
 
-The SDK bundles its own ProGuard consumer rules. No additional configuration required.
+## Configuration
 
----
-
-## Quick Start
+Initialize the SDK with your user and environment settings:
 
 ```kotlin
-import com.avafli.winrsdk.WINR
-import com.avafli.winrsdk.WINRConfiguration
-import com.avafli.winrsdk.WINREnvironment
-import com.avafli.winrsdk.WINRUser
-
-// 1. Configure (once, in Application.onCreate or your launcher Activity)
 val config = WINRConfiguration(
     context = applicationContext,
-    apiKey = "winr_live_xxxxxxxxxxxxxxxx",
+    apiKey = "winr_live_xxxxxxxxxx",
+    bundleId = "com.example.myapp",
     environment = WINREnvironment.Production,
     user = WINRUser(
-        id = "user_123",
+        id = "user_abc123",
         firstName = "Jane",
-        lastName = "Doe"
+        lastName = "Doe",
+        phone = "+15551234567"  // optional
+    ),
+    options = WINROptions(
+        logging = LoggingLevel.Info,
+        analyticsAdapter = myAdapter,
+        enablePushReminders = true
     )
 )
+
 WINR.configure(config)
-
-// 2. Present the WINR experience
-WINR.present(activity)
 ```
 
-That's it — two steps. The SDK registers the device, submits the user profile, fetches active giveaways, renders the experience using your dashboard-configured branding, and manages the full entry lifecycle.
+### WINRConfiguration
 
----
-
-## API Reference
-
-### `WINR.configure`
-
-Configures the SDK. Call once before any other WINR method.
-
-```kotlin
-WINR.configure(
-    WINRConfiguration(
-        context = applicationContext,
-        apiKey = "winr_live_xxxxxxxxxxxxxxxx",
-        environment = WINREnvironment.Production,  // or .Sandbox
-        user = WINRUser(
-            id = "user_abc123",
-            firstName = "Jane",
-            lastName = "Smith",
-            phone = "+15551234567"  // optional
-        ),
-        options = WINROptions()
-    )
-)
-```
-
-| `WINRConfiguration` Field | Type | Required | Description |
-|---|---|---|---|
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
 | `context` | `Context` | ✅ | Application or Activity context |
-| `apiKey` | `String` | ✅ | Your publisher API key (`winr_live_xxx`) |
-| `environment` | `WINREnvironment` | — | `.Production` (default) or `.Sandbox` |
-| `user` | `WINRUser` | ✅ | The authenticated user for this session |
-| `options` | `WINROptions` | — | Additional configuration (see below) |
+| `apiKey` | `String` | ✅ | Your WINR API key from the dashboard |
+| `bundleId` | `String` | ✅ | App bundle ID (e.g., com.example.myapp) |
+| `environment` | `WINREnvironment` | ✅ | `.Production`, `.Staging`, or `.QA` |
+| `user` | `WINRUser` | ✅ | The authenticated user |
+| `options` | `WINROptions?` | — | Optional behavior toggles |
 
-| `WINRUser` Field | Type | Required | Description |
-|---|---|---|---|
-| `id` | `String` | ✅ | Your internal user identifier |
+### WINRUser
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| `id` | `String` | ✅ | Unique, stable user identifier |
 | `firstName` | `String` | ✅ | User's first name |
 | `lastName` | `String` | ✅ | User's last name |
-| `phone` | `String?` | — | Phone number (E.164 format) |
+| `phone` | `String?` | — | Phone number in E.164 format |
 
-**Environments:**
+> **Email:** The SDK captures email through its own opt-in UI. Do not pass email via `WINRUser`.
 
-| Environment | Purpose |
-|---|---|
-| `WINREnvironment.Production` | Live giveaways, real entries |
-| `WINREnvironment.Sandbox` | Testing — no real prizes, entries reset daily |
+## Present the Experience
 
-> **Get your API key** from the [WINR Dashboard](https://dashboard.avafli.com) → Settings → API Keys.
-
-> **Note:** Email is captured directly by the SDK within the sweepstakes experience. Publishers do not pass or manage user email addresses.
-
----
-
-### `WINR.present`
-
-Launches the WINR experience as a full-screen activity. All UI, branding, and copy are driven by your dashboard configuration.
+Launch the full-screen WINR experience:
 
 ```kotlin
-// Fire-and-forget
+// Simple presentation
 WINR.present(activity)
 
 // With completion callback
@@ -171,90 +141,62 @@ WINR.present(activity) { result ->
 }
 ```
 
-The callback receives a `Result<DailyEntryGrant>` with the outcome of the session.
+The callback receives a `DailyEntryGrant` with the entries earned during the session.
 
----
+## Push Notifications
 
-### `WINR.registerForPushNotifications`
+Drive re-engagement with daily reminders. Publishers forward their FCM token to WINR:
 
-Registers the device for WINR push notifications via Firebase Cloud Messaging. Call after `configure`.
+### 1. Setup Firebase Cloud Messaging
 
-```kotlin
-WINR.registerForPushNotifications(context)
-```
+Follow the [Firebase Android setup guide](https://firebase.google.com/docs/cloud-messaging/android/client) if you haven't already.
 
----
-
-### `WINR.onNewToken`
-
-Forwards a new FCM token to the WINR backend. Call from your `FirebaseMessagingService`.
-
-```kotlin
-WINR.onNewToken(token)
-```
-
----
-
-### `WINR.deleteAccount`
-
-Permanently deletes all user data from WINR servers and local storage. Supports GDPR right-to-erasure and CCPA delete requests.
-
-```kotlin
-lifecycleScope.launch {
-    WINR.deleteAccount()
-        .onSuccess { /* All data deleted */ }
-        .onFailure { error -> /* Handle error */ }
-}
-```
-
-This is a `suspend` function — call from a coroutine scope.
-
-**Data removed:**
-- Entries, streaks, and engagement history
-- User profile and email
-- Device registration and push tokens
-- Local encrypted storage
-
----
-
-## Push Notifications (FCM)
-
-WINR sends push notifications for giveaway reminders, winner announcements, and streak nudges. Setup takes three steps.
-
-### 1. Add Firebase to your project
-
-Follow the [Firebase Android setup guide](https://firebase.google.com/docs/android/setup) if you haven't already.
-
-### 2. Register for notifications
+### 2. Register for Notifications
 
 ```kotlin
 // After WINR.configure()
-WINR.registerForPushNotifications(context)
+WINRPushNotificationManager.instance.registerForPushNotifications(context)
 ```
 
-### 3. Forward token refreshes
+### 3. Forward FCM Token
 
 ```kotlin
 class MyFirebaseMessagingService : FirebaseMessagingService() {
     override fun onNewToken(token: String) {
         super.onNewToken(token)
-        WINR.onNewToken(token)
+        WINRPushNotificationManager.instance.didReceiveRegistrationToken(token)
     }
 }
 ```
 
-The SDK automatically handles notification display, deep linking back into the experience, and token lifecycle management.
+### 4. Upload FCM Service Account Key
 
----
+Upload your FCM service account key via the [WINR Dashboard](https://avafli-website.web.app/sdk/dashboard) to enable push notifications.
 
-## Analytics Adapter
+### 5. Enable Push Reminders
 
-Route WINR engagement events to your existing analytics stack by implementing `AnalyticsAdapter`:
+Set `enablePushReminders = true` in `WINROptions` during configuration.
+
+## Customization
+
+All branding, themes, and copy are managed server-side through the [WINR Dashboard](https://avafli-website.web.app/sdk/dashboard):
+
+- **Colors & Branding** — Primary colors, logos, backgrounds
+- **Copy & Messaging** — Headlines, CTAs, legal text
+- **Prize Configuration** — Active giveaways, entry mechanics
+- **Push Notifications** — Reminder schedules and messaging
+
+Changes apply instantly across all app installations without requiring an app update.
+
+## Analytics
+
+Forward WINR events to your existing analytics stack:
 
 ```kotlin
 class MyAnalyticsAdapter : AnalyticsAdapter {
     override fun trackEvent(name: String, params: Map<String, Any?>) {
         // Forward to Amplitude, Mixpanel, Segment, etc.
+        analytics.track(name, params)
     }
 
     override fun trackScreenView(screenName: String) {
@@ -265,206 +207,60 @@ class MyAnalyticsAdapter : AnalyticsAdapter {
         // Set user properties
     }
 }
-```
 
-Pass it during configuration:
-
-```kotlin
-WINR.configure(
-    WINRConfiguration(
-        context = applicationContext,
-        apiKey = "winr_live_xxxxxxxxxxxxxxxx",
-        user = WINRUser(
-            id = "user_123",
-            firstName = "Jane",
-            lastName = "Doe"
-        ),
-        options = WINROptions(analyticsAdapter = MyAnalyticsAdapter())
-    )
+// Pass during configuration
+val options = WINROptions(
+    analyticsAdapter = MyAnalyticsAdapter(),
+    enablePushReminders = true
 )
 ```
 
-**Events emitted include:** `winr_experience_opened`, `winr_entry_earned`, `winr_streak_continued`, `winr_video_watched`, `winr_email_captured`, and more. See the [Event Catalog](https://docs.avafli.com/events) for the full list.
+**Events emitted by the SDK:**
+- `winr.session_started` — User opened the WINR experience
+- `winr.entry_granted` — Daily entries awarded
+- `winr.bonus_entry_granted` — Bonus entries earned via rewarded video
+- `winr.session_completed` — User closed the WINR experience
+- `winr.push_registered` — Device registered for push reminders
 
----
+## GDPR / Delete User Data
 
-## Rewarded Video
-
-WINR supports entry multipliers via rewarded video ads. Publishers configure ad unit IDs and providers in the [WINR Dashboard](https://dashboard.avafli.com) — the SDK handles provider initialization, ad loading, and entry crediting automatically.
-
-### Supported Ad Providers
-
-| Provider | Dependency |
-|---|---|
-| Google AdMob | `com.google.android.gms:play-services-ads` |
-| AppLovin MAX | `com.applovin:applovin-sdk` |
-| ironSource | `com.ironsource.sdk:mediationsdk` |
-| Unity Ads | `com.unity3d.ads:unity-ads` |
-
-Add the dependency for your ad provider:
+Support GDPR/CCPA deletion requests:
 
 ```kotlin
-// Example: AdMob
-implementation("com.google.android.gms:play-services-ads:23.6.0")
-```
-
-The SDK uses reflection to load ad providers at runtime — only include the provider you use. No compile-time coupling.
-
----
-
-## Branding & Theming
-
-All branding is configured server-side through the [WINR Dashboard](https://dashboard.avafli.com):
-
-- **Colors** — primary, secondary, background, surface, text
-- **Logo** — upload your brand logo and icon
-- **Copy** — headlines, CTAs, legal text
-- **Layout** — card styles, corner radius, spacing
-
-Changes publish instantly to all SDK instances without an app update.
-
-> No client-side branding code is required. The SDK fetches and applies your configuration at runtime.
-
----
-
-## ProGuard / R8
-
-The SDK ships with embedded consumer ProGuard rules that are applied automatically. If you encounter issues with a custom R8 configuration, add the following to your `proguard-rules.pro`:
-
-```
-# WINR SDK
--keep class com.avafli.winrsdk.** { *; }
--dontwarn com.avafli.winrsdk.**
-
-# OkHttp (transitive)
--dontwarn okhttp3.**
--dontwarn okio.**
-
-# kotlinx.serialization
--keepattributes *Annotation*, InnerClasses
--keep,includedescriptorclasses class com.avafli.winrsdk.**$$serializer { *; }
-```
-
----
-
-## Architecture
-
-```
-com.avafli.winrsdk/
-├── WINR.kt                        # Public API — singleton entry point
-├── domain/
-│   ├── Giveaway.kt                # Giveaway model
-│   ├── StreakEngine.kt             # Streak calculation engine
-│   └── StreakState.kt              # Streak state model
-├── network/
-│   ├── NetworkClient.kt           # OkHttp client, certificate pinning, token refresh
-│   └── WinrApi.kt                 # API endpoints
-├── storage/
-│   ├── SecureStorage.kt           # EncryptedSharedPreferences (Android Keystore)
-│   └── PreferencesStorage.kt      # Non-sensitive preferences
-├── rewards/
-│   ├── RewardedVideoProvider.kt   # Ad provider interface
-│   └── AdProviderFactory.kt       # Runtime provider resolution
-└── ui/                            # Jetpack Compose (Material 3)
-    ├── WINRExperienceScreen.kt    # Main experience screen
-    ├── WINRExperienceActivity.kt  # Host activity
-    └── components/                # Reusable UI components
-```
-
-**Dependencies:**
-
-| Library | Purpose |
-|---|---|
-| OkHttp | Networking with certificate pinning |
-| kotlinx.serialization | JSON parsing |
-| EncryptedSharedPreferences | Secure local storage |
-| Lottie Compose | Animated illustrations |
-
----
-
-## Example App
-
-A complete integration example is available in the [`example/`](example/) directory.
-
-```kotlin
-class MainActivity : ComponentActivity() {
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-
-        WINR.configure(
-            WINRConfiguration(
-                context = this,
-                apiKey = "winr_live_xxxxxxxxxxxxxxxx",
-                user = WINRUser(
-                    id = "user_123",
-                    firstName = "Jane",
-                    lastName = "Doe"
-                )
-            )
-        )
-
-        setContent {
-            MaterialTheme {
-                Button(onClick = { WINR.present(this@MainActivity) }) {
-                    Text("Launch WINR")
-                }
-            }
-        }
-    }
+lifecycleScope.launch {
+    WINR.deleteUserData()
+        .onSuccess { /* All data deleted */ }
+        .onFailure { error -> /* Handle error */ }
 }
 ```
 
----
+This permanently removes all user data, entries, preferences, and consent records from WINR servers.
 
-## Sandbox & Testing
+## API Reference
 
-Use the sandbox environment during development:
+### Core Methods
 
-```kotlin
-WINR.configure(
-    WINRConfiguration(
-        context = applicationContext,
-        apiKey = "winr_test_xxxxxxxxxxxxxxxx",
-        environment = WINREnvironment.Sandbox,
-        user = WINRUser(
-            id = "test_user",
-            firstName = "Test",
-            lastName = "User"
-        )
-    )
-)
-```
+| Method | Returns | Description |
+| ------ | ------- | ----------- |
+| `WINR.configure(config)` | `Unit` | Initialize the SDK with user and settings |
+| `WINR.present(activity, callback?)` | `Unit` | Launch the full-screen WINR experience |
+| `WINR.deleteUserData()` | `Result<Unit>` | Permanently delete all user data |
 
-Sandbox mode:
-- Uses test giveaway data — no real prizes
-- Entries reset daily for rapid iteration
-- Logs verbose debug output to Logcat
+### Push Notifications
 
----
+| Method | Returns | Description |
+| ------ | ------- | ----------- |
+| `WINRPushNotificationManager.instance.didReceiveRegistrationToken(token)` | `Unit` | Forward FCM token to WINR |
+| `WINRPushNotificationManager.instance.registerForPushNotifications(context)` | `Unit` | Register for push notifications |
 
-## Migration Guide
+For detailed API documentation, see the [WINR Docs](https://docs.avafli.com).
 
-### Upgrading to 1.x
+## Links
 
-WINR Android SDK 1.0.0 is the initial release. See the [changelog](https://github.com/AVAFLI/winr_android_sdk/releases) for release notes.
+- **Dashboard:** [https://avafli-website.web.app/sdk/dashboard](https://avafli-website.web.app/sdk/dashboard)
+- **Documentation:** [https://docs.avafli.com](https://docs.avafli.com)
+- **Support:** [team@avafli.com](mailto:team@avafli.com)
 
 ---
 
-## Support
-
-| Channel | Link |
-|---|---|
-| Documentation | [docs.avafli.com](https://docs.avafli.com) |
-| Dashboard | [dashboard.avafli.com](https://dashboard.avafli.com) |
-| Email | [support@avafli.com](mailto:support@avafli.com) |
-| Status | [status.avafli.com](https://status.avafli.com) |
-
----
-
-## License
-
-MIT License — see [LICENSE](LICENSE) for details.
-
----
-
-<p align="center">Built by <a href="https://avafli.com">Avafli</a></p>
+© 2026 Avafli. All Rights Reserved.
