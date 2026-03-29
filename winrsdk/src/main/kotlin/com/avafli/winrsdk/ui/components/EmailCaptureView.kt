@@ -332,7 +332,7 @@ internal fun EmailCaptureView(
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.clickable {
-                    uriHandler.openUri("https://winfrastructure.us/privacy")
+                    uriHandler.openUri("https://avafli-website.web.app/sdk/privacy")
                 }
             )
         }
