@@ -17,6 +17,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import java.util.TimeZone
 
 // ── State machine (mirrors iOS WINRExperienceViewModel.State) ──
@@ -68,6 +72,8 @@ internal class WINRExperienceViewModel(
 
     private val _uiState = MutableStateFlow(ExperienceUiState())
     val uiState: StateFlow<ExperienceUiState> = _uiState.asStateFlow()
+
+    private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
     private var streakEngine: StreakEngine? = null
     private var onResult: ((Result<DailyEntryGrant>) -> Unit)? = null
@@ -248,6 +254,15 @@ internal class WINRExperienceViewModel(
 
     fun claimDailyEntries() {
         viewModelScope.launch {
+            // Client-side dup guard: if we already claimed today, skip the network call
+            // entirely and reflect the already-claimed state. The server remains the
+            // source of truth, but this avoids a guaranteed-reject round trip.
+            if (streakEngine?.hasClaimedToday() == true) {
+                logger.debug("Daily entries already claimed today (client guard), skipping claim")
+                showAlreadyClaimed()
+                return@launch
+            }
+
             _uiState.value = _uiState.value.copy(isClaiming = true, error = null)
             try {
                 val timezone = TimeZone.getDefault().id
@@ -297,23 +312,9 @@ internal class WINRExperienceViewModel(
             } catch (e: Exception) {
                 logger.error("Failed to claim entries: ${e.message}", e)
 
-                if (e.message?.contains("Already claimed") == true) {
-                    // Treat as success — update UI
-                    val state = streakEngine?.getState() ?: StreakState()
-                    val giveaway = _uiState.value.giveaway
-                    val ladder = giveaway?.streakLadder?.map {
-                        it * (giveaway.maxDailyBaseEntries)
-                    } ?: emptyList()
-                    val dayIndex = (state.currentDay.coerceAtLeast(1) - 1)
-                        .coerceIn(0, ladder.size.coerceAtLeast(1) - 1)
-                    val entriesToday = ladder.getOrElse(dayIndex) { 1 }
-
-                    _uiState.value = _uiState.value.copy(
-                        screen = ExperienceScreen.Streak(state, entriesToday, ladder),
-                        isClaiming = false,
-                        hasClaimed = true,
-                        claimedToday = true
-                    )
+                if (isAlreadyClaimedError(e)) {
+                    // Server confirms today's entry is already claimed — reflect as claimed.
+                    showAlreadyClaimed()
                     return@launch
                 }
 
@@ -324,6 +325,59 @@ internal class WINRExperienceViewModel(
                 onResult?.invoke(Result.failure(e))
             }
         }
+    }
+
+    /**
+     * Determine whether [e] represents an "already claimed today" rejection.
+     * Prefers the server's structured error code/type (parsed from the ServerError body)
+     * and falls back to message-substring matching only as a last resort.
+     */
+    private fun isAlreadyClaimedError(e: Throwable): Boolean {
+        // Typed error from the SDK error hierarchy.
+        if (e is com.avafli.winrsdk.WINRError.AlreadyClaimed) return true
+
+        // Structured server error: parse the JSON body for an error code/status field.
+        if (e is com.avafli.winrsdk.WINRError.ServerError) {
+            val structured = try {
+                val body = e.message ?: ""
+                val start = body.indexOf('{')
+                if (start >= 0) {
+                    val obj = json.parseToJsonElement(body.substring(start)).jsonObject
+                    val code = (obj["error"]?.jsonObject?.get("status")
+                        ?: obj["error"]?.jsonObject?.get("code")
+                        ?: obj["code"]
+                        ?: obj["status"])?.jsonPrimitive?.contentOrNull
+                    code?.uppercase()?.let {
+                        it == "ALREADY_CLAIMED" || it == "FAILED_PRECONDITION"
+                    } ?: false
+                } else false
+            } catch (_: Exception) {
+                false
+            }
+            if (structured) return true
+        }
+
+        // Last-resort fallback: legacy message-substring match.
+        return e.message?.contains("Already claimed", ignoreCase = true) == true
+    }
+
+    /** Render the already-claimed streak dashboard state. */
+    private fun showAlreadyClaimed() {
+        val state = streakEngine?.getState() ?: StreakState()
+        val giveaway = _uiState.value.giveaway
+        val ladder = giveaway?.streakLadder?.map {
+            it * (giveaway.maxDailyBaseEntries)
+        } ?: emptyList()
+        val dayIndex = (state.currentDay.coerceAtLeast(1) - 1)
+            .coerceIn(0, ladder.size.coerceAtLeast(1) - 1)
+        val entriesToday = ladder.getOrElse(dayIndex) { 1 }
+
+        _uiState.value = _uiState.value.copy(
+            screen = ExperienceScreen.Streak(state, entriesToday, ladder),
+            isClaiming = false,
+            hasClaimed = true,
+            claimedToday = true
+        )
     }
 
     // ── Bonus (rewarded ad) ──

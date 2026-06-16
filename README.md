@@ -32,7 +32,6 @@ import com.avafli.winrsdk.WINRUser
 val config = WINRConfiguration(
     context = applicationContext,
     apiKey = "YOUR_API_KEY",
-    bundleId = "com.example.myapp",
     environment = WINREnvironment.Production,
     user = WINRUser(
         id = "user_123",
@@ -82,7 +81,6 @@ Initialize the SDK with your user and environment settings:
 val config = WINRConfiguration(
     context = applicationContext,
     apiKey = "winr_live_xxxxxxxxxx",
-    bundleId = "com.example.myapp",
     environment = WINREnvironment.Production,
     user = WINRUser(
         id = "user_abc123",
@@ -91,9 +89,9 @@ val config = WINRConfiguration(
         phone = "+15551234567"  // optional
     ),
     options = WINROptions(
-        logging = LoggingLevel.Info,
+        debugLogging = true,
         analyticsAdapter = myAdapter,
-        enablePushReminders = true
+        enableCertificatePinning = true
     )
 )
 
@@ -106,10 +104,11 @@ WINR.configure(config)
 | --------- | ---- | -------- | ----------- |
 | `context` | `Context` | ✅ | Application or Activity context |
 | `apiKey` | `String` | ✅ | Your WINR API key from the dashboard |
-| `bundleId` | `String` | ✅ | App bundle ID (e.g., com.example.myapp) |
-| `environment` | `WINREnvironment` | ✅ | `.Production`, `.Staging`, or `.QA` |
+| `environment` | `WINREnvironment` | — | `.Production` (default), `.Staging`, or `.Development` |
 | `user` | `WINRUser` | ✅ | The authenticated user |
 | `options` | `WINROptions?` | — | Optional behavior toggles |
+
+> **App ID:** The SDK auto-detects your Android application ID from the host `Context` (`context.packageName`). You do not pass it manually.
 
 ### WINRUser
 
@@ -155,7 +154,7 @@ Follow the [Firebase Android setup guide](https://firebase.google.com/docs/cloud
 
 ```kotlin
 // After WINR.configure()
-WINRPushNotificationManager.instance.registerForPushNotifications(context)
+WINR.registerForPushNotifications(context)
 ```
 
 ### 3. Forward FCM Token
@@ -164,18 +163,14 @@ WINRPushNotificationManager.instance.registerForPushNotifications(context)
 class MyFirebaseMessagingService : FirebaseMessagingService() {
     override fun onNewToken(token: String) {
         super.onNewToken(token)
-        WINRPushNotificationManager.instance.didReceiveRegistrationToken(token)
+        WINR.onNewToken(token)
     }
 }
 ```
 
 ### 4. Upload FCM Service Account Key
 
-Upload your FCM service account key via the [WINR Dashboard](https://avafli-website.web.app/sdk/dashboard) to enable push notifications.
-
-### 5. Enable Push Reminders
-
-Set `enablePushReminders = true` in `WINROptions` during configuration.
+Upload your FCM service account key via the [WINR Dashboard](https://avafli-website.web.app/sdk/dashboard) to enable push notifications. Reminder schedules and messaging are configured server-side from the dashboard.
 
 ## Customization
 
@@ -210,8 +205,7 @@ class MyAnalyticsAdapter : AnalyticsAdapter {
 
 // Pass during configuration
 val options = WINROptions(
-    analyticsAdapter = MyAnalyticsAdapter(),
-    enablePushReminders = true
+    analyticsAdapter = MyAnalyticsAdapter()
 )
 ```
 
@@ -228,7 +222,7 @@ Support GDPR/CCPA deletion requests:
 
 ```kotlin
 lifecycleScope.launch {
-    WINR.deleteUserData()
+    WINR.deleteAccount()
         .onSuccess { /* All data deleted */ }
         .onFailure { error -> /* Handle error */ }
 }
@@ -244,14 +238,14 @@ This permanently removes all user data, entries, preferences, and consent record
 | ------ | ------- | ----------- |
 | `WINR.configure(config)` | `Unit` | Initialize the SDK with user and settings |
 | `WINR.present(activity, callback?)` | `Unit` | Launch the full-screen WINR experience |
-| `WINR.deleteUserData()` | `Result<Unit>` | Permanently delete all user data |
+| `WINR.deleteAccount()` | `Result<Unit>` | Permanently delete all user data |
 
 ### Push Notifications
 
 | Method | Returns | Description |
 | ------ | ------- | ----------- |
-| `WINRPushNotificationManager.instance.didReceiveRegistrationToken(token)` | `Unit` | Forward FCM token to WINR |
-| `WINRPushNotificationManager.instance.registerForPushNotifications(context)` | `Unit` | Register for push notifications |
+| `WINR.registerForPushNotifications(context)` | `Unit` | Register for push notifications |
+| `WINR.onNewToken(token)` | `Unit` | Forward an FCM token to WINR |
 
 For detailed API documentation, see the [WINR Docs](https://avafli-website.web.app/sdk/android).
 

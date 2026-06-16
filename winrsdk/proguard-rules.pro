@@ -30,6 +30,12 @@
     kotlinx.serialization.KSerializer serializer(...);
 }
 
+# Rewarded ad providers are instantiated reflectively by name in AdProviderFactory.
+# R8 cannot see these references statically, so keep the classes + no-arg constructors.
+-keep class com.avafli.winrsdk.rewards.*RewardedProvider {
+    public <init>();
+}
+
 # OkHttp
 -dontwarn okhttp3.**
 -dontwarn okio.**

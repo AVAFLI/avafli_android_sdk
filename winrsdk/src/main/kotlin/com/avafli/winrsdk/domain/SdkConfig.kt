@@ -47,6 +47,10 @@ data class SdkCopy(
     val emailConsentText: String? = null,
     val ageGateText: String? = null,
     val rulesLinkText: String? = null,
+    val completedTitle: String? = null,
+    val completedSubtitle: String? = null,
+    val bonusTitle: String? = null,
+    val bonusSubtitle: String? = null,
 )
 
 data class EmailCaptureCopy(

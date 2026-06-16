@@ -18,7 +18,10 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8 shrinking/obfuscation enabled. The SDK's public API, serializers, and
+            // reflection targets are preserved via consumer-rules.pro (applied to consumers)
+            // and proguard-rules.pro (applied to this module).
+            isMinifyEnabled = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

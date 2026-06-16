@@ -127,14 +127,6 @@ private fun WINRExperienceBody(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
-                            // Show publisher logo if available from sdkConfig
-                            uiState.sdkCopy?.let { sdkCopy ->
-                                sdkConfig?.branding?.logoUrl?.let { logoUrl ->
-                                    // TODO: Load and display logo using AsyncImage or similar
-                                    // For now, we'll skip the logo display
-                                }
-                            }
-                            
                             Text(
                                 text = "No Active Giveaway",
                                 color = branding.primaryTextColor,

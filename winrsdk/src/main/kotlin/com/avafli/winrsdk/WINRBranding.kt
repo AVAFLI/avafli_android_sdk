@@ -111,7 +111,6 @@ data class WINRBranding(
             primaryColor = serverPrimary ?: this.primaryColor,
             primaryButtonColor = serverPrimary ?: this.primaryButtonColor,
             secondaryColor = serverSecondary ?: this.secondaryColor,
-            secondaryButtonColor = serverSecondary ?: this.secondaryButtonColor,
             accentGlowColor = serverSecondary ?: this.accentGlowColor,
             backgroundColor = serverBg ?: this.backgroundColor,
             logoUrl = serverLogoUrl ?: this.logoUrl

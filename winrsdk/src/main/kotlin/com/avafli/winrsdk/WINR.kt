@@ -26,6 +26,9 @@ import java.util.TimeZone
  */
 object WINR {
 
+    /** All-zeros UUID returned by the Ad ID provider when the user has opted out. */
+    private const val OPT_OUT_AD_ID = "00000000-0000-0000-0000-000000000000"
+
     private var config: WINRConfiguration? = null
     private var secureStorage: SecureStorage? = null
     private var preferencesStorage: PreferencesStorage? = null
@@ -226,7 +229,9 @@ object WINR {
         cachedSdkConfig = response.sdkConfig
         setupAdProvider()
 
-        logger?.info("Device registered successfully (uuid: ${response.uuid})")
+        // Do not log the uuid (PII-linked identifier) at info level.
+        logger?.info("Device registered successfully")
+        logger?.debug("Registered uuid present: ${response.uuid.isNotEmpty()}")
     }
 
     private fun setupAdProvider() {
@@ -253,8 +258,26 @@ object WINR {
                 Context::class.java
             )
             val info = getInfoMethod.invoke(null, config?.context)
+
+            // Respect the user's limit-ad-tracking choice. If LAT is enabled we must not
+            // collect the GAID (spec: maid_id only collected when GAID is granted).
+            val isLatMethod = info?.javaClass?.getMethod("isLimitAdTrackingEnabled")
+            val limitAdTracking = isLatMethod?.invoke(info) as? Boolean ?: true
+            if (limitAdTracking) {
+                logger?.debug("Limit-ad-tracking enabled; omitting GAID")
+                return@withContext null
+            }
+
             val getIdMethod = info?.javaClass?.getMethod("getId")
-            getIdMethod?.invoke(info) as? String
+            val adId = getIdMethod?.invoke(info) as? String
+
+            // The all-zeros UUID is the documented opt-out sentinel; treat as unavailable.
+            if (adId == null || adId == OPT_OUT_AD_ID) {
+                logger?.debug("GAID unavailable or opt-out sentinel; omitting")
+                null
+            } else {
+                adId
+            }
         } catch (e: Exception) {
             logger?.debug("AdvertisingId not available: ${e.message}")
             null

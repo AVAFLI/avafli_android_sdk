@@ -276,14 +276,15 @@ internal fun EmailCaptureView(
                         branding.primaryButtonColor.copy(alpha = 0.4f)
                 )
                 .clickable {
-                    val trimmed = email.trim()
+                    // Normalize per spec: trim → lowercase before validation/submit
+                    val normalized = email.trim().lowercase()
                     when {
-                        trimmed.isEmpty() -> emailError = "Email is required"
+                        normalized.isEmpty() -> emailError = "Email is required"
                         !isEmailValid -> emailError = "Please enter a valid email address"
                         !isAgeConfirmed -> emailError = "You must be 18+ to enter"
                         else -> {
                             emailError = null
-                            onSubmit(trimmed, isMarketingConsented)
+                            onSubmit(normalized, isMarketingConsented)
                         }
                     }
                 },

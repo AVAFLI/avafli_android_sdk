@@ -28,7 +28,9 @@ class MainActivity : ComponentActivity() {
         WINR.configure(
             WINRConfiguration(
                 context = this,
-                apiKey = "winr_live_50b1b3b801a843d5e1f99593fcad4d14",
+                // Replace with your publisher API key from the WINR Dashboard.
+                // Never commit a real key to source control.
+                apiKey = "YOUR_WINR_API_KEY",
                 environment = WINREnvironment.Production,
                 user = WINRUser(
                     id = "android-example-user",

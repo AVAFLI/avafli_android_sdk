@@ -13,6 +13,7 @@ import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
+import java.util.Base64
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
@@ -42,13 +43,20 @@ internal class NetworkClient(
             .readTimeout(config.options.networkTimeoutSeconds, TimeUnit.SECONDS)
             .writeTimeout(config.options.networkTimeoutSeconds, TimeUnit.SECONDS)
 
-        // Certificate pinning for production
+        // Certificate pinning for production.
+        // We CA-pin Google Trust Services rather than the leaf cert: Cloud Functions
+        // hosts (*.cloudfunctions.net) rotate their leaf certificates frequently, but the
+        // issuing GTS CA chain is stable. Pinning the GTS Root R1 (valid to 2036) plus the
+        // GTS WR2 intermediate as a backup avoids hard outages on leaf rotation while still
+        // defeating MITM via a rogue CA. These are SPKI SHA-256 pins in OkHttp format.
         if (config.environment == WINREnvironment.Production && config.options.enableCertificatePinning) {
             val certificatePinner = CertificatePinner.Builder()
-                .add("us-central1-winr-9c11f.cloudfunctions.net", "sha256/BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=")
+                // GTS Root R1 (stable to 2036)
+                .add("*.cloudfunctions.net", "sha256/hxqRlPTu1bMS/0DITB1SSu0vd4u/8l8TjPgfaAp63Gc=")
+                // GTS WR2 intermediate (backup)
+                .add("*.cloudfunctions.net", "sha256/YPtHaftLw6/0vnc2BnNKGF54xiCA28WFcccjkA4ypCM=")
                 .build()
-            // Note: In production, replace the pin above with actual certificate hash
-            // builder.certificatePinner(certificatePinner)
+            builder.certificatePinner(certificatePinner)
         }
 
         builder.build()
@@ -62,8 +70,16 @@ internal class NetworkClient(
         endpoint: String,
         body: Map<String, JsonElement> = emptyMap()
     ): JsonObject {
-        val token = secureStorage.getToken()
+        var token = secureStorage.getToken()
             ?: throw WINRError.TokenRefreshFailed()
+
+        // Proactive JWT expiry check: avoid a guaranteed-401 round trip when we can
+        // already see the token is expired (or malformed). The server still validates
+        // the signature; this is a cheap client-side pre-check only.
+        if (isJwtExpired(token)) {
+            logger.debug("Session token expired (exp pre-check), refreshing before request")
+            token = refreshToken()
+        }
 
         return try {
             executePost(endpoint, body, token)
@@ -118,7 +134,8 @@ internal class NetworkClient(
             val responseBody = response.body?.string()
                 ?: throw WINRError.NetworkError("Empty response body")
 
-            logger.debug("Response ${response.code}: $responseBody")
+            // Do NOT log the response body: it carries session tokens and PII.
+            logger.debug("Response ${response.code} (${responseBody.length} bytes)")
 
             if (!response.isSuccessful) {
                 throw WINRError.ServerError(response.code, responseBody)
@@ -134,6 +151,33 @@ internal class NetworkClient(
             throw WINRError.NetworkError("Network request failed: ${e.message}", e)
         } catch (e: Exception) {
             throw WINRError.Unknown("Unexpected error: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Lightweight JWT structure + `exp` pre-check.
+     *
+     * Verifies the token has three dot-separated segments and decodes the payload to
+     * read `exp` (seconds since epoch). Returns true if the token is malformed or the
+     * expiry is in the past (with a small clock-skew leeway). This is NOT a signature
+     * check — the server remains the source of truth — it only avoids a doomed request.
+     */
+    private fun isJwtExpired(token: String, leewaySeconds: Long = 30): Boolean {
+        return try {
+            val parts = token.split(".")
+            if (parts.size != 3) return true
+            val payloadJson = String(
+                Base64.getUrlDecoder().decode(parts[1]),
+                Charsets.UTF_8
+            )
+            val exp = json.parseToJsonElement(payloadJson)
+                .jsonObject["exp"]?.jsonPrimitive?.longOrNull
+                ?: return false // no exp claim → let the server decide
+            val nowSeconds = System.currentTimeMillis() / 1000
+            nowSeconds >= (exp - leewaySeconds)
+        } catch (e: Exception) {
+            // Malformed payload → treat as expired so we refresh rather than send garbage.
+            true
         }
     }
 

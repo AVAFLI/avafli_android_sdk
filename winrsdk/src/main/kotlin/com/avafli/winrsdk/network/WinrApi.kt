@@ -37,7 +37,7 @@ internal class WinrApi(
             "deviceFingerprint" to JsonPrimitive(deviceFingerprint),
             "bundleId" to JsonPrimitive(bundleId),
             "timezone" to JsonPrimitive(timezone),
-            "platformOS" to JsonPrimitive("android"),
+            "platformOS" to JsonPrimitive("Android"),
             "sdkVersion" to JsonPrimitive(SDK_VERSION)
         )
 
@@ -78,7 +78,7 @@ internal class WinrApi(
     suspend fun claimDailyEntries(timezone: String): ClaimDailyEntriesResponse {
         val body = mapOf(
             "timezone" to JsonPrimitive(timezone),
-            "platformOS" to JsonPrimitive("android"),
+            "platformOS" to JsonPrimitive("Android"),
             "sdkVersion" to JsonPrimitive(SDK_VERSION)
         )
 
@@ -100,7 +100,7 @@ internal class WinrApi(
     suspend fun claimBonusEntries(timezone: String): ClaimBonusEntriesResponse {
         val body = mapOf(
             "timezone" to JsonPrimitive(timezone),
-            "platformOS" to JsonPrimitive("android"),
+            "platformOS" to JsonPrimitive("Android"),
             "sdkVersion" to JsonPrimitive(SDK_VERSION)
         )
 
@@ -379,6 +379,9 @@ internal class WinrApi(
     }
 
     companion object {
-        const val SDK_VERSION = "1.0.0"
+        // Single source of truth for the wire-format sdk_version. Spec requires a
+        // leading "v" (v1.x.x). Keep in sync with the Maven publish version in
+        // winrsdk/build.gradle.kts (1.0.0).
+        const val SDK_VERSION = "v1.0.0"
     }
 }
