@@ -18,6 +18,10 @@ import com.avafli.winrsdk.storage.SecureStorage
 import com.avafli.winrsdk.ui.WINRExperienceActivity
 import com.avafli.winrsdk.ui.WINRExperienceViewModel
 import kotlinx.coroutines.*
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import java.util.TimeZone
 
 /**
@@ -41,7 +45,18 @@ object WINR {
     private var cachedSdkConfig: SdkConfig? = null
     private var pendingCallback: ((Result<DailyEntryGrant>) -> Unit)? = null
 
+    /**
+     * Cached "publisher suspended" flag. Set when device registration fails with a
+     * suspended/revoked error so repeat launches short-circuit without re-hitting the
+     * backend. When true, the default UI is never presented.
+     */
+    @Volatile
+    private var isSuspended: Boolean = false
+
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+
+    /** Lenient parser for extracting structured error codes from server error bodies. */
+    private val suspendedJson = Json { ignoreUnknownKeys = true; isLenient = true }
 
     /**
      * Configure the WINR SDK.
@@ -71,6 +86,13 @@ object WINR {
         scope.launch {
             try {
                 registerDeviceIfNeeded(appContext)
+            } catch (e: WINRError.ServiceUnavailable) {
+                // Publisher suspended/revoked — cache so repeat launches short-circuit and
+                // notify any custom-UI callback awaiting the result. Default UI is declined
+                // in present(). Not logged as an error: this is an expected degrade.
+                isSuspended = true
+                logger?.info("Publisher account suspended; WINR experience unavailable")
+                consumePendingCallback()?.invoke(Result.failure(e))
             } catch (e: Exception) {
                 logger?.error("Background device registration failed: ${e.message}", e)
             }
@@ -115,11 +137,30 @@ object WINR {
             return
         }
 
+        // Default-UI path: if the publisher has been suspended/revoked, silently decline to
+        // present the WINR experience. Report ServiceUnavailable via the callback and return
+        // without launching the Activity. This is a clean degrade — no crash, no empty UI.
+        if (isSuspended) {
+            logger?.info("Publisher suspended; declining to present WINR experience")
+            callback?.invoke(Result.failure(WINRError.ServiceUnavailable()))
+            return
+        }
+
         this.pendingCallback = callback
 
         val intent = Intent(activity, WINRExperienceActivity::class.java)
         activity.startActivity(intent)
     }
+
+    /**
+     * Whether the WINR experience is currently available for this publisher.
+     *
+     * Returns false once device registration has failed with a suspended/revoked error
+     * (e.g. a lapsed billing account). Publishers using a custom launch UI can query this
+     * to hide their WINR entry point or show their own "no longer available" messaging
+     * instead of calling [present].
+     */
+    fun isServiceAvailable(): Boolean = !isSuspended
 
     /**
      * Register for push notifications.
@@ -151,6 +192,7 @@ object WINR {
             preferencesStorage?.clearAll()
             cachedGiveaway = null
             cachedSdkConfig = null
+            isSuspended = false
             logger?.info("User account deleted successfully")
             Result.success(Unit)
         } catch (e: Exception) {
@@ -214,12 +256,23 @@ object WINR {
 
         logger?.debug("Registering device...")
 
-        val response = currentApi.registerDevice(
-            apiKey = apiKey,
-            deviceFingerprint = deviceFingerprint,
-            bundleId = bundleId,
-            timezone = timezone
-        )
+        val response = try {
+            currentApi.registerDevice(
+                apiKey = apiKey,
+                deviceFingerprint = deviceFingerprint,
+                bundleId = bundleId,
+                timezone = timezone
+            )
+        } catch (e: WINRError) {
+            // Map a suspended/revoked publisher into the dedicated ServiceUnavailable error
+            // so the caller can degrade gracefully. The backend surfaces this as an error
+            // whose message contains "suspended" (e.g. "API key suspended or revoked" /
+            // "Publisher account suspended").
+            if (isSuspendedError(e)) {
+                throw WINRError.ServiceUnavailable()
+            }
+            throw e
+        }
 
         secureStorage?.saveToken(response.token)
         secureStorage?.saveRefreshToken(response.refreshToken)
@@ -232,6 +285,45 @@ object WINR {
         // Do not log the uuid (PII-linked identifier) at info level.
         logger?.info("Device registered successfully")
         logger?.debug("Registered uuid present: ${response.uuid.isNotEmpty()}")
+    }
+
+    /**
+     * Determine whether [e] represents a suspended/revoked publisher rejection raised
+     * during device registration.
+     *
+     * Prefers the server's structured error code/status (parsed from the ServerError JSON
+     * body) and falls back to message-substring matching ("suspended" / "revoked") only as
+     * a last resort, mirroring the detection strategy used for already-claimed errors.
+     */
+    private fun isSuspendedError(e: Throwable): Boolean {
+        // Already mapped.
+        if (e is WINRError.ServiceUnavailable) return true
+
+        // Structured server error: parse the JSON body for an error code/status field.
+        if (e is WINRError.ServerError) {
+            val structured = try {
+                val body = e.message ?: ""
+                val start = body.indexOf('{')
+                if (start >= 0) {
+                    val obj = suspendedJson.parseToJsonElement(body.substring(start)).jsonObject
+                    val code = (obj["error"]?.jsonObject?.get("status")
+                        ?: obj["error"]?.jsonObject?.get("code")
+                        ?: obj["code"]
+                        ?: obj["status"])?.jsonPrimitive?.contentOrNull
+                    code?.uppercase()?.let {
+                        it == "PERMISSION_DENIED" || it == "SUSPENDED" || it == "REVOKED"
+                    } ?: false
+                } else false
+            } catch (_: Exception) {
+                false
+            }
+            if (structured) return true
+        }
+
+        // Last-resort fallback: legacy message-substring match.
+        val msg = e.message ?: return false
+        return msg.contains("suspended", ignoreCase = true) ||
+            msg.contains("revoked", ignoreCase = true)
     }
 
     private fun setupAdProvider() {

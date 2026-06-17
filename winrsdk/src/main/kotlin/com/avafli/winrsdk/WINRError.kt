@@ -29,6 +29,14 @@ sealed class WINRError(message: String, cause: Throwable? = null) : Exception(me
     /** Server returned an error. */
     class ServerError(val code: Int, message: String) : WINRError("Server error ($code): $message")
 
+    /**
+     * The WINR experience is no longer available for this publisher — typically because
+     * the publisher's account or API key has been suspended or revoked (e.g. billing lapse).
+     * The SDK silently declines to present the default UI in this case; publishers using a
+     * custom launch UI can surface their own "no longer available" messaging.
+     */
+    class ServiceUnavailable : WINRError("The WINR experience is no longer available.")
+
     /** An unknown error occurred. */
     class Unknown(message: String = "An unknown error occurred", cause: Throwable? = null) :
         WINRError(message, cause)
