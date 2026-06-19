@@ -108,10 +108,12 @@ internal class WINRExperienceViewModel(
         viewModelScope.launch {
             try {
                 val giveaway: Giveaway
+                var backendResponse: WinrApi.GetActiveGiveawayResponse? = null
                 if (existingGiveaway != null) {
                     giveaway = existingGiveaway
                 } else {
                     val response = api.getActiveGiveaway()
+                    backendResponse = response
                     // Check if backend returned no active giveaway (like iOS implementation)
                     if (response.giveaway == null) {
                         // Clear cached giveaway and set state to NoActiveGiveaway
@@ -134,6 +136,36 @@ internal class WINRExperienceViewModel(
                 val savedState = loadStreakState()
                 streakEngine?.setState(savedState)
                 streakEngine?.checkStreakReset()
+
+                // Trust the backend streak when it reports one (it's the source of
+                // truth). This unifies the displayed streak across devices — after
+                // cross-device adoption the local state belongs to a throwaway
+                // device-user, so we reseed from the canonical user's backend streak.
+                val backendDay = backendResponse?.streakDay
+                if (backendDay != null) {
+                    val today = java.time.LocalDate.now().toString()
+                    val backendClaimed = backendResponse?.claimedToday == true
+                    val seeded = streakEngine?.getState()?.copy(
+                        currentDay = backendDay,
+                        claimedToday = backendClaimed,
+                        totalEntries = backendResponse?.totalEntries
+                            ?: streakEngine?.getState()?.totalEntries ?: 0,
+                        // Anchor claimedToday on lastClaimDate so hasClaimedToday() agrees.
+                        lastClaimDate = if (backendClaimed) today
+                            else streakEngine?.getState()?.lastClaimDate,
+                    )
+                    if (seeded != null) {
+                        streakEngine?.setState(seeded)
+                        saveStreakState(seeded)
+                    }
+                }
+
+                // Backend is the source of truth for email consent — seed the local
+                // flag from it so a user whose flag was lost (e.g. reinstall) isn't
+                // re-prompted for email.
+                if (backendResponse?.emailConsentStatus == true) {
+                    preferencesStorage.saveEmailSubmitted(true)
+                }
 
                 val state = streakEngine?.getState() ?: StreakState()
                 val alreadyClaimed = streakEngine?.hasClaimedToday() ?: false
@@ -197,18 +229,24 @@ internal class WINRExperienceViewModel(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isSubmittingEmail = true, error = null)
             try {
-                val success = api.submitEmail(email, marketingConsent, publisherUserId)
-                if (success) {
+                val result = api.submitEmail(email, marketingConsent, publisherUserId)
+                if (result.success) {
                     preferencesStorage.saveEmailSubmitted(true)
                     _uiState.value = _uiState.value.copy(
                         isSubmittingEmail = false,
                         emailSubmitted = true
                     )
-                    // Advance to streak dashboard
-                    val giveaway = _uiState.value.giveaway ?: return@launch
-                    val state = streakEngine?.getState() ?: StreakState()
-                    val claimed = streakEngine?.hasClaimedToday() ?: false
-                    moveToStreakDashboard(giveaway, state, claimed)
+                    if (result.adopted) {
+                        // Switched to the canonical user (credentials already saved in
+                        // WinrApi). Re-load from the backend so the unified streak shows.
+                        loadGiveaway(null)
+                    } else {
+                        // Advance to streak dashboard
+                        val giveaway = _uiState.value.giveaway ?: return@launch
+                        val state = streakEngine?.getState() ?: StreakState()
+                        val claimed = streakEngine?.hasClaimedToday() ?: false
+                        moveToStreakDashboard(giveaway, state, claimed)
+                    }
                 } else {
                     _uiState.value = _uiState.value.copy(
                         isSubmittingEmail = false,

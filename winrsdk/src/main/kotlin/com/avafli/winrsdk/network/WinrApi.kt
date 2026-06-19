@@ -69,7 +69,17 @@ internal class WinrApi(
         val giveawayJson = response["giveaway"]?.jsonObject
         val giveaway = giveawayJson?.let { parseGiveaway(it) }
         val sdkConfig = response["sdkConfig"]?.jsonObject?.let { parseSdkConfig(it) }
-        return GetActiveGiveawayResponse(giveaway = giveaway, sdkConfig = sdkConfig)
+        return GetActiveGiveawayResponse(
+            giveaway = giveaway,
+            sdkConfig = sdkConfig,
+            // Backend is the source of truth for the streak. Surfacing these lets the
+            // UI reflect the authoritative streak — essential after cross-device
+            // adoption, where the local streak belongs to a throwaway device-user.
+            claimedToday = response["claimedToday"]?.jsonPrimitive?.booleanOrNull,
+            streakDay = response["streakDay"]?.jsonPrimitive?.intOrNull,
+            totalEntries = response["totalEntries"]?.jsonPrimitive?.intOrNull,
+            emailConsentStatus = response["emailConsentStatus"]?.jsonPrimitive?.booleanOrNull,
+        )
     }
 
     /**
@@ -115,14 +125,28 @@ internal class WinrApi(
     /**
      * Submit user email with marketing consent and optional publisher user ID.
      */
-    suspend fun submitEmail(email: String, marketingConsent: Boolean = false, publisherUserId: String? = null): Boolean {
+    suspend fun submitEmail(email: String, marketingConsent: Boolean = false, publisherUserId: String? = null): SubmitEmailResult {
         val body = buildMap<String, JsonElement> {
             put("email", JsonPrimitive(email))
             put("marketingConsent", JsonPrimitive(marketingConsent))
             publisherUserId?.let { put("publisherUserId", JsonPrimitive(it)) }
         }
         val response = networkClient.authenticatedPost("submitEmail", body)
-        return response["success"]?.jsonPrimitive?.booleanOrNull ?: false
+        val result = SubmitEmailResult(
+            success = response["success"]?.jsonPrimitive?.booleanOrNull ?: false,
+            adopted = response["adopted"]?.jsonPrimitive?.booleanOrNull ?: false,
+            uuid = response["uuid"]?.jsonPrimitive?.contentOrNull,
+            token = response["token"]?.jsonPrimitive?.contentOrNull,
+            refreshToken = response["refreshToken"]?.jsonPrimitive?.contentOrNull,
+        )
+        // Cross-device streak unification: this email already belonged to an
+        // existing user under this publisher — switch to that canonical user so
+        // the person keeps one streak per publisher and can't double-claim.
+        if (result.adopted && result.token != null && result.uuid != null) {
+            networkClient.saveSession(result.token, result.refreshToken, result.uuid)
+            logger.info("Adopted existing account — streak unified across devices")
+        }
+        return result
     }
 
     /**
@@ -184,7 +208,26 @@ internal class WinrApi(
 
     data class GetActiveGiveawayResponse(
         val giveaway: Giveaway?,
-        val sdkConfig: SdkConfig? = null
+        val sdkConfig: SdkConfig? = null,
+        val claimedToday: Boolean? = null,
+        val streakDay: Int? = null,
+        val totalEntries: Int? = null,
+        val emailConsentStatus: Boolean? = null,
+    )
+
+    /**
+     * Result of submitEmail. When the email matched an existing account under this
+     * publisher (another device/SDK), the backend adopts that canonical user so the
+     * streak follows the person across devices — [adopted] is true and
+     * [token]/[refreshToken]/[uuid] carry the canonical user's credentials, which the
+     * SDK must switch to.
+     */
+    data class SubmitEmailResult(
+        val success: Boolean,
+        val adopted: Boolean = false,
+        val uuid: String? = null,
+        val token: String? = null,
+        val refreshToken: String? = null,
     )
 
     data class ClaimDailyEntriesResponse(

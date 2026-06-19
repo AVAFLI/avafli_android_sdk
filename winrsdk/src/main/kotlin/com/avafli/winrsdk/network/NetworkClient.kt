@@ -104,6 +104,19 @@ internal class NetworkClient(
         return executePost(endpoint, body, authToken = null)
     }
 
+    /**
+     * Switch the persisted session to a different user. Used for cross-device
+     * streak unification: when submitEmail adopts an existing canonical user,
+     * the SDK swaps to those credentials so subsequent requests act as that user.
+     * Tokens are read from [secureStorage] on every request, so saving here is
+     * enough — no in-flight client state to update.
+     */
+    fun saveSession(token: String, refreshToken: String?, uuid: String) {
+        secureStorage.saveToken(token)
+        refreshToken?.let { secureStorage.saveRefreshToken(it) }
+        secureStorage.saveUuid(uuid)
+    }
+
     private suspend fun executePost(
         endpoint: String,
         body: Map<String, JsonElement>,
