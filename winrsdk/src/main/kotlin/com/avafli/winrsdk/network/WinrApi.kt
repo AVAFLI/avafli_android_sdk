@@ -57,7 +57,11 @@ internal class WinrApi(
             refreshToken = refreshToken,
             uuid = uuid,
             giveaway = giveaway,
-            sdkConfig = sdkConfig
+            sdkConfig = sdkConfig,
+            claimedToday = response["claimedToday"]?.jsonPrimitive?.booleanOrNull,
+            streakDay = response["streakDay"]?.jsonPrimitive?.intOrNull,
+            totalEntries = response["totalEntries"]?.jsonPrimitive?.intOrNull,
+            optedOut = response["optedOut"]?.jsonPrimitive?.booleanOrNull,
         )
     }
 
@@ -79,6 +83,7 @@ internal class WinrApi(
             streakDay = response["streakDay"]?.jsonPrimitive?.intOrNull,
             totalEntries = response["totalEntries"]?.jsonPrimitive?.intOrNull,
             emailConsentStatus = response["emailConsentStatus"]?.jsonPrimitive?.booleanOrNull,
+            optedOut = response["optedOut"]?.jsonPrimitive?.booleanOrNull,
         )
     }
 
@@ -100,8 +105,18 @@ internal class WinrApi(
             totalEntries = response["totalEntries"]?.jsonPrimitive?.int ?: 0,
             weeklyBonusEntries = response["weeklyBonusEntries"]?.jsonPrimitive?.intOrNull,
             monthlyBonusEntries = response["monthlyBonusEntries"]?.jsonPrimitive?.intOrNull,
-            milestone = response["milestone"]?.jsonObject?.let { parseMilestone(it) }
+            milestone = response["milestone"]?.jsonObject?.let { parseMilestone(it) },
+            monthlyMilestone = response["monthlyMilestone"]?.jsonObject?.let { parseMilestone(it) }
         )
+    }
+
+    /**
+     * RTD opt-out: tombstones the person on the backend (identity-wide, PII anonymized,
+     * email suppressed). The SDK must never present the experience again afterwards.
+     */
+    suspend fun optOut(): Boolean {
+        val response = networkClient.authenticatedPost("optOut")
+        return response["success"]?.jsonPrimitive?.booleanOrNull ?: false
     }
 
     /**
@@ -203,7 +218,12 @@ internal class WinrApi(
         val refreshToken: String,
         val uuid: String,
         val giveaway: Giveaway?,
-        val sdkConfig: SdkConfig? = null
+        val sdkConfig: SdkConfig? = null,
+        val claimedToday: Boolean? = null,
+        val streakDay: Int? = null,
+        val totalEntries: Int? = null,
+        /** True when this device/person has opted out (RTD) — never auto-present. */
+        val optedOut: Boolean? = null,
     )
 
     data class GetActiveGiveawayResponse(
@@ -213,6 +233,8 @@ internal class WinrApi(
         val streakDay: Int? = null,
         val totalEntries: Int? = null,
         val emailConsentStatus: Boolean? = null,
+        /** True when this person has opted out (RTD) — the SDK must never auto-present. */
+        val optedOut: Boolean? = null,
     )
 
     /**
@@ -236,7 +258,8 @@ internal class WinrApi(
         val totalEntries: Int,
         val weeklyBonusEntries: Int?,
         val monthlyBonusEntries: Int?,
-        val milestone: Milestone?
+        val milestone: Milestone?,
+        val monthlyMilestone: Milestone? = null
     )
 
     data class ClaimBonusEntriesResponse(
@@ -297,7 +320,22 @@ internal class WinrApi(
 
         val bonusEntriesEnabled = try { obj["bonusEntriesEnabled"]?.jsonPrimitive?.boolean ?: false } catch (_: Exception) { false }
 
-        return SdkConfig(branding = branding, copy = copy, media = media, bonusEntriesEnabled = bonusEntriesEnabled)
+        val experience = obj["experience"]?.jsonObject?.let {
+            ExperienceConfig(
+                autoOpenEnabled = it["autoOpenEnabled"]?.jsonPrimitive?.booleanOrNull,
+                unregisteredImpressionCap = it["unregisteredImpressionCap"]?.jsonPrimitive?.intOrNull,
+                requireDismissClick = it["requireDismissClick"]?.jsonPrimitive?.booleanOrNull
+            )
+        }
+
+        return SdkConfig(
+            branding = branding,
+            copy = copy,
+            media = media,
+            bonusEntriesEnabled = bonusEntriesEnabled,
+            rulesUrl = obj["rulesUrl"]?.jsonPrimitive?.contentOrNull,
+            experience = experience
+        )
     }
 
     private fun parseMilestone(obj: JsonObject): Milestone {

@@ -13,6 +13,12 @@ internal class PreferencesStorage(context: Context) {
         PREFS_NAME, Context.MODE_PRIVATE
     )
 
+    /**
+     * Auto-present keys are suffixed with the package name (mirrors the iOS
+     * per-bundle keys) so state never cross-contaminates between publisher apps.
+     */
+    private val packageName: String = context.packageName
+
     fun saveStreakDay(day: Int) {
         prefs.edit().putInt(KEY_STREAK_DAY, day).apply()
     }
@@ -71,6 +77,33 @@ internal class PreferencesStorage(context: Context) {
         return encoded.split(",").map { it == "1" }
     }
 
+    // ── Auto-present (V2 experience: open once per calendar day) ──
+
+    fun saveLastAutoPresentDay(day: String) {
+        prefs.edit().putString("${KEY_LAST_AUTO_PRESENT}_$packageName", day).apply()
+    }
+
+    fun getLastAutoPresentDay(): String? {
+        return prefs.getString("${KEY_LAST_AUTO_PRESENT}_$packageName", null)
+    }
+
+    fun saveUnregisteredImpressions(count: Int) {
+        prefs.edit().putInt("${KEY_UNREGISTERED_IMPRESSIONS}_$packageName", count).apply()
+    }
+
+    fun getUnregisteredImpressions(): Int {
+        return prefs.getInt("${KEY_UNREGISTERED_IMPRESSIONS}_$packageName", 0)
+    }
+
+    /** RTD opt-out — once set, the experience is permanently silenced on this device. */
+    fun saveOptedOut(optedOut: Boolean) {
+        prefs.edit().putBoolean("${KEY_OPTED_OUT}_$packageName", optedOut).apply()
+    }
+
+    fun isOptedOut(): Boolean {
+        return prefs.getBoolean("${KEY_OPTED_OUT}_$packageName", false)
+    }
+
     fun clearAll() {
         prefs.edit().clear().apply()
     }
@@ -84,5 +117,8 @@ internal class PreferencesStorage(context: Context) {
         private const val KEY_MONTHLY_DAYS = "monthly_days_completed"
         private const val KEY_EMAIL_SUBMITTED = "email_submitted"
         private const val KEY_COMPLETED_DAYS = "completed_days"
+        private const val KEY_LAST_AUTO_PRESENT = "winr_last_auto_present"
+        private const val KEY_UNREGISTERED_IMPRESSIONS = "winr_unregistered_impressions"
+        private const val KEY_OPTED_OUT = "winr_opted_out"
     }
 }

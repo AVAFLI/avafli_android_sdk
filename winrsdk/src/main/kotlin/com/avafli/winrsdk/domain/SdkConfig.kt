@@ -8,8 +8,27 @@ data class SdkConfig(
     val branding: SdkBranding? = null,
     val copy: SdkCopy? = null,
     val media: SdkMedia? = null,
-    /** Feature flag: show bonus entries (watch video) screen in SDK flow. */
-    val bonusEntriesEnabled: Boolean = false
+    /** Feature flag: show bonus entries (watch video) screen in SDK flow. Parked (Phase 1). */
+    val bonusEntriesEnabled: Boolean = false,
+    /** Publisher-level rules URL fallback (giveaway.rulesUrl wins when present). */
+    val rulesUrl: String? = null,
+    /** Experience behavior (V2 auto-open flow). Absent → SDK defaults apply. */
+    val experience: ExperienceConfig? = null
+)
+
+/**
+ * Server-driven experience behavior flags.
+ */
+data class ExperienceConfig(
+    /** Auto-present the experience on the first app-open of the day (default true). */
+    val autoOpenEnabled: Boolean? = null,
+    /**
+     * How many times an unregistered (no-email) user sees the auto-presented
+     * experience before it goes quiet (default 3 — MVP decision).
+     */
+    val unregisteredImpressionCap: Int? = null,
+    /** Dismissal requires an explicit tap; never auto-fade (default true). */
+    val requireDismissClick: Boolean? = null
 )
 
 /**
