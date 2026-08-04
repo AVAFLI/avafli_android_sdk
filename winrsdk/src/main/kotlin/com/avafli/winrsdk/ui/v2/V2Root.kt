@@ -27,7 +27,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -150,8 +149,9 @@ private fun DrawerContent(
         )
 
         is ExperienceScreen.DailyConfirmed -> Box(Modifier.fillMaxSize()) {
-            // Dashboard behind + celebration modal on top (blur no-ops < API 31).
-            Box(Modifier.fillMaxSize().blur(3.dp)) {
+            // Dashboard behind + celebration modal on top. Real blur on 31+,
+            // desaturate + extra dim below (see winrCelebrationBackdrop).
+            Box(Modifier.fillMaxSize().winrCelebrationBackdrop()) {
                 WINRV2DashboardScreen(
                     accent = accent,
                     logoUrl = logoUrl,
