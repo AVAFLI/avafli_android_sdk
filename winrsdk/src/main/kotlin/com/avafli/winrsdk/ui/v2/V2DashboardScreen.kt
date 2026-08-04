@@ -41,7 +41,10 @@ internal fun WINRV2DashboardScreen(
     revealed: Boolean = true,
 ) {
     val visitMode = giveaway?.streakMode == "visit"
-    val preReveal = pendingClaimEntries != null && !revealed
+    // Pinned while today is unclaimed OR the reveal hasn't played — matching
+    // the router (V2Root). Without the claimedToday clause the current tile
+    // animates at claim-response time, ~1s BEFORE the count-up/toast beat.
+    val preReveal = !revealed && (pendingClaimEntries != null || !claimedToday)
 
     fun ladderValue(day: Int): Int =
         WINRV2Ladder.entries(day = day, ladder = ladder, milestones = giveaway?.milestones)

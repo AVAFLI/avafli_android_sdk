@@ -142,7 +142,13 @@ private fun DrawerContent(
             // the claim response is staged — the total springs to the
             // post-claim value while the tile checks off with confetti.
             // No claim tap (Joe's Slice prototype).
-            val preReveal = ui.pendingRevealGrant != null && !ui.claimRevealed
+            // Pinned from the FIRST frame: while today is unclaimed OR the
+            // reveal hasn't played, show yesterday's numbers. Without the
+            // claimedToday clause there's a flash of the raw post-claim
+            // server state during the network round-trip, and elements flip
+            // at different times.
+            val preReveal = !ui.claimRevealed &&
+                (ui.pendingRevealGrant != null || !ui.claimedToday)
             val targetTotal =
                 if (preReveal) ui.preClaimTotalEntries ?: screen.streakState.totalEntries
                 else screen.streakState.totalEntries
