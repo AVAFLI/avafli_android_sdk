@@ -19,16 +19,19 @@ import com.avafli.winrsdk.WINRUser
 /**
  * Example activity demonstrating WINR SDK integration.
  *
- * The V2 experience AUTO-OPENS on the first app-open of each calendar day —
- * configuring the SDK below is all that's needed. The button demonstrates the
- * manual WINR.present() entry point (always available).
+ * Integration is configure-only: the V2 experience AUTO-OPENS on the first
+ * app-open of each calendar day — the `WINR.configure(...)` call below is the
+ * entire integration. There is no manual launch API.
+ *
+ * To demo the auto-open again, clear the app's data (Settings > Apps > WINR
+ * Example > Storage > Clear data) and relaunch.
  */
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Configure WINR SDK
+        // Configure WINR SDK — this is the entire integration.
         WINR.configure(
             WINRConfiguration(
                 context = this,
@@ -56,8 +59,6 @@ class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     private fun ExampleApp() {
-        var lastResult by remember { mutableStateOf<String?>(null) }
-
         MaterialTheme(
             colorScheme = darkColorScheme()
         ) {
@@ -89,50 +90,12 @@ class MainActivity : ComponentActivity() {
                     Spacer(modifier = Modifier.height(16.dp))
 
                     Text(
-                        text = "The experience auto-opens on the first app-open of each day. " +
-                            "Use the button to re-open it manually.",
+                        text = "The WINR experience opens itself automatically on the " +
+                            "first app-open of each day — no launch code required. " +
+                            "To see the auto-open again, clear the app's data and relaunch.",
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                     )
-
-                    Spacer(modifier = Modifier.height(32.dp))
-
-                    Button(
-                        onClick = {
-                            WINR.present(this@MainActivity) { result ->
-                                result.onSuccess { grant ->
-                                    lastResult = "Earned ${grant.entries} entries! (Day ${grant.streakDay})"
-                                }
-                                result.onFailure { error ->
-                                    lastResult = "Error: ${error.message}"
-                                }
-                            }
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(56.dp)
-                    ) {
-                        Text(
-                            text = "🎟️ Open WINR Experience",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                    }
-
-                    lastResult?.let { result ->
-                        Spacer(modifier = Modifier.height(24.dp))
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.secondaryContainer
-                            )
-                        ) {
-                            Text(
-                                text = result,
-                                modifier = Modifier.padding(16.dp),
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                        }
-                    }
                 }
             }
         }

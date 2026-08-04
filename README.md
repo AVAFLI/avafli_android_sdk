@@ -44,9 +44,8 @@ val config = WINRConfiguration(
 )
 WINR.configure(config)
 
-// 2. That's it — the experience auto-opens on the first app-open of each day.
-//    You can also open it manually at any time:
-WINR.present(activity)
+// 2. That's it — one call, and the experience opens itself
+//    on the first app-open of each day.
 ```
 
 > **Auto-open:** After `configure()`, the SDK presents the experience automatically once per calendar day (after registration and on activity resumes — a new day re-opens it even if the app stayed in memory). It can be disabled remotely via the dashboard's `experience.autoOpenEnabled` kill switch; unregistered users see at most 3 auto-opens until they submit an email, and RTD opted-out users never see it.
@@ -73,7 +72,7 @@ In your app-level `build.gradle.kts`:
 
 ```kotlin
 dependencies {
-    implementation("com.github.avafli:winr-android-sdk:2.0.0")
+    implementation("com.github.AVAFLI:winr_android_sdk:2.1.0")
 }
 ```
 
@@ -137,28 +136,9 @@ WINR.configure(config)
 
 > **Email:** The SDK captures email through its own opt-in UI. Do not pass email via `WINRUser`.
 
-## Present the Experience
+## The Experience
 
-The V2 experience presents itself automatically once per calendar day (first app-open of the day). Entries are claimed automatically when it opens, and a celebration modal confirms the grant.
-
-You can also launch the bottom-drawer experience manually:
-
-```kotlin
-// Simple presentation
-WINR.present(activity)
-
-// With completion callback
-WINR.present(activity) { result ->
-    result.onSuccess { grant ->
-        Log.d("WINR", "Entries earned: ${grant.entries}, streak day: ${grant.streakDay}")
-    }
-    result.onFailure { error ->
-        Log.e("WINR", "Error: ${error.message}")
-    }
-}
-```
-
-The callback receives a `DailyEntryGrant` with the entries earned during the session (`entries`, `streakDay`, `totalEntries`, plus optional `weeklyBonusEntries`, `monthlyBonusEntries`, and `milestone`). Check `WINR.isServiceAvailable()` if you gate your own UI on the experience being available.
+The V2 experience presents itself automatically once per calendar day (first app-open of the day). Entries are claimed automatically when it opens, and a celebration modal confirms the grant. There is no launch API — after `configure()`, the SDK handles everything: presentation timing, entry claiming, and celebration.
 
 ## Push Notifications
 
@@ -253,9 +233,7 @@ For Right-to-Delete opt-outs (user asks to never see WINR again), call `WINR.opt
 
 | Method | Returns | Description |
 | ------ | ------- | ----------- |
-| `WINR.configure(config)` | `Unit` | Initialize the SDK; auto-opens the experience once per day |
-| `WINR.present(activity, callback?)` | `Unit` | Manually launch the WINR bottom-drawer experience |
-| `WINR.isServiceAvailable()` | `Boolean` | Whether the experience can currently be presented |
+| `WINR.configure(config)` | `Unit` | Initialize the SDK; the experience auto-opens once per day |
 | `WINR.optOut()` | `suspend Result<Unit>` | RTD opt-out — permanently silence the experience |
 | `WINR.deleteAccount()` | `suspend Result<Unit>` | Permanently delete all user data |
 

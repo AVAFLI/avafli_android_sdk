@@ -3,7 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
-    `maven-publish`
+    id("maven-publish")
 }
 
 android {
@@ -98,7 +98,7 @@ afterEvaluate {
                 from(components["release"])
                 groupId = "com.avafli"
                 artifactId = "winrsdk"
-                version = "2.0.1"
+                version = "2.1.0"
 
                 pom {
                     name.set("WINR SDK")

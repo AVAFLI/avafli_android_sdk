@@ -28,8 +28,9 @@ import java.util.TimeZone
 
 /**
  * Main public API for the WINR SDK.
- * Singleton — initialize once, then the V2 experience auto-opens on the first
- * app-open of each day. Manual [present] remains available.
+ * Singleton — initialize once via [configure]; the V2 experience then auto-opens
+ * on the first app-open of each calendar day. Auto-open is the only way the
+ * experience appears — there is no public launch API.
  */
 object WINR {
 
@@ -57,7 +58,7 @@ object WINR {
 
     /**
      * RTD opt-out — from the backend or the persisted local flag. Once true the
-     * experience is never auto-presented and manual present() refuses.
+     * experience is never presented.
      */
     @Volatile
     private var cachedOptedOut: Boolean = false
@@ -202,7 +203,7 @@ object WINR {
 
         // Unregistered users (no confirmed email) see the auto-open at most N
         // times (default 3 per the MVP decision), then the SDK goes quiet until
-        // they register or the publisher opens it manually.
+        // they register.
         if (cachedEmailConsent != true) {
             val cap = experience?.unregisteredImpressionCap ?: 3
             val seen = prefs.getUnregisteredImpressions()
@@ -222,21 +223,14 @@ object WINR {
     }
 
     /**
-     * Present the WINR experience.
-     *
-     * @param activity The activity from which to present
-     */
-    fun present(activity: Activity) {
-        present(activity, null)
-    }
-
-    /**
-     * Present the WINR experience with a result callback.
+     * Presentation path used exclusively by the auto-open engine
+     * ([autoPresentIfEligible]). Not part of the public API — the experience is
+     * only ever opened by the SDK itself, at most once per calendar day.
      *
      * @param activity The activity from which to present
      * @param callback Called with the result of the daily entry claim
      */
-    fun present(activity: Activity, callback: ((Result<DailyEntryGrant>) -> Unit)? = null) {
+    internal fun present(activity: Activity, callback: ((Result<DailyEntryGrant>) -> Unit)? = null) {
         if (config == null) {
             callback?.invoke(Result.failure(WINRError.NotInitialized()))
             return
@@ -249,8 +243,7 @@ object WINR {
             return
         }
 
-        // RTD: an opted-out person never sees the experience again — not even via
-        // a manual present() from the host app.
+        // RTD: an opted-out person never sees the experience again.
         if (cachedOptedOut) {
             logger?.info("WINR present suppressed: user opted out (RTD)")
             callback?.invoke(Result.failure(WINRError.OptedOut()))
@@ -268,12 +261,13 @@ object WINR {
     }
 
     /**
-     * Whether the WINR experience is currently available for this publisher.
+     * Whether the WINR experience is currently available.
      *
      * Returns false once device registration has failed with a suspended/revoked
-     * error, or when the user has opted out (RTD).
+     * error, or when the user has opted out (RTD). Internal — auto-open makes
+     * this decision itself; there is no publisher-facing availability gate.
      */
-    fun isServiceAvailable(): Boolean = !isSuspended && !cachedOptedOut
+    internal fun isServiceAvailable(): Boolean = !isSuspended && !cachedOptedOut
 
     /**
      * Right-To-Delete opt-out: tombstones the person on the backend (identity-wide,

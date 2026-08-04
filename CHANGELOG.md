@@ -1,10 +1,17 @@
 # Changelog
 
+All notable changes to the WINR Android SDK will be documented in this file.
+
+## [2.1.0] - 2026-08-04
+### Removed (BREAKING)
+- Manual launch API removed — `WINR.present(...)` and `WINR.isServiceAvailable()` are no longer public. The experience is exclusively auto-opened by the SDK (once per calendar day, after `configure()`); publishers cannot launch it manually.
+
+### Fixed
+- JitPack build: declare `maven-publish` via `id("maven-publish")` and run `:winrsdk:publishToMavenLocal` as an explicit `install` step in `jitpack.yml`, so JitPack no longer injects a duplicate `maven-publish` plugin (the 2.0.1 build failure).
+
 ## [2.0.1] - 2026-08-04
 ### Fixed
 - Ship the Gradle wrapper + JitPack build config so `com.github.AVAFLI:winr_android_sdk` resolves from JitPack.
-
-All notable changes to the WINR Android SDK will be documented in this file.
 
 ## [2.0.0] - 2026-08-03
 

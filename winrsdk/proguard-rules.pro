@@ -1,5 +1,9 @@
 # WINR SDK ProGuard Rules
 
+# JDK indy string-concat bootstrap class — referenced by javac/kotlinc output but
+# desugared by AGP and never present on the Android runtime. Safe to ignore.
+-dontwarn java.lang.invoke.StringConcatFactory
+
 # Keep public API
 -keep class com.avafli.winrsdk.WINR { *; }
 -keep class com.avafli.winrsdk.WINRConfiguration { *; }

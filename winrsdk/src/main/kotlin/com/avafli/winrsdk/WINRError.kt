@@ -32,14 +32,13 @@ sealed class WINRError(message: String, cause: Throwable? = null) : Exception(me
     /**
      * The WINR experience is no longer available for this publisher — typically because
      * the publisher's account or API key has been suspended or revoked (e.g. billing lapse).
-     * The SDK silently declines to present the default UI in this case; publishers using a
-     * custom launch UI can surface their own "no longer available" messaging.
+     * The SDK silently stops auto-opening the experience in this case.
      */
     class ServiceUnavailable : WINRError("The WINR experience is no longer available.")
 
     /**
      * The user opted out (RTD — Right To Delete). The experience is permanently
-     * silenced on this device: never auto-presented, and manual present() refuses.
+     * silenced on this device — it is never presented again.
      */
     class OptedOut : WINRError("The user has opted out of the WINR experience.")
 
