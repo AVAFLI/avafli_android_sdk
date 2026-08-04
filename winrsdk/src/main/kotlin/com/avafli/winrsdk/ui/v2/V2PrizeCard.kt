@@ -2,14 +2,13 @@ package com.avafli.winrsdk.ui.v2
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -30,28 +29,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.avafli.winrsdk.R
 
-// Day 2+ prize card, ported from iOS WINRV2PrizeCard: white stats strip
-// (streak + total entries) over the prize image. The image is publisher-
-// configurable (prizeImageUrl); default is the bundled cash pile with
-// the prize-derived headline overlaid.
-
-internal fun winrIsCashPrize(prizeDescription: String): Boolean =
-    prizeDescription.isEmpty() || prizeDescription.lowercase().contains("cash")
-
-/**
- * Article keyed off the LEADING character: "$500 Amazon..." reads
- * "a five-hundred...", so any non-letter start takes "a"; only a leading
- * vowel takes "an".
- */
-internal fun winrArticle(prizeDescription: String): String {
-    val first = prizeDescription.trim().firstOrNull() ?: return "a"
-    if (!first.isLetter()) return "a"
-    return if ("AEIOU".contains(first.uppercaseChar())) "an" else "a"
-}
-
-/** True when the description already states the $amount ("$500 Amazon Gift Card"). */
-internal fun winrDescriptionContainsValue(prizeDescription: String, value: Int): Boolean =
-    prizeDescription.contains("$${value.winrFormatted()}") || prizeDescription.contains("$$value")
+// Day 2+ prize card (Joe's Aug-2026 dark full-bleed revision, ported from iOS
+// WINRV2PrizeCard): the prize art fills the WHOLE card, a solid black stats
+// strip (streak + total entries) sits inside the top edge, and the
+// prize-derived headline rides the bottom over a black→transparent scrim.
+// The image is publisher-configurable (prizeImageUrl); default is the bundled
+// cash pile.
 
 @Composable
 internal fun WINRV2PrizeCard(
@@ -64,19 +47,67 @@ internal fun WINRV2PrizeCard(
     visitMode: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier.clip(RoundedCornerShape(10.dp))) {
-        StatsStrip(accent, streakDay, totalEntries, visitMode)
-        PromoArea(accent, prizeImageUrl, prizeValue, prizeDescription)
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(200.dp)
+            .clip(RoundedCornerShape(10.dp)),
+    ) {
+        Hero(prizeImageUrl)
+        StatsStrip(
+            accent = accent,
+            streakDay = streakDay,
+            totalEntries = totalEntries,
+            visitMode = visitMode,
+            modifier = Modifier.align(Alignment.TopCenter),
+        )
+        Headline(
+            accent = accent,
+            prizeValue = prizeValue,
+            prizeDescription = prizeDescription,
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
     }
 }
 
 @Composable
-private fun StatsStrip(accent: Color, streakDay: Int, totalEntries: Int, visitMode: Boolean) {
+private fun Hero(prizeImageUrl: String?) {
+    if (prizeImageUrl != null) {
+        val art = rememberWinrRemoteImage(prizeImageUrl)
+        if (art != null) {
+            Image(
+                bitmap = art,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+            )
+        } else {
+            Box(Modifier.fillMaxSize().background(WINRV2Color.deepCharcoal))
+        }
+    } else {
+        Image(
+            painter = painterResource(R.drawable.winr_cash_hero_single),
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop,
+        )
+    }
+}
+
+/** Solid black strip inside the top of the card: accent title + white sub. */
+@Composable
+private fun StatsStrip(
+    accent: Color,
+    streakDay: Int,
+    totalEntries: Int,
+    visitMode: Boolean,
+    modifier: Modifier = Modifier,
+) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .height(46.dp)
-            .background(Color.White),
+            .background(Color.Black),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(
@@ -97,7 +128,7 @@ private fun StatsStrip(accent: Color, streakDay: Int, totalEntries: Int, visitMo
                 )
                 Text(
                     "Keep it going!",
-                    style = WINRV2Font.inter(12.sp, FontWeight.Medium, color = WINRV2Color.gunmetal),
+                    style = WINRV2Font.inter(12.sp, FontWeight.Medium, color = Color.White),
                 )
             }
         }
@@ -121,109 +152,75 @@ private fun StatsStrip(accent: Color, streakDay: Int, totalEntries: Int, visitMo
                 )
                 Text(
                     "Total Entries",
-                    style = WINRV2Font.inter(12.sp, FontWeight.Medium, color = WINRV2Color.gunmetal),
+                    style = WINRV2Font.inter(12.sp, FontWeight.Medium, color = Color.White),
                 )
             }
         }
     }
 }
 
+/** Prize headline over the bottom scrim. */
 @Composable
-private fun PromoArea(accent: Color, prizeImageUrl: String?, prizeValue: Int, prizeDescription: String) {
+private fun Headline(
+    accent: Color,
+    prizeValue: Int,
+    prizeDescription: String,
+    modifier: Modifier = Modifier,
+) {
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .height(150.dp),
-    ) {
-        if (prizeImageUrl != null) {
-            // Publisher-supplied prize art fills the card as-is.
-            val art = rememberWinrRemoteImage(prizeImageUrl)
-            if (art != null) {
-                Image(
-                    bitmap = art,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
+            .background(
+                Brush.verticalGradient(
+                    0f to Color.Black.copy(alpha = 0f),
+                    0.45f to Color.Black.copy(alpha = 0.55f),
+                    1f to Color.Black.copy(alpha = 0.9f),
                 )
-            } else {
-                Box(Modifier.fillMaxSize().background(WINRV2Color.gunmetal))
+            )
+            .padding(horizontal = 14.dp)
+            .padding(top = 34.dp, bottom = 10.dp),
+    ) {
+        if (WINRV2PrizeText.isCash(prizeDescription)) {
+            // "WIN $1,000" (Black 44) over "CASH PRIZE" (Black 19), right-aligned.
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy((-5).dp),
+            ) {
+                WINRAutoSizeText(
+                    "WIN $${prizeValue.winrFormatted()}",
+                    style = WINRV2Font.inter(44.sp, FontWeight.Black, tracking = (-2.2).sp, color = Color.White),
+                    minScale = 0.5f,
+                )
+                Text(
+                    "CASH PRIZE",
+                    style = WINRV2Font.inter(19.sp, FontWeight.Black, tracking = (-0.57).sp, color = Color.White),
+                )
             }
         } else {
-            // Default: bundled cash pile fading up into white, with the
-            // prize-derived headline over the fade (Figma cash card).
-            Image(
-                painter = painterResource(R.drawable.winr_cash_hero_single),
-                contentDescription = null,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .offset(y = 14.dp),
-                contentScale = ContentScale.Crop,
-            )
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            0f to Color.White,
-                            0.3f to Color.White.copy(alpha = 0.55f),
-                            0.62f to Color.White.copy(alpha = 0f),
-                        )
-                    )
-            )
-            PromoHeadline(prizeValue, prizeDescription)
-        }
-    }
-}
-
-@Composable
-private fun PromoHeadline(prizeValue: Int, prizeDescription: String) {
-    if (winrIsCashPrize(prizeDescription)) {
-        // Figma cash lockup: "WIN $1,000" (Black 54) over "CASH PRIZE" (Black 19),
-        // right-aligned.
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp)
-                .padding(top = 4.dp),
-            horizontalAlignment = Alignment.End,
-        ) {
-            WINRAutoSizeText(
-                "WIN $${prizeValue.winrFormatted()}",
-                style = WINRV2Font.inter(54.sp, FontWeight.Black, tracking = (-2.7).sp, color = WINRV2Color.gunmetal),
-                minScale = 0.5f,
-            )
-            Text(
-                "CASH PRIZE",
-                style = WINRV2Font.inter(19.sp, FontWeight.Black, tracking = (-0.57).sp, color = WINRV2Color.gunmetal),
-                modifier = Modifier.offset(y = (-6).dp),
-            )
-        }
-    } else {
-        // "WIN A $500 AMAZON GIFT CARD" + "$500.00 Value!"
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp)
-                .padding(top = 6.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            WINRAutoSizeText(
-                "WIN ${winrArticle(prizeDescription).uppercase()} ${prizeDescription.uppercase()}",
-                style = WINRV2Font.inter(
-                    30.sp, FontWeight.Black,
-                    tracking = (-1.1).sp,
-                    color = WINRV2Color.gunmetal,
+            // Centered "Win a {Prize}" + accent "$X.00 VALUE!".
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                WINRAutoSizeText(
+                    "Win ${WINRV2PrizeText.article(prizeDescription)} $prizeDescription",
+                    style = WINRV2Font.inter(
+                        28.sp, FontWeight.Black,
+                        tracking = (-1.0).sp,
+                        color = Color.White,
+                        textAlign = TextAlign.Center,
+                    ),
+                    maxLines = 2,
+                    minScale = 0.55f,
                     textAlign = TextAlign.Center,
-                ),
-                maxLines = 2,
-                minScale = 0.55f,
-                textAlign = TextAlign.Center,
-            )
-            if (prizeValue > 0 && !winrDescriptionContainsValue(prizeDescription, prizeValue)) {
-                Text(
-                    "$${prizeValue.winrFormatted()}.00 Value!",
-                    style = WINRV2Font.inter(15.sp, FontWeight.Bold, color = WINRV2Color.gunmetal),
                 )
+                if (WINRV2PrizeText.showsValueLine(prizeDescription, prizeValue)) {
+                    Text(
+                        "$${prizeValue.winrFormatted()}.00 VALUE!",
+                        style = WINRV2Font.inter(15.sp, FontWeight.Black, color = accent),
+                    )
+                }
             }
         }
     }

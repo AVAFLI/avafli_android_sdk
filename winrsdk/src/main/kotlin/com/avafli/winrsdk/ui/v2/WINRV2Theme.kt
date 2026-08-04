@@ -127,6 +127,50 @@ internal object WINRV2Font {
 internal fun Int.winrFormatted(): String =
     NumberFormat.getIntegerInstance(Locale.US).format(this.toLong())
 
+// MARK: - Prize text derivation (capture strip / prize card / winner claim)
+
+/**
+ * Shared prize-derived copy rules (mirrors iOS WINRV2PrizeText): cash prizes
+ * read "$1,000.00 CASH PRIZE"; other prizes read "Win a {Description}" with an
+ * optional value line that is suppressed when the description already states
+ * the amount.
+ */
+internal object WINRV2PrizeText {
+    fun isCash(description: String): Boolean =
+        description.isEmpty() || description.lowercase().contains("cash")
+
+    /**
+     * "a" vs "an", keyed off the LEADING token: "$500 Amazon…" reads
+     * "a five-hundred…", so any non-letter start takes "a"; only a leading
+     * vowel sound takes "an".
+     */
+    fun article(description: String): String {
+        val first = description.trim().firstOrNull() ?: return "a"
+        if (!first.isLetter()) return "a"
+        return if ("AEIOU".contains(first.uppercaseChar())) "an" else "a"
+    }
+
+    /**
+     * Whether the "$X.00 VALUE!" line should render (redundant when the prize
+     * name already states the amount, e.g. "$500 Amazon Gift Card").
+     */
+    fun showsValueLine(description: String, value: Int): Boolean =
+        value > 0 &&
+            !description.contains("$${value.winrFormatted()}") &&
+            !description.contains("$$value")
+
+    /**
+     * The white-strip headline (Day-1 capture + winner splash):
+     * cash → "$1,000.00 CASH PRIZE"; other → "Win a $500 Amazon Gift Card".
+     */
+    fun stripHeadline(description: String, value: Int): String =
+        if (isCash(description)) {
+            "$${value.winrFormatted()}.00 CASH PRIZE"
+        } else {
+            "Win ${article(description)} $description"
+        }
+}
+
 // MARK: - Ladder math (mirrors the backend exactly)
 
 internal object WINRV2Ladder {

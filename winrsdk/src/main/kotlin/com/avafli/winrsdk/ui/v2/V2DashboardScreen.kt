@@ -25,6 +25,7 @@ internal fun WINRV2DashboardScreen(
     giveaway: Giveaway?,
     streakDay: Int,
     totalEntries: Int,
+    entriesToday: Int,
     ladder: List<Int>,
     claimedToday: Boolean,
     onInfo: () -> Unit,
@@ -84,7 +85,17 @@ internal fun WINRV2DashboardScreen(
                 activeId = "day-$streakDay",
                 visitMode = visitMode,
             )
-            WINRV2ComeBackBar(accent = accent, nextEntries = nextEntries, visitMode = visitMode)
+            WINRV2ComeBackBar(
+                accent = accent,
+                nextEntries = nextEntries,
+                visitMode = visitMode,
+                // Delta A: once today's claim is revealed (or the user reopens in
+                // a claimed state) the bar celebrates the entries that were just
+                // added instead of pitching tomorrow. Pre-reveal keeps the
+                // come-back copy.
+                claimed = claimedToday && !preReveal,
+                claimedEntries = pendingClaimEntries ?: entriesToday,
+            )
             Column(
                 modifier = Modifier
                     .fillMaxWidth()

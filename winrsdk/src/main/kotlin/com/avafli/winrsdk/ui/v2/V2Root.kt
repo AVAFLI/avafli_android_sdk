@@ -156,6 +156,7 @@ private fun DrawerContent(
                 giveaway = ui.giveaway,
                 streakDay = screen.streakState.currentDay.coerceAtLeast(1),
                 totalEntries = animatedTotal,
+                entriesToday = screen.entriesToday,
                 ladder = screen.ladder,
                 claimedToday = ui.claimedToday,
                 onInfo = { viewModel.showHowItWorks() },
@@ -178,6 +179,7 @@ private fun DrawerContent(
                     giveaway = ui.giveaway,
                     streakDay = ui.displayStreakDay,
                     totalEntries = screen.totalEntries,
+                    entriesToday = screen.grant.entries,
                     ladder = ui.giveaway?.streakLadder?.takeIf { it.isNotEmpty() }
                         ?: listOf(1, 2, 3, 5, 8, 13, 21),
                     claimedToday = true,

@@ -133,26 +133,24 @@ private fun PrizeStrip(giveaway: Giveaway?) {
             .padding(vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        if (winrIsCashPrize(description)) {
-            WINRAutoSizeText(
-                "$${value.winrFormatted()}.00 CASH PRIZE",
-                style = WINRV2Font.inter(24.sp, FontWeight.Black, tracking = (-0.7).sp, color = WINRV2Color.gunmetal),
-                minScale = 0.6f,
+        val isCash = WINRV2PrizeText.isCash(description)
+        WINRAutoSizeText(
+            WINRV2PrizeText.stripHeadline(description, value),
+            style = WINRV2Font.inter(
+                if (isCash) 24.sp else 23.sp,
+                FontWeight.Black,
+                tracking = (-0.7).sp,
+                color = WINRV2Color.gunmetal,
+            ),
+            minScale = 0.6f,
+        )
+        // The value subtitle is redundant when the prize name already
+        // states the amount ("$500 Amazon Gift Card").
+        if (!isCash && WINRV2PrizeText.showsValueLine(description, value)) {
+            Text(
+                "$${value.winrFormatted()}.00 Value!",
+                style = WINRV2Font.inter(16.sp, color = WINRV2Color.gunmetal),
             )
-        } else {
-            WINRAutoSizeText(
-                "Win ${winrArticle(description)} $description",
-                style = WINRV2Font.inter(23.sp, FontWeight.Black, tracking = (-0.7).sp, color = WINRV2Color.gunmetal),
-                minScale = 0.6f,
-            )
-            // The value subtitle is redundant when the prize name already
-            // states the amount ("$500 Amazon Gift Card").
-            if (value > 0 && !winrDescriptionContainsValue(description, value)) {
-                Text(
-                    "$${value.winrFormatted()}.00 Value!",
-                    style = WINRV2Font.inter(16.sp, color = WINRV2Color.gunmetal),
-                )
-            }
         }
     }
 }
