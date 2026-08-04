@@ -32,13 +32,13 @@ internal fun WINRV2DashboardScreen(
     onClose: () -> Unit,
     onWinnerTap: (() -> Unit)? = null,
     /**
-     * Reveal flow (Day 2+): the claim already succeeded server-side, but the UI
-     * holds yesterday's numbers until the user taps "CLAIM N ENTRIES" — that tap
-     * is the celebration (tile check + confetti + totals update), no modal.
+     * Reveal flow (Day 2+): the claim already succeeded server-side; the UI
+     * mounts pinned to yesterday's numbers and the celebration (tile check +
+     * confetti + totals update, bar → "N ENTRIES ADDED") fires on its own a
+     * beat later — Joe's Slice prototype has no claim tap and no modal.
      */
     pendingClaimEntries: Int? = null,
     revealed: Boolean = true,
-    onClaim: (() -> Unit)? = null,
 ) {
     val visitMode = giveaway?.streakMode == "visit"
     val preReveal = pendingClaimEntries != null && !revealed
@@ -103,19 +103,13 @@ internal fun WINRV2DashboardScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                if (preReveal && pendingClaimEntries != null && onClaim != null) {
-                    WINRV2PillButton(
-                        accent = accent,
-                        title = "CLAIM ${pendingClaimEntries.winrFormatted()} ENTRIES",
-                        modifier = Modifier.padding(horizontal = 30.dp),
-                    ) { onClaim() }
-                } else {
-                    WINRV2PillButton(
-                        accent = accent,
-                        title = "GOT IT",
-                        modifier = Modifier.padding(horizontal = 30.dp),
-                    ) { onClose() }
-                }
+                // Always GOT IT (Slice prototype) — the celebration plays on
+                // its own; the pill only ever closes.
+                WINRV2PillButton(
+                    accent = accent,
+                    title = "GOT IT",
+                    modifier = Modifier.padding(horizontal = 30.dp),
+                ) { onClose() }
                 WINRV2LegalLinks(rulesUrl = rulesUrl)
             }
         }

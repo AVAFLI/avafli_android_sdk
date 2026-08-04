@@ -136,10 +136,12 @@ private fun DrawerContent(
         )
 
         is ExperienceScreen.Streak -> {
-            // Reveal flow (Day 2+): before the CLAIM tap the dashboard is pinned
-            // to yesterday's numbers (streak N-1, pre-claim total, READY tile).
-            // The tap flips claimRevealed and the total springs to the post-claim
-            // value while the tile checks off with confetti.
+            // Auto-reveal flow (Day 2+): the dashboard mounts pinned to
+            // yesterday's numbers (streak N-1, pre-claim total, READY tile),
+            // then the ViewModel flips claimRevealed on its own a beat after
+            // the claim response is staged — the total springs to the
+            // post-claim value while the tile checks off with confetti.
+            // No claim tap (Joe's Slice prototype).
             val preReveal = ui.pendingRevealGrant != null && !ui.claimRevealed
             val targetTotal =
                 if (preReveal) ui.preClaimTotalEntries ?: screen.streakState.totalEntries
@@ -164,7 +166,6 @@ private fun DrawerContent(
                 onWinnerTap = onWinnerTap,
                 pendingClaimEntries = ui.pendingRevealGrant?.entries,
                 revealed = ui.claimRevealed,
-                onClaim = { viewModel.revealClaim() },
             )
         }
 

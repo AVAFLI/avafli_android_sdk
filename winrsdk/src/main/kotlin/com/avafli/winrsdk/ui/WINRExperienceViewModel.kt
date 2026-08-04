@@ -15,6 +15,7 @@ import com.avafli.winrsdk.network.WinrApi
 import com.avafli.winrsdk.services.Logger
 import com.avafli.winrsdk.services.analytics.AnalyticsAdapter
 import com.avafli.winrsdk.storage.PreferencesStorage
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -30,9 +31,9 @@ import java.util.TimeZone
 //
 // loading → emailCapture (until consent) → streak dashboard, with an automatic
 // claim on open. Day 1 lands on the celebration modal (dailyConfirmed); Day 2+
-// holds yesterday's numbers behind a "CLAIM N ENTRIES" pill on the dashboard
-// (the reveal flow). The rewarded-video bonus flow is parked (Phase 1) and has
-// been removed.
+// mounts the dashboard pinned to yesterday's numbers and the celebration plays
+// on its own a beat later (the auto-reveal flow — no claim tap). The
+// rewarded-video bonus flow is parked (Phase 1) and has been removed.
 
 internal sealed class ExperienceScreen {
     object Loading : ExperienceScreen()
@@ -81,19 +82,21 @@ internal data class ExperienceUiState(
 
     // ── V2 reveal flow (Day 2+) — mirrors iOS ──
     //
-    // The auto-claim on open grants entries server-side immediately, but the UI
-    // holds the previous day's numbers until the user taps "CLAIM N ENTRIES".
-    // That tap flips claimRevealed — the day tile checks off with confetti, the
-    // streak label and totals advance, and the pill becomes "GOT IT".
+    // The auto-claim on open grants entries server-side immediately, and the
+    // celebration plays ON ITS OWN moments after the drawer settles (Joe's
+    // Slice Day 2+ prototype): the dashboard mounts pinned to the previous
+    // day's numbers, then the day tile checks off with confetti, the streak
+    // label and totals advance, and the bar flips to "N ENTRIES ADDED".
+    // The pill reads "GOT IT" the whole time — there is no claim tap.
 
     /**
-     * The grant held back for the reveal (null when nothing is pending). Its
+     * The grant staged for the auto-reveal (null when nothing is pending). Its
      * `entries` carries base + all streak bonuses, like the modal grant.
      */
     val pendingRevealGrant: DailyEntryGrant? = null,
-    /** Whether the user has tapped CLAIM and seen the in-place celebration. */
+    /** Whether the in-place celebration has played. */
     val claimRevealed: Boolean = false,
-    /** Total entries as of before today's claim, for pre-reveal display. */
+    /** Total entries as of before today's claim, for the pre-reveal frame. */
     val preClaimTotalEntries: Int? = null,
 
     // ── Winner prize claim (mirrors iOS) ──
@@ -117,6 +120,16 @@ internal class WINRExperienceViewModel(
     private val logger: Logger,
     private val analytics: AnalyticsAdapter? = null,
 ) : ViewModel() {
+
+    companion object {
+        /**
+         * Delay between staging the claim response and the celebration firing
+         * — long enough for the drawer spring to settle so the state flip
+         * reads as its own beat, short enough to feel immediate (mirrors iOS
+         * autoRevealDelay = 0.8s).
+         */
+        internal const val AUTO_REVEAL_DELAY_MS = 800L
+    }
 
     private val _uiState = MutableStateFlow(ExperienceUiState())
     val uiState: StateFlow<ExperienceUiState> = _uiState.asStateFlow()
@@ -342,13 +355,30 @@ internal class WINRExperienceViewModel(
     }
 
     /**
-     * V2 reveal (Day 2+): the "CLAIM N ENTRIES" tap. The claim already succeeded
-     * server-side on open; this only flips the UI into the celebration state.
+     * V2 reveal (Day 2+): flips the UI into the celebration state. The claim
+     * already succeeded server-side on open; the springs on the dashboard
+     * (total count-up, tile check + confetti, bar swap) animate the flip.
+     * Idempotent — double-fires are harmless.
      */
     fun revealClaim() {
         val ui = _uiState.value
         if (ui.pendingRevealGrant == null || ui.claimRevealed) return
         _uiState.value = ui.copy(claimRevealed = true)
+    }
+
+    /**
+     * Schedules the automatic celebration a beat after the claim response is
+     * staged (Joe's Slice Day 2+ prototype — no claim tap). Armed from the
+     * claim success path because the dashboard is typically already composed
+     * when the grant lands, so a composition-time side effect would miss it.
+     */
+    private fun scheduleAutoReveal() {
+        val ui = _uiState.value
+        if (ui.pendingRevealGrant == null || ui.claimRevealed) return
+        viewModelScope.launch {
+            delay(AUTO_REVEAL_DELAY_MS)
+            revealClaim()
+        }
     }
 
     // ── Email capture ──
@@ -439,16 +469,16 @@ internal class WINRExperienceViewModel(
                 saveStreakState(updatedStreak)
 
                 // The grant's entries carry base + streak bonuses so the
-                // celebration ("YOU EARNED N" / "CLAIM N ENTRIES") is complete.
+                // celebration ("YOU EARNED N" / "N ENTRIES ADDED") is complete.
                 val grantEntries = response.entries + streakBonusEntries
 
                 // V2 auto-claim routing (mirrors iOS):
                 // - Day 1 (brand-new or restarted streak, typically right after
                 //   email capture): the "You're in!" celebration modal is the
                 //   reveal.
-                // - Day 2+: no modal. Land on the dashboard pinned to yesterday's
-                //   numbers with a "CLAIM N ENTRIES" pill; the tap reveals the
-                //   celebration in place (Joe's Slice Day 2+ flow).
+                // - Day 2+: no modal, no claim tap. Land on the dashboard pinned
+                //   to yesterday's numbers; the celebration fires on its own a
+                //   beat later (Joe's Slice Day 2+ flow).
                 if (response.streakDay <= 1) {
                     _uiState.value = _uiState.value.copy(
                         screen = ExperienceScreen.DailyConfirmed(
@@ -469,6 +499,10 @@ internal class WINRExperienceViewModel(
                         claimRevealed = false,
                         preClaimTotalEntries = response.totalEntries - grantEntries,
                     )
+                    // The dashboard is usually already composed when the claim
+                    // lands (its composition-time effects ran pre-grant and
+                    // won't run again), so the celebration must be armed here.
+                    scheduleAutoReveal()
                 }
                 isClaimingDaily = false
 

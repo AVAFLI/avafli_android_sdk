@@ -31,8 +31,8 @@ import com.avafli.winrsdk.R
 // STREAK STEP tile, ported from iOS WINRV2StreakTile (106x134dp).
 
 /**
- * `Ready` = today's tile before the user taps CLAIM (claim already granted
- * server-side, reveal withheld): glows like `Active` but shows no checkmark.
+ * `Ready` = today's tile before the auto-reveal fires (claim already granted
+ * server-side, celebration pending): glows like `Active` but shows no checkmark.
  */
 internal enum class WINRV2TileState { Completed, Active, Ready, Locked }
 
@@ -63,8 +63,8 @@ internal fun WINRV2StreakTile(
             }
 
         WINRV2TileState.Ready ->
-            // Pre-reveal: glow draws the eye to CLAIM, but the confetti and
-            // checkmark are saved for the reveal moment.
+            // Pre-reveal: glow marks today's tile, but the confetti and
+            // checkmark are saved for the auto-reveal moment.
             TileCard(accent, day, entries, state, visitMode, modifier.winrPulseGlow(accent))
 
         else -> TileCard(accent, day, entries, state, visitMode, modifier)
