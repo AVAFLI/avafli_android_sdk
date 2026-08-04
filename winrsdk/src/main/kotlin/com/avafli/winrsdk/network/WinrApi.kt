@@ -463,6 +463,6 @@ internal class WinrApi(
         // Single source of truth for the wire-format sdk_version. Spec requires a
         // leading "v" (v1.x.x). Keep in sync with the Maven publish version in
         // winrsdk/build.gradle.kts (1.0.0).
-        const val SDK_VERSION = "1.0.0"
+        const val SDK_VERSION = "2.0.0"
     }
 }
