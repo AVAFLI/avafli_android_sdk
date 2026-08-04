@@ -18,6 +18,10 @@ import com.avafli.winrsdk.WINRUser
 
 /**
  * Example activity demonstrating WINR SDK integration.
+ *
+ * The V2 experience AUTO-OPENS on the first app-open of each calendar day —
+ * configuring the SDK below is all that's needed. The button demonstrates the
+ * manual WINR.present() entry point (always available).
  */
 class MainActivity : ComponentActivity() {
 
@@ -85,7 +89,8 @@ class MainActivity : ComponentActivity() {
                     Spacer(modifier = Modifier.height(16.dp))
 
                     Text(
-                        text = "Tap below to open the sweepstakes experience",
+                        text = "The experience auto-opens on the first app-open of each day. " +
+                            "Use the button to re-open it manually.",
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                     )
