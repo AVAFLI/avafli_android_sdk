@@ -49,8 +49,8 @@ internal class WinrApi(
             ?: throw WINRError.RegistrationFailed("Missing refreshToken in response")
         val uuid = response["uuid"]?.jsonPrimitive?.contentOrNull
             ?: throw WINRError.RegistrationFailed("Missing uuid in response")
-        val giveaway = response["giveaway"]?.let { parseGiveaway(it.jsonObject) }
-        val sdkConfig = response["sdkConfig"]?.jsonObject?.let { parseSdkConfig(it) }
+        val giveaway = (response["giveaway"] as? JsonObject)?.let { parseGiveaway(it) }
+        val sdkConfig = (response["sdkConfig"] as? JsonObject)?.let { parseSdkConfig(it) }
 
         return RegisterDeviceResponse(
             token = token,
@@ -62,6 +62,7 @@ internal class WinrApi(
             streakDay = response["streakDay"]?.jsonPrimitive?.intOrNull,
             totalEntries = response["totalEntries"]?.jsonPrimitive?.intOrNull,
             optedOut = response["optedOut"]?.jsonPrimitive?.booleanOrNull,
+            prizeClaim = (response["prizeClaim"] as? JsonObject)?.let { parsePrizeClaim(it) },
         )
     }
 
@@ -70,9 +71,8 @@ internal class WinrApi(
      */
     suspend fun getActiveGiveaway(): GetActiveGiveawayResponse {
         val response = networkClient.authenticatedPost("getActiveGiveaway")
-        val giveawayJson = response["giveaway"]?.jsonObject
-        val giveaway = giveawayJson?.let { parseGiveaway(it) }
-        val sdkConfig = response["sdkConfig"]?.jsonObject?.let { parseSdkConfig(it) }
+        val giveaway = (response["giveaway"] as? JsonObject)?.let { parseGiveaway(it) }
+        val sdkConfig = (response["sdkConfig"] as? JsonObject)?.let { parseSdkConfig(it) }
         return GetActiveGiveawayResponse(
             giveaway = giveaway,
             sdkConfig = sdkConfig,
@@ -84,6 +84,49 @@ internal class WinrApi(
             totalEntries = response["totalEntries"]?.jsonPrimitive?.intOrNull,
             emailConsentStatus = response["emailConsentStatus"]?.jsonPrimitive?.booleanOrNull,
             optedOut = response["optedOut"]?.jsonPrimitive?.booleanOrNull,
+            prizeClaim = (response["prizeClaim"] as? JsonObject)?.let { parsePrizeClaim(it) },
+        )
+    }
+
+    /**
+     * Winner prize claim: submit the claim form for [giveawayId]. Field names are
+     * a FIXED contract with the backend's submitPrizeClaim callable
+     * (functions/src/prizeclaim.ts) — do not rename.
+     */
+    suspend fun submitPrizeClaim(
+        giveawayId: String,
+        firstName: String,
+        lastName: String,
+        phone: String? = null,
+        street: String,
+        apt: String? = null,
+        city: String,
+        state: String,
+        zip: String,
+        country: String,
+        photoBase64: String? = null,
+        story: String? = null,
+    ): SubmitPrizeClaimResponse {
+        val body = buildMap<String, JsonElement> {
+            put("giveawayId", JsonPrimitive(giveawayId))
+            put("firstName", JsonPrimitive(firstName))
+            put("lastName", JsonPrimitive(lastName))
+            put("street", JsonPrimitive(street))
+            put("city", JsonPrimitive(city))
+            put("state", JsonPrimitive(state))
+            put("zip", JsonPrimitive(zip))
+            put("country", JsonPrimitive(country))
+            phone?.takeIf { it.isNotEmpty() }?.let { put("phone", JsonPrimitive(it)) }
+            apt?.takeIf { it.isNotEmpty() }?.let { put("apt", JsonPrimitive(it)) }
+            photoBase64?.let { put("photoBase64", JsonPrimitive(it)) }
+            story?.takeIf { it.isNotEmpty() }?.let { put("story", JsonPrimitive(it)) }
+        }
+
+        val response = networkClient.authenticatedPost("submitPrizeClaim", body)
+
+        return SubmitPrizeClaimResponse(
+            claimNumber = response["claimNumber"]?.jsonPrimitive?.contentOrNull ?: "",
+            submittedAt = response["submittedAt"]?.jsonPrimitive?.contentOrNull ?: "",
         )
     }
 
@@ -224,6 +267,11 @@ internal class WinrApi(
         val totalEntries: Int? = null,
         /** True when this device/person has opted out (RTD) — never auto-present. */
         val optedOut: Boolean? = null,
+        /**
+         * Present only when this person is the drawn winner of one of this
+         * publisher's giveaways (winner prize-claim flow).
+         */
+        val prizeClaim: PrizeClaimBlock? = null,
     )
 
     data class GetActiveGiveawayResponse(
@@ -235,6 +283,19 @@ internal class WinrApi(
         val emailConsentStatus: Boolean? = null,
         /** True when this person has opted out (RTD) — the SDK must never auto-present. */
         val optedOut: Boolean? = null,
+        /**
+         * Present only when this person is the drawn winner of one of this
+         * publisher's giveaways and the winner record is still claimable.
+         * `status == "pending"` drives the winner splash → claim form flow;
+         * `"submitted"` means the form was already sent (normal dashboard shows).
+         */
+        val prizeClaim: PrizeClaimBlock? = null,
+    )
+
+    data class SubmitPrizeClaimResponse(
+        val claimNumber: String,
+        /** ISO date. */
+        val submittedAt: String,
     )
 
     /**
@@ -276,6 +337,13 @@ internal class WinrApi(
 
     private fun parseGiveaway(obj: JsonObject): Giveaway {
         return json.decodeFromJsonElement(Giveaway.serializer(), obj)
+    }
+
+    private fun parsePrizeClaim(obj: JsonObject): PrizeClaimBlock? = try {
+        json.decodeFromJsonElement(PrizeClaimBlock.serializer(), obj)
+    } catch (e: Exception) {
+        logger.warn("Failed to parse prizeClaim block: ${e.message}")
+        null
     }
 
     private fun parseSdkConfig(obj: JsonObject): SdkConfig {
@@ -460,9 +528,8 @@ internal class WinrApi(
     }
 
     companion object {
-        // Single source of truth for the wire-format sdk_version. Spec requires a
-        // leading "v" (v1.x.x). Keep in sync with the Maven publish version in
-        // winrsdk/build.gradle.kts (1.0.0).
-        const val SDK_VERSION = "2.2.0"
+        // Single source of truth for the wire-format sdk_version. Keep in sync
+        // with the Maven publish version in winrsdk/build.gradle.kts.
+        const val SDK_VERSION = "2.3.0"
     }
 }
