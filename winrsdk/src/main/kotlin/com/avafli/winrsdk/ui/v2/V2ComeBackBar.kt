@@ -4,8 +4,8 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -20,25 +20,38 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.avafli.winrsdk.R
+import kotlinx.coroutines.delay
 
 /**
  * Confirmation ("come back tomorrow") bar, ported from iOS WINRV2ComeBackBar:
  * black strip, calendar icon, reward line, celebratory sprinkles drifting over it.
  *
- * Post-reveal / claimed-today variant (Joe's Aug-2026 frames): the bar
- * celebrates "{N} ENTRIES ADDED / You're on a roll!" instead of pitching
- * tomorrow. Pre-reveal and unclaimed states keep the come-back pitch.
+ * Joe's Slice sequence: the bar RESTS on the come-back pitch. When the
+ * auto-reveal fires (`claimed` flips true), "{N} ENTRIES ADDED / You're on a
+ * roll!" SLIDES in horizontally, holds ~2.6s, then SLIDES back out to the
+ * pitch — the pitch is the final state. A claimed-at-mount reopen (same-day
+ * dashboard reopen) rests on the pitch directly, no toast replay.
  */
+private enum class WINRV2BarPhase { Pitch, Added }
+
 @Composable
 internal fun WINRV2ComeBackBar(
     accent: Color,
@@ -48,39 +61,57 @@ internal fun WINRV2ComeBackBar(
     claimedEntries: Int = 0,
     modifier: Modifier = Modifier,
 ) {
+    var phase by remember { mutableStateOf(WINRV2BarPhase.Pitch) }
+    var lastClaimed by remember { mutableStateOf(claimed) }
+    // LaunchedEffect scoping makes the hold timer teardown-safe: the delay is
+    // cancelled automatically if the bar leaves composition mid-hold.
+    LaunchedEffect(claimed) {
+        if (claimed == lastClaimed) return@LaunchedEffect // mount: rest on pitch
+        lastClaimed = claimed
+        if (claimed) {
+            // Fresh reveal: celebrate, hold, then slide back to the pitch.
+            phase = WINRV2BarPhase.Added
+            delay(2600)
+            phase = WINRV2BarPhase.Pitch
+        } else {
+            phase = WINRV2BarPhase.Pitch
+        }
+    }
+
     Box(
         modifier = modifier
             .fillMaxWidth()
             .height(71.dp)
-            .background(Color.Black),
+            .background(Color.Black)
+            .clipToBounds(),
         contentAlignment = Alignment.Center,
     ) {
-        // iOS: claimedContent enters with scale(0.8)+opacity on a spring
-        // (response 0.5, damping 0.8); comeBackContent swaps with opacity.
-        val swapSpring = spring<Float>(dampingRatio = 0.8f, stiffness = 158f)
+        // iOS: pitch enters/exits at the leading edge, the ADDED toast at the
+        // trailing edge — a horizontal slide (not a crossfade), on a spring
+        // (response 0.5, damping 0.85).
+        val swapSpring = spring<androidx.compose.ui.unit.IntOffset>(
+            dampingRatio = 0.85f,
+            stiffness = 158f,
+        )
         AnimatedContent(
-            targetState = claimed,
+            targetState = phase,
             transitionSpec = {
-                val enter = if (targetState) {
-                    scaleIn(animationSpec = swapSpring, initialScale = 0.8f) +
-                        fadeIn(animationSpec = swapSpring)
+                if (targetState == WINRV2BarPhase.Added) {
+                    // Toast slides in from the trailing edge; pitch slides out leading.
+                    (slideInHorizontally(swapSpring) { it } + fadeIn()) togetherWith
+                        (slideOutHorizontally(swapSpring) { -it } + fadeOut())
                 } else {
-                    fadeIn()
+                    // Pitch slides back in from the leading edge; toast exits trailing.
+                    (slideInHorizontally(swapSpring) { -it } + fadeIn()) togetherWith
+                        (slideOutHorizontally(swapSpring) { it } + fadeOut())
                 }
-                val exit = if (targetState) {
-                    fadeOut()
-                } else {
-                    scaleOut(targetScale = 0.8f) + fadeOut()
-                }
-                enter togetherWith exit
             },
             label = "winrComeBackSwap",
-        ) { isClaimed ->
+        ) { barPhase ->
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                if (isClaimed) {
-                    ClaimedContent(accent, claimedEntries)
-                } else {
-                    ComeBackContent(accent, nextEntries, visitMode)
+                when (barPhase) {
+                    WINRV2BarPhase.Added -> ClaimedContent(accent, claimedEntries)
+                    WINRV2BarPhase.Pitch -> ComeBackContent(accent, nextEntries, visitMode)
                 }
             }
         }
@@ -106,11 +137,21 @@ private fun ComeBackContent(accent: Color, nextEntries: Int, visitMode: Boolean)
             modifier = Modifier.size(width = 26.dp, height = 28.dp),
         )
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            // "Come back tomorrow"/"Come back again" is BOLD, the rest
+            // regular — per Joe's banner lockup.
             Text(
-                if (visitMode) {
-                    "Come back again to receive:"
-                } else {
-                    "Come back tomorrow to\nkeep your streak alive and receive:"
+                buildAnnotatedString {
+                    if (visitMode) {
+                        withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
+                            append("Come back again")
+                        }
+                        append(" to receive:")
+                    } else {
+                        withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
+                            append("Come back tomorrow")
+                        }
+                        append(" to\nkeep your streak alive and receive:")
+                    }
                 },
                 style = WINRV2Font.inter(
                     12.sp,

@@ -129,12 +129,11 @@ private fun TileCard(
                     modifier = Modifier.size(20.dp),
                     lineWidth = 2.5.dp,
                 )
-                WINRV2TileState.Ready -> Icon(
-                    painter = painterResource(R.drawable.winr_flame),
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(width = 16.dp, height = 20.dp),
-                )
+                // Joe's frames: the current tile pre-check shows ONLY the
+                // glowing number — no icon. The enclosing 24dp slot keeps its
+                // size so the check can draw into place without the card
+                // resizing.
+                WINRV2TileState.Ready -> Unit
                 WINRV2TileState.Locked -> Icon(
                     painter = painterResource(R.drawable.winr_lock),
                     contentDescription = null,
