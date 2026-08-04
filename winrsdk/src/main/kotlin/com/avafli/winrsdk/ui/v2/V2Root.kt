@@ -2,6 +2,7 @@ package com.avafli.winrsdk.ui.v2
 
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -134,19 +135,37 @@ private fun DrawerContent(
             onClose = onDismiss,
         )
 
-        is ExperienceScreen.Streak -> WINRV2DashboardScreen(
-            accent = accent,
-            logoUrl = logoUrl,
-            rulesUrl = rulesUrl,
-            giveaway = ui.giveaway,
-            streakDay = screen.streakState.currentDay.coerceAtLeast(1),
-            totalEntries = screen.streakState.totalEntries,
-            ladder = screen.ladder,
-            claimedToday = ui.claimedToday,
-            onInfo = { viewModel.showHowItWorks() },
-            onClose = onDismiss,
-            onWinnerTap = onWinnerTap,
-        )
+        is ExperienceScreen.Streak -> {
+            // Reveal flow (Day 2+): before the CLAIM tap the dashboard is pinned
+            // to yesterday's numbers (streak N-1, pre-claim total, READY tile).
+            // The tap flips claimRevealed and the total springs to the post-claim
+            // value while the tile checks off with confetti.
+            val preReveal = ui.pendingRevealGrant != null && !ui.claimRevealed
+            val targetTotal =
+                if (preReveal) ui.preClaimTotalEntries ?: screen.streakState.totalEntries
+                else screen.streakState.totalEntries
+            val animatedTotal by animateIntAsState(
+                targetTotal,
+                spring(dampingRatio = 0.9f, stiffness = 195f),
+                label = "winrRevealTotal",
+            )
+            WINRV2DashboardScreen(
+                accent = accent,
+                logoUrl = logoUrl,
+                rulesUrl = rulesUrl,
+                giveaway = ui.giveaway,
+                streakDay = screen.streakState.currentDay.coerceAtLeast(1),
+                totalEntries = animatedTotal,
+                ladder = screen.ladder,
+                claimedToday = ui.claimedToday,
+                onInfo = { viewModel.showHowItWorks() },
+                onClose = onDismiss,
+                onWinnerTap = onWinnerTap,
+                pendingClaimEntries = ui.pendingRevealGrant?.entries,
+                revealed = ui.claimRevealed,
+                onClaim = { viewModel.revealClaim() },
+            )
+        }
 
         is ExperienceScreen.DailyConfirmed -> Box(Modifier.fillMaxSize()) {
             // Dashboard behind + celebration modal on top. Real blur on 31+,
@@ -177,7 +196,9 @@ private fun DrawerContent(
                     milestones = ui.giveaway?.milestones,
                 ),
                 visitMode = visitMode,
-                onDismiss = { viewModel.showDashboardAfterCelebration() },
+                // Day-1 modal is the reveal for brand-new streaks; GOT IT closes
+                // the whole experience until the next day's open.
+                onDismiss = onDismiss,
             )
         }
 

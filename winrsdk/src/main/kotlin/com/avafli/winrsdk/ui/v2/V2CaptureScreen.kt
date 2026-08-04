@@ -93,7 +93,7 @@ internal fun WINRV2CaptureScreen(
                 AgeGateCheckbox(isAdult) { isAdult = !isAdult }
                 WINRV2PillButton(
                     accent = accent,
-                    title = "GET MY $day1Entries ENTRIES",
+                    title = "CLAIM MY $day1Entries ENTRIES",
                     isLoading = isSubmitting,
                     enabled = canSubmit && !isSubmitting,
                     modifier = Modifier.alpha(if (canSubmit) 1f else 0.5f),

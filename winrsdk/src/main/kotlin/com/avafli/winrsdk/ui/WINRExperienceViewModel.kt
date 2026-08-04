@@ -26,8 +26,10 @@ import java.util.TimeZone
 // ── V2 state machine (mirrors iOS WINRExperienceViewModel) ──
 //
 // loading → emailCapture (until consent) → streak dashboard, with an automatic
-// claim on open that lands on the celebration modal (dailyConfirmed). The
-// rewarded-video bonus flow is parked (Phase 1) and has been removed.
+// claim on open. Day 1 lands on the celebration modal (dailyConfirmed); Day 2+
+// holds yesterday's numbers behind a "CLAIM N ENTRIES" pill on the dashboard
+// (the reveal flow). The rewarded-video bonus flow is parked (Phase 1) and has
+// been removed.
 
 internal sealed class ExperienceScreen {
     object Loading : ExperienceScreen()
@@ -58,6 +60,23 @@ internal data class ExperienceUiState(
     /** Current streak day for display (backend truth, falling back to local). */
     val displayStreakDay: Int = 1,
     val displayTotalEntries: Int = 0,
+
+    // ── V2 reveal flow (Day 2+) — mirrors iOS ──
+    //
+    // The auto-claim on open grants entries server-side immediately, but the UI
+    // holds the previous day's numbers until the user taps "CLAIM N ENTRIES".
+    // That tap flips claimRevealed — the day tile checks off with confetti, the
+    // streak label and totals advance, and the pill becomes "GOT IT".
+
+    /**
+     * The grant held back for the reveal (null when nothing is pending). Its
+     * `entries` carries base + all streak bonuses, like the modal grant.
+     */
+    val pendingRevealGrant: DailyEntryGrant? = null,
+    /** Whether the user has tapped CLAIM and seen the in-place celebration. */
+    val claimRevealed: Boolean = false,
+    /** Total entries as of before today's claim, for pre-reveal display. */
+    val preClaimTotalEntries: Int? = null,
 )
 
 internal class WINRExperienceViewModel(
@@ -239,12 +258,14 @@ internal class WINRExperienceViewModel(
         )
     }
 
-    /** V2: the celebration modal's GOT IT — settle onto the dashboard. */
-    fun showDashboardAfterCelebration() {
-        computeStreakAndMoveToDashboard(
-            backendClaimedToday = true,
-            backendStreakDay = cachedBackendStreakDay,
-        )
+    /**
+     * V2 reveal (Day 2+): the "CLAIM N ENTRIES" tap. The claim already succeeded
+     * server-side on open; this only flips the UI into the celebration state.
+     */
+    fun revealClaim() {
+        val ui = _uiState.value
+        if (ui.pendingRevealGrant == null || ui.claimRevealed) return
+        _uiState.value = ui.copy(claimRevealed = true)
     }
 
     // ── Email capture ──
@@ -326,26 +347,46 @@ internal class WINRExperienceViewModel(
                 cachedBackendStreakDay = response.streakDay
                 cachedBackendClaimedToday = true
 
-                saveStreakState(
-                    StreakState(
-                        currentDay = response.streakDay,
-                        claimedToday = true,
-                        totalEntries = response.totalEntries,
-                        lastClaimDate = LocalDate.now().toString(),
-                    )
-                )
-
-                // V2: a claim ALWAYS lands on the celebration modal. The grant's
-                // entries carry base + streak bonuses so "YOU EARNED N" is complete.
-                _uiState.value = _uiState.value.copy(
-                    screen = ExperienceScreen.DailyConfirmed(
-                        grant = grant.copy(entries = response.entries + streakBonusEntries),
-                        totalEntries = response.totalEntries,
-                    ),
+                val updatedStreak = StreakState(
+                    currentDay = response.streakDay,
                     claimedToday = true,
-                    displayStreakDay = response.streakDay,
-                    displayTotalEntries = response.totalEntries,
+                    totalEntries = response.totalEntries,
+                    lastClaimDate = LocalDate.now().toString(),
                 )
+                saveStreakState(updatedStreak)
+
+                // The grant's entries carry base + streak bonuses so the
+                // celebration ("YOU EARNED N" / "CLAIM N ENTRIES") is complete.
+                val grantEntries = response.entries + streakBonusEntries
+
+                // V2 auto-claim routing (mirrors iOS):
+                // - Day 1 (brand-new or restarted streak, typically right after
+                //   email capture): the "You're in!" celebration modal is the
+                //   reveal.
+                // - Day 2+: no modal. Land on the dashboard pinned to yesterday's
+                //   numbers with a "CLAIM N ENTRIES" pill; the tap reveals the
+                //   celebration in place (Joe's Slice Day 2+ flow).
+                if (response.streakDay <= 1) {
+                    _uiState.value = _uiState.value.copy(
+                        screen = ExperienceScreen.DailyConfirmed(
+                            grant = grant.copy(entries = grantEntries),
+                            totalEntries = response.totalEntries,
+                        ),
+                        claimedToday = true,
+                        displayStreakDay = response.streakDay,
+                        displayTotalEntries = response.totalEntries,
+                    )
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        screen = ExperienceScreen.Streak(updatedStreak, response.entries, displayLadder),
+                        claimedToday = true,
+                        displayStreakDay = response.streakDay,
+                        displayTotalEntries = response.totalEntries,
+                        pendingRevealGrant = grant.copy(entries = grantEntries),
+                        claimRevealed = false,
+                        preClaimTotalEntries = response.totalEntries - grantEntries,
+                    )
+                }
                 isClaimingDaily = false
 
                 analytics?.trackEvent(

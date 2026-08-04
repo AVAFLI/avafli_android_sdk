@@ -2,6 +2,15 @@
 
 All notable changes to the WINR Android SDK will be documented in this file.
 
+## [2.2.0] - 2026-08-04
+### Changed
+- **Day 2+ reveal flow** — the auto-claim still fires silently the moment the drawer opens, but returning users no longer get the celebration modal. The dashboard opens pinned to yesterday's numbers (streak N-1, pre-claim total, today's tile glowing with a flame and no checkmark) behind a "CLAIM N ENTRIES" button; tapping it is the celebration — the tile checks off with confetti, the streak label and total spring forward, and the button becomes GOT IT. Mirrors iOS `e7fae27`.
+- Day 1 keeps the "You're in!" celebration modal as its reveal, and its GOT IT now dismisses the whole experience (previously it settled on the dashboard)
+- Email-capture CTA renamed: "GET MY N ENTRIES" → "CLAIM MY N ENTRIES"
+
+### Added
+- New `Ready` streak-tile state (radial glow like active, white flame icon, no checkmark, no confetti) used pre-reveal
+
 ## [2.1.0] - 2026-08-04
 ### Removed (BREAKING)
 - Manual launch API removed — `WINR.present(...)` and `WINR.isServiceAvailable()` are no longer public. The experience is exclusively auto-opened by the SDK (once per calendar day, after `configure()`); publishers cannot launch it manually.

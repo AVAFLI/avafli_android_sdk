@@ -30,7 +30,11 @@ import com.avafli.winrsdk.R
 
 // STREAK STEP tile, ported from iOS WINRV2StreakTile (106x134dp).
 
-internal enum class WINRV2TileState { Completed, Active, Locked }
+/**
+ * `Ready` = today's tile before the user taps CLAIM (claim already granted
+ * server-side, reveal withheld): glows like `Active` but shows no checkmark.
+ */
+internal enum class WINRV2TileState { Completed, Active, Ready, Locked }
 
 @Composable
 internal fun WINRV2StreakTile(
@@ -41,23 +45,29 @@ internal fun WINRV2StreakTile(
     visitMode: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
-    if (state == WINRV2TileState.Active) {
-        // Joe's active-tile motion: breathing glow + confetti specks scattered
-        // around the tile. The confetti field is larger than the tile but must
-        // not affect layout (it draws past the tile bounds, like iOS .background).
-        Box(
-            modifier.size(width = 106.dp, height = 134.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            WINRV2ConfettiField(
-                modifier = Modifier.requiredSize(width = 152.dp, height = 176.dp),
-                count = 12,
-                speed = 0.7,
-            )
-            TileCard(accent, day, entries, state, visitMode, Modifier.winrPulseGlow(accent))
-        }
-    } else {
-        TileCard(accent, day, entries, state, visitMode, modifier)
+    when (state) {
+        WINRV2TileState.Active ->
+            // Joe's active-tile motion: breathing glow + confetti specks scattered
+            // around the tile. The confetti field is larger than the tile but must
+            // not affect layout (it draws past the tile bounds, like iOS .background).
+            Box(
+                modifier.size(width = 106.dp, height = 134.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                WINRV2ConfettiField(
+                    modifier = Modifier.requiredSize(width = 152.dp, height = 176.dp),
+                    count = 12,
+                    speed = 0.7,
+                )
+                TileCard(accent, day, entries, state, visitMode, Modifier.winrPulseGlow(accent))
+            }
+
+        WINRV2TileState.Ready ->
+            // Pre-reveal: glow draws the eye to CLAIM, but the confetti and
+            // checkmark are saved for the reveal moment.
+            TileCard(accent, day, entries, state, visitMode, modifier.winrPulseGlow(accent))
+
+        else -> TileCard(accent, day, entries, state, visitMode, modifier)
     }
 }
 
@@ -73,7 +83,7 @@ private fun TileCard(
     val noun = if (visitMode) "VISIT" else "DAY"
     val numberColor = when (state) {
         WINRV2TileState.Completed -> accent
-        WINRV2TileState.Active -> Color.White
+        WINRV2TileState.Active, WINRV2TileState.Ready -> Color.White
         WINRV2TileState.Locked -> WINRV2Color.foregroundSecondary
     }
     val labelColor = if (state == WINRV2TileState.Locked) WINRV2Color.foregroundSecondary else Color.White
@@ -119,6 +129,12 @@ private fun TileCard(
                     modifier = Modifier.size(20.dp),
                     lineWidth = 2.5.dp,
                 )
+                WINRV2TileState.Ready -> Icon(
+                    painter = painterResource(R.drawable.winr_flame),
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(width = 16.dp, height = 20.dp),
+                )
                 WINRV2TileState.Locked -> Icon(
                     painter = painterResource(R.drawable.winr_lock),
                     contentDescription = null,
@@ -131,7 +147,7 @@ private fun TileCard(
 }
 
 private fun Modifier.tileBackground(accent: Color, state: WINRV2TileState): Modifier =
-    if (state == WINRV2TileState.Active) {
+    if (state == WINRV2TileState.Active || state == WINRV2TileState.Ready) {
         drawBehind {
             drawRect(
                 Brush.radialGradient(

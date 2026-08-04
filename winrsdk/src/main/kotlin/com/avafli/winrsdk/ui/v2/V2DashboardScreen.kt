@@ -30,14 +30,23 @@ internal fun WINRV2DashboardScreen(
     onInfo: () -> Unit,
     onClose: () -> Unit,
     onWinnerTap: (() -> Unit)? = null,
+    /**
+     * Reveal flow (Day 2+): the claim already succeeded server-side, but the UI
+     * holds yesterday's numbers until the user taps "CLAIM N ENTRIES" — that tap
+     * is the celebration (tile check + confetti + totals update), no modal.
+     */
+    pendingClaimEntries: Int? = null,
+    revealed: Boolean = true,
+    onClaim: (() -> Unit)? = null,
 ) {
     val visitMode = giveaway?.streakMode == "visit"
+    val preReveal = pendingClaimEntries != null && !revealed
 
     fun ladderValue(day: Int): Int =
         WINRV2Ladder.entries(day = day, ladder = ladder, milestones = giveaway?.milestones)
 
     val nextEntries = ladderValue(streakDay + 1)
-    val railEntries = buildRailEntries(giveaway, streakDay, visitMode, ::ladderValue)
+    val railEntries = buildRailEntries(giveaway, streakDay, visitMode, preReveal, ::ladderValue)
 
     Column(
         modifier = Modifier
@@ -61,7 +70,7 @@ internal fun WINRV2DashboardScreen(
             }
             WINRV2PrizeCard(
                 accent = accent,
-                streakDay = streakDay,
+                streakDay = if (preReveal) maxOf(streakDay - 1, 1) else streakDay,
                 totalEntries = totalEntries,
                 prizeImageUrl = giveaway?.prizeImageUrl,
                 prizeValue = giveaway?.prizeValue?.toDoubleOrNull()?.toInt() ?: 0,
@@ -83,11 +92,19 @@ internal fun WINRV2DashboardScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                WINRV2PillButton(
-                    accent = accent,
-                    title = "GOT IT",
-                    modifier = Modifier.padding(horizontal = 30.dp),
-                ) { onClose() }
+                if (preReveal && pendingClaimEntries != null && onClaim != null) {
+                    WINRV2PillButton(
+                        accent = accent,
+                        title = "CLAIM ${pendingClaimEntries.winrFormatted()} ENTRIES",
+                        modifier = Modifier.padding(horizontal = 30.dp),
+                    ) { onClaim() }
+                } else {
+                    WINRV2PillButton(
+                        accent = accent,
+                        title = "GOT IT",
+                        modifier = Modifier.padding(horizontal = 30.dp),
+                    ) { onClose() }
+                }
                 WINRV2LegalLinks(rulesUrl = rulesUrl)
             }
         }
@@ -102,6 +119,7 @@ private fun buildRailEntries(
     giveaway: Giveaway?,
     streakDay: Int,
     visitMode: Boolean,
+    preReveal: Boolean,
     ladderValue: (Int) -> Int,
 ): List<WINRV2RailEntry> {
     val entries = mutableListOf<WINRV2RailEntry>()
@@ -111,7 +129,7 @@ private fun buildRailEntries(
     for (day in 1..maxDay) {
         val state = when {
             day < streakDay -> WINRV2TileState.Completed
-            day == streakDay -> WINRV2TileState.Active
+            day == streakDay -> if (preReveal) WINRV2TileState.Ready else WINRV2TileState.Active
             else -> WINRV2TileState.Locked
         }
         entries.add(

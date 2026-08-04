@@ -72,7 +72,7 @@ In your app-level `build.gradle.kts`:
 
 ```kotlin
 dependencies {
-    implementation("com.github.AVAFLI:winr_android_sdk:2.1.0")
+    implementation("com.github.AVAFLI:winr_android_sdk:2.2.0")
 }
 ```
 
@@ -138,7 +138,7 @@ WINR.configure(config)
 
 ## The Experience
 
-The V2 experience presents itself automatically once per calendar day (first app-open of the day). Entries are claimed automatically when it opens, and a celebration modal confirms the grant. There is no launch API — after `configure()`, the SDK handles everything: presentation timing, entry claiming, and celebration.
+The V2 experience presents itself automatically once per calendar day (first app-open of the day). Entries are claimed automatically when it opens. On Day 1 a celebration modal confirms the grant; from Day 2 on, the dashboard holds the previous day's numbers behind a "CLAIM N ENTRIES" button — tapping it is the celebration (the day tile checks off and the totals advance in place). There is no launch API — after `configure()`, the SDK handles everything: presentation timing, entry claiming, and celebration.
 
 ## Push Notifications
 
