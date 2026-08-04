@@ -44,13 +44,18 @@ import kotlinx.coroutines.delay
  * Confirmation ("come back tomorrow") bar, ported from iOS WINRV2ComeBackBar:
  * black strip, calendar icon, reward line, celebratory sprinkles drifting over it.
  *
- * Joe's Slice sequence: the bar RESTS on the come-back pitch. When the
- * auto-reveal fires (`claimed` flips true), "{N} ENTRIES ADDED / You're on a
- * roll!" SLIDES in horizontally, holds ~2.6s, then SLIDES back out to the
- * pitch — the pitch is the final state. A claimed-at-mount reopen (same-day
- * dashboard reopen) rests on the pitch directly, no toast replay.
+ * Joe's sequence: on a CELEBRATION open ([celebrationOpen]) the bar's FIRST
+ * visible state is the toast — "YOU'RE ON A ROLL! / Your {N} entries have been
+ * added automatically." — never the pitch first; it holds ~2.5s then slides
+ * ONCE to the come-back pitch, the final state. Non-celebration opens (same-day
+ * reopens, Day 1 modal) rest on the pitch directly. If `claimed` flips true
+ * mid-life without a celebration mount (late-arriving grant), the toast slides
+ * in, holds, and slides back — same single forward carousel.
  */
 private enum class WINRV2BarPhase { Pitch, Added }
+
+/** How long the "entries added" toast holds before sliding to the pitch. */
+private const val TOAST_HOLD_MS = 2500L
 
 @Composable
 internal fun WINRV2ComeBackBar(
@@ -59,21 +64,36 @@ internal fun WINRV2ComeBackBar(
     visitMode: Boolean = false,
     claimed: Boolean = false,
     claimedEntries: Int = 0,
+    celebrationOpen: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
-    var phase by remember { mutableStateOf(WINRV2BarPhase.Pitch) }
+    // Captured at mount: a celebration open starts ON the toast (no slide-in,
+    // it IS the first frame) and later parameter flips must not re-trigger it.
+    val celebrationAtMount = remember { celebrationOpen }
+    var phase by remember {
+        mutableStateOf(if (celebrationAtMount) WINRV2BarPhase.Added else WINRV2BarPhase.Pitch)
+    }
     var lastClaimed by remember { mutableStateOf(claimed) }
-    // LaunchedEffect scoping makes the hold timer teardown-safe: the delay is
-    // cancelled automatically if the bar leaves composition mid-hold.
-    LaunchedEffect(claimed) {
-        if (claimed == lastClaimed) return@LaunchedEffect // mount: rest on pitch
-        lastClaimed = claimed
-        if (claimed) {
-            // Fresh reveal: celebrate, hold, then slide back to the pitch.
-            phase = WINRV2BarPhase.Added
-            delay(2600)
+    // LaunchedEffect scoping makes the hold timers teardown-safe: the delays
+    // are cancelled automatically if the bar leaves composition mid-hold.
+    LaunchedEffect(Unit) {
+        if (celebrationAtMount) {
+            // Celebration open: toast first, then ONE slide to the pitch.
+            delay(TOAST_HOLD_MS)
             phase = WINRV2BarPhase.Pitch
-        } else {
+        }
+    }
+    LaunchedEffect(claimed) {
+        if (claimed == lastClaimed) return@LaunchedEffect // mount: keep initial phase
+        lastClaimed = claimed
+        if (claimed && !celebrationAtMount && phase == WINRV2BarPhase.Pitch) {
+            // Late-arriving grant on a non-celebration mount: celebrate, hold,
+            // then slide back to the pitch.
+            phase = WINRV2BarPhase.Added
+            delay(TOAST_HOLD_MS)
+            phase = WINRV2BarPhase.Pitch
+        } else if (!claimed) {
+            // Claim retracted (predicted grant failed) — settle on the pitch.
             phase = WINRV2BarPhase.Pitch
         }
     }
@@ -174,12 +194,12 @@ private fun ClaimedContent(accent: Color, claimedEntries: Int) {
         )
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             WINRAutoSizeText(
-                "${claimedEntries.winrFormatted()} ENTRIES ADDED",
+                "YOU’RE ON A ROLL!",
                 style = WINRV2Font.inter(20.sp, FontWeight.Black, tracking = (-0.6).sp, color = accent),
                 minScale = 0.7f,
             )
             Text(
-                "You’re on a roll!",
+                "Your ${claimedEntries.winrFormatted()} entries have been added automatically.",
                 style = WINRV2Font.inter(13.sp, FontWeight.Bold, color = Color.White),
             )
         }

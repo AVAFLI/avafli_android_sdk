@@ -29,8 +29,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 //
-// Joe's ACTUAL Figma animation files (bundled GIFs) for the Day 2+ reveal
-// beat, ported from iOS WINRV2GifView/WINRV2GifAsset. Playback is Coil-free:
+// Joe's ACTUAL Figma confetti-burst animation (bundled GIF) for the Day 2+
+// reveal beat, ported from iOS WINRV2GifView/WINRV2GifAsset. Playback is Coil-free:
 // android.graphics.drawable.AnimatedImageDrawable decoded via ImageDecoder
 // from res/raw (API 28+), hosted in a plain ImageView. The drawable honors
 // the file's own per-frame delay table and, with repeatCount = 0, plays
@@ -39,12 +39,11 @@ import kotlinx.coroutines.withContext
 //
 
 /**
- * Decoded-GIF cache. Decoding the 1500x1500 47-frame tile-burst GIF costs
- * hundreds of milliseconds, so [prewarm] decodes both reveal GIFs off-main at
- * drawer open and the reveal-beat mount plays the cached drawable instantly.
+ * Decoded-GIF cache. [prewarm] decodes the reveal GIF off-main at drawer open
+ * so the reveal-beat mount plays the cached drawable instantly.
  */
 internal object WINRV2GifAssets {
-    /** Longest decoded edge; the tile burst renders at 200dp so 600px covers 3x density. */
+    /** Longest decoded edge; the burst renders at 200dp so 600px covers 3x density. */
     private const val MAX_PIXEL_SIZE = 600
 
     private val cache = ConcurrentHashMap<Int, AnimatedImageDrawable>()
@@ -52,12 +51,11 @@ internal object WINRV2GifAssets {
     @RequiresApi(Build.VERSION_CODES.P)
     fun cached(@RawRes resId: Int): AnimatedImageDrawable? = cache[resId]
 
-    /** Decode both reveal GIFs into the cache off-main so a later mount is instant. */
+    /** Decode the reveal GIF into the cache off-main so a later mount is instant. */
     suspend fun prewarm(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return
         val appContext = context.applicationContext
         withContext(Dispatchers.IO) {
-            load(appContext, R.raw.winr_tile_burst)
             load(appContext, R.raw.winr_confetti_burst)
         }
     }

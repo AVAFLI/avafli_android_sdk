@@ -57,8 +57,8 @@ internal fun WINRV2ExperienceRoot(
     val context = LocalContext.current
     LaunchedEffect(Unit) {
         drawerAppeared = true
-        // Decode Joe's Figma reveal GIFs off-main NOW so mounting them at the
-        // reveal beat is instant (the 47-frame tile GIF costs ~0.7s to decode).
+        // Decode Joe's Figma confetti-burst GIF off-main NOW so mounting it at
+        // the reveal beat is instant.
         WINRV2GifAssets.prewarm(context)
     }
 
@@ -143,17 +143,16 @@ private fun DrawerContent(
         )
 
         is ExperienceScreen.Streak -> {
-            // Auto-reveal flow (Day 2+): the dashboard mounts pinned to
-            // yesterday's numbers (streak N-1, pre-claim total, READY tile),
-            // then the ViewModel flips claimRevealed on its own a beat after
-            // the claim response is staged — the total springs to the
-            // post-claim value while the tile checks off with confetti.
-            // No claim tap (Joe's Slice prototype).
-            // Pinned from the FIRST frame: while today is unclaimed OR the
-            // reveal hasn't played, show yesterday's numbers. Without the
-            // claimedToday clause there's a flash of the raw post-claim
-            // server state during the network round-trip, and elements flip
-            // at different times.
+            // Predicted-reveal flow (Day 2+): the ViewModel stages a PREDICTED
+            // grant BEFORE entering this state and flips claimRevealed one
+            // composition beat (~0.15s) after mount, so the celebration is the
+            // dashboard's first visible frame — the total springs from the
+            // pre-claim baseline to the predicted value while the tile checks
+            // off with confetti and the bar opens on the toast. The real claim
+            // reconciles the numbers silently when it returns. No claim tap
+            // (Joe's prototype).
+            // The single pre-reveal baseline frame shows yesterday's numbers:
+            // it is what the springs animate FROM.
             val preReveal = !ui.claimRevealed &&
                 (ui.pendingRevealGrant != null || !ui.claimedToday)
             val targetTotal =

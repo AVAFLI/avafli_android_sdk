@@ -92,12 +92,12 @@ internal fun WINRV2DashboardScreen(
                 accent = accent,
                 nextEntries = nextEntries,
                 visitMode = visitMode,
-                // Delta A: once today's claim is revealed (or the user reopens in
-                // a claimed state) the bar celebrates the entries that were just
-                // added instead of pitching tomorrow. Pre-reveal keeps the
-                // come-back copy.
                 claimed = claimedToday && !preReveal,
                 claimedEntries = pendingClaimEntries ?: entriesToday,
+                // A staged, not-yet-revealed grant at composition time means
+                // this open IS the celebration: the bar starts ON the toast
+                // (never the pitch first) and slides once to the pitch.
+                celebrationOpen = pendingClaimEntries != null && preReveal,
             )
             Column(
                 modifier = Modifier
