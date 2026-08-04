@@ -14,9 +14,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -184,6 +187,11 @@ internal fun WINRV2ClaimFormScreen(
                         form = form.copy(photoBase64 = null)
                     },
                 )
+                WINRClaimConsentSection(
+                    accent = accent,
+                    form = form,
+                    onChange = { form = it },
+                )
             }
 
             if (submitError != null) {
@@ -200,14 +208,38 @@ internal fun WINRV2ClaimFormScreen(
 
             WINRV2PillButton(
                 accent = accent,
-                title = "SUBMIT",
+                title = "SUBMIT PRIZE CLAIM",
                 isLoading = isSubmitting,
                 enabled = form.isValid && !isSubmitting,
                 modifier = Modifier
-                    .padding(top = 20.dp, bottom = 34.dp)
+                    .padding(top = 20.dp)
                     .padding(horizontal = 22.dp)
                     .alpha(if (form.isValid) 1f else 0.5f),
             ) { onSubmit(form) }
+
+            // Lock note below the button (iOS d1b8bb3).
+            Row(
+                modifier = Modifier
+                    .padding(top = 14.dp, bottom = 34.dp)
+                    .padding(horizontal = 22.dp)
+                    .fillMaxWidth()
+                    .height(46.dp)
+                    .background(Color.White.copy(alpha = 0.06f), RoundedCornerShape(10.dp)),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.winr_lock),
+                    contentDescription = null,
+                    tint = accent,
+                    modifier = Modifier.size(15.dp),
+                )
+                Text(
+                    "Your information is secure and encrypted.",
+                    style = WINRV2Font.inter(13.sp, FontWeight.Medium, color = Color.White.copy(alpha = 0.85f)),
+                    modifier = Modifier.padding(start = 10.dp),
+                )
+            }
         }
     }
 }

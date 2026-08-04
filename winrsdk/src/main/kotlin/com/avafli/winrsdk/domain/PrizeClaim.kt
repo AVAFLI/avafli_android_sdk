@@ -45,13 +45,22 @@ internal data class PrizeClaimForm(
     val zip: String = "",
     /** JPEG base64 of the optional attached photo (already downscaled/capped). */
     val photoBase64: String? = null,
+    /**
+     * Explicit consents (Joe's "review and agree" checkboxes). All three are
+     * REQUIRED — the likeness release in particular must be an affirmative
+     * user action for the publicity authorization to hold up.
+     */
+    val confirmsAccuracy: Boolean = false,
+    val authorizesLikeness: Boolean = false,
+    val agreesToRules: Boolean = false,
 ) {
     /** Fixed — US-only sweepstakes. */
     val country: String get() = "United States"
 
     /**
-     * SUBMIT enables when every required field is present and the zip is a
-     * 5-digit US code. Phone, apartment, and photo are optional.
+     * SUBMIT enables when every required field is present, the zip is a
+     * 5-digit US code, and all three consents are affirmed. Phone, apartment,
+     * and photo are optional.
      */
     val isValid: Boolean
         get() = firstName.trim().isNotEmpty() &&
@@ -59,7 +68,10 @@ internal data class PrizeClaimForm(
             street.trim().isNotEmpty() &&
             city.trim().isNotEmpty() &&
             state.trim().isNotEmpty() &&
-            isValidZip(zip)
+            isValidZip(zip) &&
+            confirmsAccuracy &&
+            authorizesLikeness &&
+            agreesToRules
 
     /** "First L." — the public display name on the winner card. */
     val displayName: String

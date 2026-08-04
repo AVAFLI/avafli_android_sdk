@@ -17,6 +17,9 @@ class PrizeClaimFormTest {
         city = "Brooklyn",
         state = "New York",
         zip = "11201",
+        confirmsAccuracy = true,
+        authorizesLikeness = true,
+        agreesToRules = true,
     )
 
     // ── Validation ──
@@ -24,6 +27,27 @@ class PrizeClaimFormTest {
     @Test
     fun `valid form with only required fields passes`() {
         assertTrue(validForm.isValid)
+    }
+
+    @Test
+    fun `all three consents are required`() {
+        assertFalse(validForm.copy(confirmsAccuracy = false).isValid)
+        assertFalse(validForm.copy(authorizesLikeness = false).isValid)
+        assertFalse(validForm.copy(agreesToRules = false).isValid)
+        assertFalse(
+            PrizeClaimForm(
+                firstName = "Ada", lastName = "Lovelace", street = "1 Analytical Way",
+                city = "Brooklyn", state = "New York", zip = "11201",
+            ).isValid
+        )
+    }
+
+    @Test
+    fun `consents default to off`() {
+        val fresh = PrizeClaimForm()
+        assertFalse(fresh.confirmsAccuracy)
+        assertFalse(fresh.authorizesLikeness)
+        assertFalse(fresh.agreesToRules)
     }
 
     @Test
