@@ -10,14 +10,17 @@
 
 ## Overview
 
-WINR lets you add daily-entry sweepstakes and prize experiences to your app in under 20 lines of code. The entire UI — branding, theming, copy, and prize configuration — is managed server-side from the WINR dashboard. You integrate once; your marketing team controls the rest.
+WINR lets you add daily-entry sweepstakes and prize experiences to your app in under 20 lines of code. The V2 experience is a bottom drawer that opens itself on the first app-open of each day, claims the user's daily entries automatically, and celebrates the result. You integrate once; prize configuration and branding are managed server-side from the WINR dashboard.
 
 **Key capabilities:**
 - **Daily entry sweepstakes** — Users earn entries every day they engage
-- **Bonus entries via rewarded video** — Monetize attention with opt-in ads
+- **V2 auto-open experience** — The bottom-drawer experience opens itself on the first app-open of each day and grants entries automatically
+- **Streak ladder + milestone accelerators** — Escalating daily entry rewards, with server-configurable milestone bonuses
+- **Winner announcements** — "WE HAVE A WINNER!" banner and winner dialog, driven by the giveaway's `latestWinner`
+- **Visit mode** — A never-resetting streak variant for low-frequency apps
 - **Push reminders** — Drive re-engagement with daily nudges (FCM)
-- **Server-driven UI** — Branding, prizes, and copy update without app releases
-- **GDPR/CCPA compliant** — Built-in consent flows and user data deletion
+- **Server-driven branding** — Logo, prize image, and primary color update without app releases
+- **GDPR/CCPA compliant** — Built-in consent flows, RTD opt-out, and user data deletion
 - **Analytics forwarding** — Route SDK events to your existing analytics stack
 
 ## Quick Start
@@ -28,7 +31,7 @@ import com.avafli.winrsdk.WINRConfiguration
 import com.avafli.winrsdk.WINREnvironment
 import com.avafli.winrsdk.WINRUser
 
-// 1. Configure the SDK
+// 1. Configure the SDK — call once at app launch
 val config = WINRConfiguration(
     context = applicationContext,
     apiKey = "YOUR_API_KEY",
@@ -41,9 +44,12 @@ val config = WINRConfiguration(
 )
 WINR.configure(config)
 
-// 2. Present the experience
+// 2. That's it — the experience auto-opens on the first app-open of each day.
+//    You can also open it manually at any time:
 WINR.present(activity)
 ```
+
+> **Auto-open:** After `configure()`, the SDK presents the experience automatically once per calendar day (after registration and on activity resumes — a new day re-opens it even if the app stayed in memory). It can be disabled remotely via the dashboard's `experience.autoOpenEnabled` kill switch; unregistered users see at most 3 auto-opens until they submit an email, and RTD opted-out users never see it.
 
 ## Installation
 
@@ -67,7 +73,7 @@ In your app-level `build.gradle.kts`:
 
 ```kotlin
 dependencies {
-    implementation("com.github.avafli:winr-android-sdk:1.0.0")
+    implementation("com.github.avafli:winr-android-sdk:2.0.0")
 }
 ```
 
@@ -91,7 +97,7 @@ val config = WINRConfiguration(
     options = WINROptions(
         debugLogging = true,
         analyticsAdapter = myAdapter,
-        enableCertificatePinning = true
+        enablePushReminders = true
     )
 )
 
@@ -110,6 +116,16 @@ WINR.configure(config)
 
 > **App ID:** The SDK auto-detects your Android application ID from the host `Context` (`context.packageName`). You do not pass it manually.
 
+### WINROptions
+
+| Parameter | Type | Default | Description |
+| --------- | ---- | ------- | ----------- |
+| `debugLogging` | `Boolean` | `false` | Enable verbose logging |
+| `analyticsAdapter` | `AnalyticsAdapter?` | `null` | Routes SDK events to your analytics stack |
+| `enablePushReminders` | `Boolean` | `true` | Enables streak reminder push notifications (requires FCM in the host app) |
+| `enableCertificatePinning` | `Boolean` | `true` | Certificate pinning for backend calls (recommended for production) |
+| `networkTimeoutSeconds` | `Long` | `30` | Custom timeout for network requests |
+
 ### WINRUser
 
 | Parameter | Type | Required | Description |
@@ -123,7 +139,9 @@ WINR.configure(config)
 
 ## Present the Experience
 
-Launch the full-screen WINR experience:
+The V2 experience presents itself automatically once per calendar day (first app-open of the day). Entries are claimed automatically when it opens, and a celebration modal confirms the grant.
+
+You can also launch the bottom-drawer experience manually:
 
 ```kotlin
 // Simple presentation
@@ -140,7 +158,7 @@ WINR.present(activity) { result ->
 }
 ```
 
-The callback receives a `DailyEntryGrant` with the entries earned during the session.
+The callback receives a `DailyEntryGrant` with the entries earned during the session (`entries`, `streakDay`, `totalEntries`, plus optional `weeklyBonusEntries`, `monthlyBonusEntries`, and `milestone`). Check `WINR.isServiceAvailable()` if you gate your own UI on the experience being available.
 
 ## Push Notifications
 
@@ -153,7 +171,7 @@ Follow the [Firebase Android setup guide](https://firebase.google.com/docs/cloud
 ### 2. Register for Notifications
 
 ```kotlin
-// After WINR.configure()
+// After WINR.configure() — no-op if WINROptions.enablePushReminders is false
 WINR.registerForPushNotifications(context)
 ```
 
@@ -174,12 +192,13 @@ Upload your FCM service account key via the [WINR Dashboard](https://avafli-webs
 
 ## Customization
 
-All branding, themes, and copy are managed server-side through the [WINR Dashboard](https://avafli-website.web.app/sdk/dashboard):
+The V2 experience is hardcoded to the WINR design; publishers customize exactly three things through the [WINR Dashboard](https://avafli-website.web.app/sdk/dashboard):
 
-- **Colors & Branding** — Primary colors, logos, backgrounds
-- **Copy & Messaging** — Headlines, CTAs, legal text
-- **Prize Configuration** — Active giveaways, entry mechanics
-- **Push Notifications** — Reminder schedules and messaging
+- **Logo** — Shown in the drawer header
+- **Prize image** — Art for the dashboard prize card
+- **Primary color** — Accent for CTAs, streak tiles, and highlights
+
+Plus prize configuration (active giveaways, ladder, milestones) and push reminder schedules.
 
 Changes apply instantly across all app installations without requiring an app update.
 
@@ -210,11 +229,7 @@ val options = WINROptions(
 ```
 
 **Events emitted by the SDK:**
-- `winr.session_started` — User opened the WINR experience
-- `winr.entry_granted` — Daily entries awarded
-- `winr.bonus_entry_granted` — Bonus entries earned via rewarded video
-- `winr.session_completed` — User closed the WINR experience
-- `winr.push_registered` — Device registered for push reminders
+- `winr_daily_entry_claimed` — Daily entries awarded (auto-claimed on open). Params: `day`, `entries`, plus `weekly_bonus`, `monthly_bonus`, and `milestone_day` when awarded.
 
 ## GDPR / Delete User Data
 
@@ -230,15 +245,19 @@ lifecycleScope.launch {
 
 This permanently removes all user data, entries, preferences, and consent records from WINR servers.
 
+For Right-to-Delete opt-outs (user asks to never see WINR again), call `WINR.optOut()` — it tombstones the person on the backend and permanently silences the experience on the device.
+
 ## API Reference
 
 ### Core Methods
 
 | Method | Returns | Description |
 | ------ | ------- | ----------- |
-| `WINR.configure(config)` | `Unit` | Initialize the SDK with user and settings |
-| `WINR.present(activity, callback?)` | `Unit` | Launch the full-screen WINR experience |
-| `WINR.deleteAccount()` | `Result<Unit>` | Permanently delete all user data |
+| `WINR.configure(config)` | `Unit` | Initialize the SDK; auto-opens the experience once per day |
+| `WINR.present(activity, callback?)` | `Unit` | Manually launch the WINR bottom-drawer experience |
+| `WINR.isServiceAvailable()` | `Boolean` | Whether the experience can currently be presented |
+| `WINR.optOut()` | `suspend Result<Unit>` | RTD opt-out — permanently silence the experience |
+| `WINR.deleteAccount()` | `suspend Result<Unit>` | Permanently delete all user data |
 
 ### Push Notifications
 
@@ -257,4 +276,4 @@ For detailed API documentation, see the [WINR Docs](https://avafli-website.web.a
 
 ---
 
-© 2025 Avafli. All Rights Reserved.
+© 2026 Avafli. All Rights Reserved.
