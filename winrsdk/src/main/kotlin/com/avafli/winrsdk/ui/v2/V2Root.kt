@@ -181,42 +181,6 @@ private fun DrawerContent(
             )
         }
 
-        is ExperienceScreen.DailyConfirmed -> Box(Modifier.fillMaxSize()) {
-            // Dashboard behind + celebration modal on top. Real blur on 31+,
-            // desaturate + extra dim below (see winrCelebrationBackdrop).
-            Box(Modifier.fillMaxSize().winrCelebrationBackdrop()) {
-                WINRV2DashboardScreen(
-                    accent = accent,
-                    logoUrl = logoUrl,
-                    rulesUrl = rulesUrl,
-                    giveaway = ui.giveaway,
-                    streakDay = ui.displayStreakDay,
-                    totalEntries = screen.totalEntries,
-                    entriesToday = screen.grant.entries,
-                    ladder = ui.giveaway?.streakLadder?.takeIf { it.isNotEmpty() }
-                        ?: listOf(1, 2, 3, 5, 8, 13, 21),
-                    claimedToday = true,
-                    onInfo = { viewModel.showHowItWorks() },
-                    onClose = onDismiss,
-                )
-            }
-            WINRV2CelebrationModal(
-                accent = accent,
-                streakDay = ui.displayStreakDay,
-                earnedEntries = screen.grant.entries,
-                nextEntries = WINRV2Ladder.entries(
-                    day = ui.displayStreakDay + 1,
-                    ladder = ui.giveaway?.streakLadder?.takeIf { it.isNotEmpty() }
-                        ?: listOf(1, 2, 3, 5, 8, 13, 21),
-                    milestones = ui.giveaway?.milestones,
-                ),
-                visitMode = visitMode,
-                // Day-1 modal is the reveal for brand-new streaks; GOT IT closes
-                // the whole experience until the next day's open.
-                onDismiss = onDismiss,
-            )
-        }
-
         is ExperienceScreen.WinnerClaim -> WINRV2WinnerClaimFlow(
             ui = ui,
             claim = screen.claim,

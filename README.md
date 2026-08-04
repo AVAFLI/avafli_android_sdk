@@ -138,7 +138,7 @@ WINR.configure(config)
 
 ## The Experience
 
-The V2 experience presents itself automatically once per calendar day (first app-open of the day). Entries are claimed automatically when it opens, and the celebration is the first thing the user sees: the dashboard opens with today's grant already showing — the day tile checks off with a confetti burst, the total counts up and pops, and the bar leads with a "YOU'RE ON A ROLL!" toast before settling into the come-back message. There is no button to tap to collect entries (the pill just reads GOT IT and closes) and no launch API — after `configure()`, the SDK handles everything: presentation timing, entry claiming, and celebration. Brand-new users first submit their email, then get a one-time "You're in!" welcome modal.
+The V2 experience presents itself automatically once per calendar day (first app-open of the day). Entries are claimed automatically when it opens, and the celebration is the first thing the user sees: the dashboard opens with today's grant already showing — the day tile checks off with a confetti burst, the total counts up and pops, and the bar leads with a "YOU'RE ON A ROLL!" toast before settling into the come-back message. There is no button to tap to collect entries (the pill just reads GOT IT and closes) and no launch API — after `configure()`, the SDK handles everything: presentation timing, entry claiming, and celebration. Brand-new users first submit their email, then land straight on the same celebrating dashboard — the toast just reads "YOU'RE IN!" on Day 1.
 
 ## Winner Experience
 

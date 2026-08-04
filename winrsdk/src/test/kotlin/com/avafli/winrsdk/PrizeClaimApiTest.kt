@@ -66,8 +66,31 @@ class PrizeClaimApiTest {
         assertEquals(1000.0, claim.prizeValue, 0.0)
         assertNull(claim.claimNumber)
         assertNull(claim.submittedAt)
+        // maskedEmail is absent from older backends — decodes to null.
+        assertNull(claim.maskedEmail)
         // Pending winner flow works even when the giveaway is null.
         assertNull(response.giveaway)
+    }
+
+    @Test
+    fun `prizeClaim block decodes the masked winning email`() = runTest {
+        coEvery { networkClient.authenticatedPost("getActiveGiveaway", any()) } returns jsonObj(
+            """
+            {
+              "prizeClaim": {
+                "status": "pending",
+                "giveawayId": "gw-123",
+                "prizeDescription": "Cash",
+                "prizeValue": 1000,
+                "maskedEmail": "d********r@winr.example.com"
+              }
+            }
+            """
+        )
+
+        val claim = api.getActiveGiveaway().prizeClaim
+        assertNotNull(claim)
+        assertEquals("d********r@winr.example.com", claim!!.maskedEmail)
     }
 
     @Test
@@ -145,6 +168,7 @@ class PrizeClaimApiTest {
             zip = "11201",
             country = "United States",
             photoBase64 = "aGVsbG8=",
+            story = "Buying my mom dinner.",
         )
 
         val body = bodySlot.captured
@@ -160,7 +184,7 @@ class PrizeClaimApiTest {
         assertEquals("11201", body["zip"]?.jsonPrimitive?.content)
         assertEquals("United States", body["country"]?.jsonPrimitive?.content)
         assertEquals("aGVsbG8=", body["photoBase64"]?.jsonPrimitive?.content)
-        assertNull(body["story"])
+        assertEquals("Buying my mom dinner.", body["story"]?.jsonPrimitive?.content)
 
         assertEquals("9876543210", response.claimNumber)
         assertEquals("2026-08-04T19:00:00.000Z", response.submittedAt)

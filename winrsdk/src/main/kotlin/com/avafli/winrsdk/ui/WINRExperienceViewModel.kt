@@ -30,11 +30,13 @@ import java.util.TimeZone
 // ── V2 state machine (mirrors iOS WINRExperienceViewModel) ──
 //
 // loading → emailCapture (until consent) → streak dashboard, with an automatic
-// claim on open. Day 1 lands on the celebration modal (dailyConfirmed); Day 2+
-// stages a PREDICTED grant from the pre-claim status response so the
-// celebration is the dashboard's FIRST visible frame (reveal ~0.15s after
-// mount — no pinned pre-claim flash, no claim tap), while the real claim runs
-// in the background and reconciles silently. The rewarded-video bonus flow is
+// claim on open. Day 1 AND Day 2+ celebrate IN PLACE (the Day-1 "You're in!"
+// modal is gone): the dashboard mounts as the first-frame celebration — Day 1
+// stages the REAL grant from the awaited email-path claim, Day 2+ stages a
+// PREDICTED grant from the pre-claim status response (reveal ~0.15s after
+// mount — no pinned pre-claim flash, no claim tap) while the real claim runs
+// in the background and reconciles silently. Only the toast headline differs
+// ("YOU'RE IN!" vs "YOU'RE ON A ROLL!"). The rewarded-video bonus flow is
 // parked (Phase 1) and has been removed.
 
 internal sealed class ExperienceScreen {
@@ -45,12 +47,6 @@ internal sealed class ExperienceScreen {
         val streakState: StreakState,
         val entriesToday: Int,
         val ladder: List<Int>
-    ) : ExperienceScreen()
-
-    /** Celebration modal over the (blurred) dashboard. */
-    data class DailyConfirmed(
-        val grant: DailyEntryGrant,
-        val totalEntries: Int
     ) : ExperienceScreen()
 
     object HowItWorks : ExperienceScreen()
@@ -82,17 +78,18 @@ internal data class ExperienceUiState(
     val displayStreakDay: Int = 1,
     val displayTotalEntries: Int = 0,
 
-    // ── V2 reveal flow (Day 2+) — mirrors iOS ──
+    // ── V2 reveal flow (Day 1 AND Day 2+, unified) — mirrors iOS ──
     //
     // The celebration is the dashboard's FIRST visible frame: before the
-    // dashboard state is entered, a PREDICTED grant (ladder value for today's
-    // streak day) is staged from the pre-claim status response, and the reveal
-    // fires on the first composition (~0.15s after mount) — the day tile
-    // checks off with confetti, the totals count up, and the bar opens ON the
-    // "YOU'RE ON A ROLL!" toast. The real claim runs in the background and
-    // reconciles the numbers silently (no second celebration; a failure
-    // settles back to server truth quietly). The pill reads "GOT IT" the
-    // whole time — there is no claim tap.
+    // dashboard state is entered, a grant is staged — Day 1 the REAL grant
+    // from the awaited email-path claim, Day 2+ a PREDICTED grant (ladder
+    // value for today's streak day) from the pre-claim status response — and
+    // the reveal fires on the first composition (~0.15s after mount): the day
+    // tile checks off with confetti, the totals count up, and the bar opens
+    // ON the toast ("YOU'RE IN!" on Day 1, "YOU'RE ON A ROLL!" on Day 2+).
+    // Any background claim reconciles the numbers silently (no second
+    // celebration; a failure settles back to server truth quietly). The pill
+    // reads "GOT IT" the whole time — there is no claim tap.
 
     /**
      * The grant staged for the auto-reveal (null when nothing is pending):
@@ -204,7 +201,10 @@ internal class WINRExperienceViewModel(
         viewModelScope.launch { loadInternal(cachedGiveaway) }
     }
 
-    private suspend fun loadInternal(cachedGiveaway: Giveaway? = null) {
+    private suspend fun loadInternal(
+        cachedGiveaway: Giveaway? = null,
+        claimBeforeDashboard: Boolean = false,
+    ) {
         // Always fetch fresh claim status from the backend. The giveaway config
         // may already be cached, but claimedToday can change between opens.
         var backendClaimedToday: Boolean? = null
@@ -291,6 +291,18 @@ internal class WINRExperienceViewModel(
             return
         }
 
+        // Email path (Day 1): claim FIRST, while the capture view's spinner is
+        // still up. On success the celebration is staged from the REAL
+        // response (synchronous with the transition — no prediction needed)
+        // and the caches below already reflect the claim, so the predicted
+        // staging is naturally skipped. On failure this is a no-op and the
+        // normal predict → auto-claim → reconcile path takes over.
+        if (claimBeforeDashboard && backendClaimedToday == false) {
+            claimAndStageBeforeDashboard()
+            backendClaimedToday = cachedBackendClaimedToday
+            backendStreakDay = cachedBackendStreakDay
+        }
+
         computeStreakAndMoveToDashboard(backendClaimedToday, backendStreakDay)
 
         // V2 experience: entries are granted automatically when the drawer opens —
@@ -333,14 +345,18 @@ internal class WINRExperienceViewModel(
             )
             saveStreakState(state)
 
-            // V2 predicted reveal (Day 2+ unclaimed): the celebration is the
-            // dashboard's FIRST visible frame — no pinned pre-claim flash and
-            // no wait for the claim round-trip. Stage a PREDICTED grant from
-            // the pre-claim response (the ladder value for today's streak day)
-            // BEFORE entering the dashboard state and arm the reveal for the
-            // first composition; the real claim (kicked off by the caller)
-            // reconciles silently when it returns.
-            if (!backendClaimedToday && day >= 2) {
+            // V2 predicted reveal (Day 1 AND Day 2+ unclaimed): the
+            // celebration is the dashboard's FIRST visible frame — no pinned
+            // pre-claim flash and no wait for the claim round-trip. Stage a
+            // PREDICTED grant from the pre-claim response (the ladder value
+            // for today's streak day) BEFORE entering the dashboard state and
+            // arm the reveal for the first composition; the real claim
+            // (kicked off by the caller) reconciles silently when it returns.
+            // Day 1 normally never reaches this — the email path claims
+            // before the dashboard — but an interrupted Day-1 open (killed
+            // app between email submit and claim) falls through here and
+            // still celebrates in place.
+            if (!backendClaimedToday && day >= 1) {
                 val predictedEntries = entriesToday
                 val predictedTotal = total + predictedEntries
                 val predictedState = StreakState(
@@ -376,6 +392,10 @@ internal class WINRExperienceViewModel(
                 displayStreakDay = day,
                 displayTotalEntries = total,
             )
+            // Email-path Day 1: the grant staged from the awaited claim fires
+            // as the dashboard's first frame. No-op without a staged grant
+            // (plain already-claimed reopens).
+            scheduleAutoReveal()
             return
         }
 
@@ -430,6 +450,63 @@ internal class WINRExperienceViewModel(
         }
     }
 
+    /**
+     * Email path (Day 1): awaited claim BEFORE the dashboard ever mounts. On
+     * success the celebration is staged from the REAL response, so the first
+     * dashboard frame counts 0 → N under the "YOU'RE IN!" toast. On failure
+     * this is a no-op — loadInternal falls through to the predicted staging
+     * and the silent auto-claim retry, the same as any other open.
+     */
+    private suspend fun claimAndStageBeforeDashboard() {
+        try {
+            val response = api.claimDailyEntries(TimeZone.getDefault().id)
+            val grantEntries = response.entries +
+                (response.weeklyBonusEntries ?: 0) +
+                (response.monthlyBonusEntries ?: 0) +
+                (response.milestone?.bonusEntries ?: 0) +
+                (response.monthlyMilestone?.bonusEntries ?: 0)
+
+            cachedBackendTotalEntries = response.totalEntries
+            cachedBackendStreakDay = response.streakDay
+            cachedBackendClaimedToday = true
+
+            saveStreakState(
+                StreakState(
+                    currentDay = response.streakDay,
+                    claimedToday = true,
+                    totalEntries = response.totalEntries,
+                    lastClaimDate = LocalDate.now().toString(),
+                )
+            )
+
+            _uiState.value = _uiState.value.copy(
+                pendingRevealGrant = DailyEntryGrant(
+                    entries = grantEntries,
+                    streakDay = response.streakDay,
+                    totalEntries = response.totalEntries,
+                    weeklyBonusEntries = response.weeklyBonusEntries,
+                    monthlyBonusEntries = response.monthlyBonusEntries,
+                    milestone = response.milestone,
+                ),
+                claimRevealed = false,
+                preClaimTotalEntries = response.totalEntries - grantEntries,
+            )
+
+            analytics?.trackEvent(
+                "winr_daily_entry_claimed",
+                buildMap {
+                    put("day", response.streakDay)
+                    put("entries", response.entries)
+                    response.weeklyBonusEntries?.let { put("weekly_bonus", it) }
+                    response.monthlyBonusEntries?.let { put("monthly_bonus", it) }
+                    response.milestone?.let { put("milestone_day", it.day) }
+                }
+            )
+        } catch (e: Exception) {
+            logger.info("Day-1 claim after email submit failed (dashboard will retry): ${e.message}")
+        }
+    }
+
     // ── Email capture ──
 
     fun submitEmail(email: String, marketingConsent: Boolean = true) {
@@ -455,8 +532,10 @@ internal class WINRExperienceViewModel(
             _uiState.value = _uiState.value.copy(isSubmittingEmail = false)
 
             // Re-load so the (possibly switched) canonical user's authoritative
-            // streak + claim status drive the UI.
-            loadInternal()
+            // streak + claim status drive the UI. The Day-1 claim is awaited
+            // INSIDE the load (capture spinner stays up) so the dashboard
+            // mounts already celebrating — never an uncelebrated streak page.
+            loadInternal(claimBeforeDashboard = true)
         }
     }
 
@@ -521,42 +600,25 @@ internal class WINRExperienceViewModel(
                 // celebration ("YOU EARNED N" / "N ENTRIES ADDED") is complete.
                 val grantEntries = response.entries + streakBonusEntries
 
-                // V2 auto-claim routing (mirrors iOS):
-                // - Day 1 (brand-new or restarted streak, typically right after
-                //   email capture): the "You're in!" celebration modal is the
-                //   reveal.
-                // - Day 2+: no modal, no claim tap. Land on the dashboard pinned
-                //   to yesterday's numbers; the celebration fires on its own a
-                //   beat later (Joe's Slice Day 2+ flow).
-                if (response.streakDay <= 1) {
-                    _uiState.value = _uiState.value.copy(
-                        screen = ExperienceScreen.DailyConfirmed(
-                            grant = grant.copy(entries = grantEntries),
-                            totalEntries = response.totalEntries,
-                        ),
-                        claimedToday = true,
-                        displayStreakDay = response.streakDay,
-                        displayTotalEntries = response.totalEntries,
-                    )
-                } else {
-                    // Reconcile the predicted reveal with server truth
-                    // SILENTLY: totals/streak update in place. claimRevealed
-                    // is deliberately left untouched — the celebration that
-                    // (typically) already played from the predicted grant is
-                    // never replayed.
-                    _uiState.value = _uiState.value.copy(
-                        screen = ExperienceScreen.Streak(updatedStreak, response.entries, displayLadder),
-                        claimedToday = true,
-                        displayStreakDay = response.streakDay,
-                        displayTotalEntries = response.totalEntries,
-                        pendingRevealGrant = grant.copy(entries = grantEntries),
-                        preClaimTotalEntries = response.totalEntries - grantEntries,
-                    )
-                    // No-op if the predicted reveal already played; arms the
-                    // celebration for the offline-cache open that staged no
-                    // prediction.
-                    scheduleAutoReveal()
-                }
+                // V2 auto-claim routing (Day 1 AND Day 2+, unified — the
+                // Day-1 celebration modal is gone): the celebration already
+                // played (or is playing) at mount off the staged grant —
+                // reconcile the staged numbers with server truth SILENTLY:
+                // totals/streak update in place. claimRevealed is deliberately
+                // left untouched — the celebration is never replayed. Day 1
+                // only differs in the toast headline ("YOU'RE IN!" instead of
+                // "YOU'RE ON A ROLL!").
+                _uiState.value = _uiState.value.copy(
+                    screen = ExperienceScreen.Streak(updatedStreak, response.entries, displayLadder),
+                    claimedToday = true,
+                    displayStreakDay = response.streakDay,
+                    displayTotalEntries = response.totalEntries,
+                    pendingRevealGrant = grant.copy(entries = grantEntries),
+                    preClaimTotalEntries = response.totalEntries - grantEntries,
+                )
+                // No-op if the reveal already played; arms the celebration
+                // for the offline-cache open that staged no prediction.
+                scheduleAutoReveal()
                 isClaimingDaily = false
 
                 analytics?.trackEvent(
@@ -717,7 +779,7 @@ internal class WINRExperienceViewModel(
                     zip = form.zip.trim(),
                     country = form.country,
                     photoBase64 = form.photoBase64,
-                    story = null,
+                    story = form.story.trim().ifEmpty { null },
                 )
                 _uiState.value = _uiState.value.copy(
                     isSubmittingClaim = false,

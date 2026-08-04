@@ -94,6 +94,7 @@ internal fun WINRV2DashboardScreen(
                 visitMode = visitMode,
                 claimed = claimedToday && !preReveal,
                 claimedEntries = pendingClaimEntries ?: entriesToday,
+                firstDay = streakDay <= 1,
                 // A staged, not-yet-revealed grant at composition time means
                 // this open IS the celebration: the bar starts ON the toast
                 // (never the pitch first) and slides once to the pitch.

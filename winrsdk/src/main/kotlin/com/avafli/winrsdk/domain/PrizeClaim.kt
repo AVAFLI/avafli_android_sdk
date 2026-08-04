@@ -22,6 +22,11 @@ data class PrizeClaimBlock(
     val giveawayId: String,
     val prizeDescription: String = "",
     val prizeValue: Double = 0.0,
+    /**
+     * Display-only masked winning email ("d********r@winr.example.com") for
+     * the claim form's locked field. Absent from older backends.
+     */
+    val maskedEmail: String? = null,
     /** Present when submitted. */
     val claimNumber: String? = null,
     /** ISO date, when submitted. */
@@ -45,33 +50,50 @@ internal data class PrizeClaimForm(
     val zip: String = "",
     /** JPEG base64 of the optional attached photo (already downscaled/capped). */
     val photoBase64: String? = null,
+    /** Optional "please share a little" story (step 4). Sent trimmed; omitted when empty. */
+    val story: String = "",
     /**
      * Explicit consents (Joe's "review and agree" checkboxes). All three are
-     * REQUIRED — the likeness release in particular must be an affirmative
-     * user action for the publicity authorization to hold up.
+     * REQUIRED for submit, and PRE-CHECKED by default (CTO decision, Aug 2026)
+     * — the user can still untick any of them on the review screen, which
+     * disables SUBMIT until re-affirmed.
      */
-    val confirmsAccuracy: Boolean = false,
-    val authorizesLikeness: Boolean = false,
-    val agreesToRules: Boolean = false,
+    val confirmsAccuracy: Boolean = true,
+    val authorizesLikeness: Boolean = true,
+    val agreesToRules: Boolean = true,
 ) {
     /** Fixed — US-only sweepstakes. */
     val country: String get() = "United States"
 
+    // ── Per-step validity (stepped flow) ──
+
     /**
-     * SUBMIT enables when every required field is present, the zip is a
-     * 5-digit US code, and all three consents are affirmed. Phone, apartment,
-     * and photo are optional.
+     * Step 1 "TELL US ABOUT YOURSELF": first + last name (email is
+     * server-side, phone optional).
      */
-    val isValid: Boolean
-        get() = firstName.trim().isNotEmpty() &&
-            lastName.trim().isNotEmpty() &&
-            street.trim().isNotEmpty() &&
+    val isStep1Valid: Boolean
+        get() = firstName.trim().isNotEmpty() && lastName.trim().isNotEmpty()
+
+    /** Step 2 "WHERE SHOULD WE SEND YOUR PRIZE?": full US shipping address. */
+    val isStep2Valid: Boolean
+        get() = street.trim().isNotEmpty() &&
             city.trim().isNotEmpty() &&
             state.trim().isNotEmpty() &&
-            isValidZip(zip) &&
-            confirmsAccuracy &&
-            authorizesLikeness &&
-            agreesToRules
+            isValidZip(zip)
+
+    // Steps 3 (photo) and 4 (story) are fully optional — always advanceable.
+
+    /** All three review-screen consents affirmed. */
+    val hasAllConsents: Boolean
+        get() = confirmsAccuracy && authorizesLikeness && agreesToRules
+
+    /**
+     * SUBMIT enables when every required field across the steps is present,
+     * the zip is a 5-digit US code, and all three consents are affirmed.
+     * Phone, apartment, photo, and story are optional.
+     */
+    val isValid: Boolean
+        get() = isStep1Valid && isStep2Valid && hasAllConsents
 
     /** "First L." — the public display name on the winner card. */
     val displayName: String

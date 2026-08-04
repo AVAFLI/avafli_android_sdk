@@ -30,14 +30,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import android.os.Build
-import androidx.compose.ui.draw.blur
-import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.ColorMatrix
-import androidx.compose.ui.graphics.Paint
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -237,40 +229,3 @@ internal fun Modifier.winrStaticGlow(accent: Color): Modifier = drawBehind {
         size = Size(size.width + blur * 4f, size.height + blur * 4f),
     )
 }
-
-/**
- * Recedes the dashboard rendered behind the celebration modal.
- *
- * API 31+: a real 3dp render-effect blur ([Modifier.blur]).
- *
- * API 26–30: [Modifier.blur] is a silent no-op (RenderEffect needs S), which
- * used to leave the dashboard fully crisp behind the modal. Instead of an
- * absent blur we make the recession deliberate: the content is drawn through
- * a saveLayer whose color filter drops saturation to 55%, and an extra dim is
- * painted on top (the modal's own 55% scrim then stacks above that). The
- * result reads as an intentionally muted, de-emphasised backdrop. This is a
- * single hardware-accelerated offscreen pass — no software blur, no extra
- * dependencies.
- */
-internal fun Modifier.winrCelebrationBackdrop(): Modifier =
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        blur(3.dp)
-    } else {
-        drawWithCache {
-            val desaturate = Paint().apply {
-                colorFilter = ColorFilter.colorMatrix(
-                    ColorMatrix().apply { setToSaturation(0.55f) },
-                )
-            }
-            val bounds = Rect(Offset.Zero, size)
-            onDrawWithContent {
-                drawIntoCanvas { canvas ->
-                    canvas.saveLayer(bounds, desaturate)
-                    drawContent()
-                    canvas.restore()
-                }
-                // Compensating dim for the missing blur.
-                drawRect(Color.Black.copy(alpha = 0.28f))
-            }
-        }
-    }

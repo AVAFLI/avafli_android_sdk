@@ -35,25 +35,54 @@ class PrizeClaimFormTest {
         assertFalse(validForm.copy(authorizesLikeness = false).isValid)
         assertFalse(validForm.copy(agreesToRules = false).isValid)
         assertFalse(
-            PrizeClaimForm(
-                firstName = "Ada", lastName = "Lovelace", street = "1 Analytical Way",
-                city = "Brooklyn", state = "New York", zip = "11201",
+            validForm.copy(
+                confirmsAccuracy = false,
+                authorizesLikeness = false,
+                agreesToRules = false,
             ).isValid
         )
     }
 
     @Test
-    fun `consents default to off`() {
+    fun `consents default to on - pre-checked per CTO decision`() {
+        // Aug 2026 CTO decision: the review screen shows the three consents
+        // PRE-CHECKED (defaults true); unticking any of them disables SUBMIT.
         val fresh = PrizeClaimForm()
-        assertFalse(fresh.confirmsAccuracy)
-        assertFalse(fresh.authorizesLikeness)
-        assertFalse(fresh.agreesToRules)
+        assertTrue(fresh.confirmsAccuracy)
+        assertTrue(fresh.authorizesLikeness)
+        assertTrue(fresh.agreesToRules)
+        assertTrue(fresh.hasAllConsents)
     }
 
     @Test
-    fun `phone apartment and photo are optional`() {
-        assertTrue(validForm.copy(phone = "", apt = "", photoBase64 = null).isValid)
-        assertTrue(validForm.copy(phone = "5551234567", apt = "4B", photoBase64 = "abc").isValid)
+    fun `phone apartment photo and story are optional`() {
+        assertTrue(validForm.copy(phone = "", apt = "", photoBase64 = null, story = "").isValid)
+        assertTrue(
+            validForm.copy(
+                phone = "5551234567", apt = "4B", photoBase64 = "abc", story = "So excited!",
+            ).isValid
+        )
+    }
+
+    // ── Per-step validity (stepped flow) ──
+
+    @Test
+    fun `step 1 requires first and last name only`() {
+        assertTrue(PrizeClaimForm(firstName = "Ada", lastName = "Lovelace").isStep1Valid)
+        assertFalse(PrizeClaimForm(firstName = "Ada").isStep1Valid)
+        assertFalse(PrizeClaimForm(lastName = "Lovelace").isStep1Valid)
+        assertFalse(PrizeClaimForm(firstName = "  ", lastName = "Lovelace").isStep1Valid)
+    }
+
+    @Test
+    fun `step 2 requires the full US shipping address`() {
+        assertTrue(validForm.isStep2Valid)
+        assertFalse(validForm.copy(street = " ").isStep2Valid)
+        assertFalse(validForm.copy(city = "").isStep2Valid)
+        assertFalse(validForm.copy(state = "").isStep2Valid)
+        assertFalse(validForm.copy(zip = "1120").isStep2Valid)
+        // Apartment stays optional at the step level too.
+        assertTrue(validForm.copy(apt = "").isStep2Valid)
     }
 
     @Test

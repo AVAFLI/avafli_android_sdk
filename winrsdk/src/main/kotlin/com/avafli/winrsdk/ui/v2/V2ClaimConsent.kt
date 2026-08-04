@@ -35,7 +35,8 @@ import androidx.compose.ui.unit.sp
 import com.avafli.winrsdk.domain.PrizeClaimForm
 
 // Joe's "review and agree" consents (ported from iOS WINRClaimConsentRow) —
-// all three required before SUBMIT PRIZE CLAIM.
+// all three required before SUBMIT PRIZE CLAIM. Shown on the review screen
+// ("ALMOST DONE!") pre-checked; unticking any of them disables SUBMIT.
 
 @Composable
 internal fun WINRClaimConsentSection(
@@ -45,7 +46,7 @@ internal fun WINRClaimConsentSection(
 ) {
     Column(
         modifier = Modifier.padding(top = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        verticalArrangement = Arrangement.spacedBy(32.dp),
     ) {
         WINRClaimConsentRow(
             accent = accent,
@@ -126,7 +127,7 @@ private fun WINRClaimConsentRow(
         }
         Text(
             text,
-            style = WINRV2Font.inter(14.sp, color = Color.White),
+            style = WINRV2Font.inter(16.sp, color = Color.White),
             modifier = Modifier.weight(1f),
         )
     }

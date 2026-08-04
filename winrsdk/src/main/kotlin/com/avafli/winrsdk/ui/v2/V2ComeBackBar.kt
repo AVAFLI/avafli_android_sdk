@@ -45,10 +45,11 @@ import kotlinx.coroutines.delay
  * black strip, calendar icon, reward line, celebratory sprinkles drifting over it.
  *
  * Joe's sequence: on a CELEBRATION open ([celebrationOpen]) the bar's FIRST
- * visible state is the toast — "YOU'RE ON A ROLL! / Your {N} entries have been
- * added automatically." — never the pitch first; it holds ~2.5s then slides
- * ONCE to the come-back pitch, the final state. Non-celebration opens (same-day
- * reopens, Day 1 modal) rest on the pitch directly. If `claimed` flips true
+ * visible state is the toast — "YOU'RE IN!" on Day 1, "YOU'RE ON A ROLL!" on
+ * Day 2+, over "Your {N} entries have been added automatically." — never the
+ * pitch first; it holds ~2.5s then slides ONCE to the come-back pitch, the
+ * final state. Non-celebration opens (same-day reopens) rest on the pitch
+ * directly. If `claimed` flips true
  * mid-life without a celebration mount (late-arriving grant), the toast slides
  * in, holds, and slides back — same single forward carousel.
  */
@@ -65,6 +66,7 @@ internal fun WINRV2ComeBackBar(
     claimed: Boolean = false,
     claimedEntries: Int = 0,
     celebrationOpen: Boolean = false,
+    firstDay: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     // Captured at mount: a celebration open starts ON the toast (no slide-in,
@@ -123,7 +125,7 @@ internal fun WINRV2ComeBackBar(
         ) { barPhase ->
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 when (barPhase) {
-                    WINRV2BarPhase.Added -> ClaimedContent(accent, claimedEntries)
+                    WINRV2BarPhase.Added -> ClaimedContent(accent, claimedEntries, firstDay)
                     WINRV2BarPhase.Pitch -> ComeBackContent(accent, nextEntries, visitMode)
                 }
             }
@@ -182,7 +184,7 @@ private fun ComeBackContent(accent: Color, nextEntries: Int, visitMode: Boolean)
 }
 
 @Composable
-private fun ClaimedContent(accent: Color, claimedEntries: Int) {
+private fun ClaimedContent(accent: Color, claimedEntries: Int, firstDay: Boolean) {
     Row(
         modifier = Modifier.padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -193,8 +195,10 @@ private fun ClaimedContent(accent: Color, claimedEntries: Int) {
             lineWidth = 3.5.dp,
         )
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            // Day 1 celebrates in place exactly like Day 2+ (the "You're in!"
+            // modal is gone) — only the toast headline differs.
             WINRAutoSizeText(
-                "YOU’RE ON A ROLL!",
+                if (firstDay) "YOU’RE IN!" else "YOU’RE ON A ROLL!",
                 style = WINRV2Font.inter(20.sp, FontWeight.Black, tracking = (-0.6).sp, color = accent),
                 minScale = 0.7f,
             )

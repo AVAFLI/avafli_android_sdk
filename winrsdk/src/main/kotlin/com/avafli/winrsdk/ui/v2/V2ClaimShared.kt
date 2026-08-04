@@ -2,7 +2,6 @@ package com.avafli.winrsdk.ui.v2
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -27,18 +26,31 @@ import com.avafli.winrsdk.R
 // Shared chrome for the winner claim flow (ported from iOS WINRV2Claim.swift):
 // header with logo + X only, and the dark info card with a leading icon.
 
-/** Claim-flow header: publisher logo centered, X close only (no "?"). */
+/**
+ * Claim-flow header: publisher logo centered, X close only (no "?"), plus an
+ * optional back chevron on the left (the stepped form, steps 2+ / review).
+ */
 @Composable
 internal fun WINRClaimHeader(
     logoUrl: String?,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
+    showsBack: Boolean = false,
+    onBack: () -> Unit = {},
 ) {
     Box(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp),
     ) {
+        if (showsBack) {
+            WINRV2CircleButton(
+                onClick = onBack,
+                modifier = Modifier.align(Alignment.CenterStart),
+            ) {
+                WINRV2BackChevron()
+            }
+        }
         val logo = rememberWinrRemoteImage(logoUrl)
         Box(
             modifier = Modifier
@@ -94,8 +106,3 @@ internal fun WINRClaimInfoCard(
         Box(Modifier.padding(start = 14.dp)) { content() }
     }
 }
-
-/** The dark rounded field background shared by the claim form's inputs. */
-internal fun Modifier.winrClaimFieldBackground(): Modifier = this
-    .background(Color.White.copy(alpha = 0.07f), RoundedCornerShape(8.dp))
-    .border(1.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(8.dp))

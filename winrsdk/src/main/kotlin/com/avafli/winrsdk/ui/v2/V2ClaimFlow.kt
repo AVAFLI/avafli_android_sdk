@@ -10,10 +10,10 @@ import com.avafli.winrsdk.ui.ExperienceUiState
 import com.avafli.winrsdk.ui.WinnerClaimStep
 
 //
-// Winner prize-claim flow (Joe's Light variant), ported from iOS
-// WINRV2Claim.swift: winner splash → single-page claim form → confirmation
-// with the OFFICIAL WINNER card. Shown when the giveaway payload carries
-// prizeClaim.status == "pending".
+// Winner prize-claim flow (Joe's stepped Figma design), ported from iOS
+// WINRV2Claim.swift: winner splash → 4 form steps + review (V2ClaimSteps.kt)
+// → confirmation with the OFFICIAL WINNER card. Shown when the giveaway
+// payload carries prizeClaim.status == "pending".
 //
 
 @Composable
@@ -44,9 +44,10 @@ internal fun WINRV2WinnerClaimFlow(
                 onClose = onClose,
             )
 
-            is WinnerClaimStep.Form -> WINRV2ClaimFormScreen(
+            is WinnerClaimStep.Form -> WINRV2ClaimStepsFlow(
                 accent = accent,
                 logoUrl = logoUrl,
+                claim = claim,
                 prefill = claimFormPrefill,
                 isSubmitting = ui.isSubmittingClaim,
                 submitError = ui.claimSubmitError,

@@ -7,6 +7,7 @@ import com.avafli.winrsdk.storage.PreferencesStorage
 import com.avafli.winrsdk.ui.ExperienceScreen
 import com.avafli.winrsdk.ui.WINRExperienceViewModel
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -180,7 +181,10 @@ class ExperienceRevealFlowTest {
     }
 
     @Test
-    fun `day1 keeps the celebration modal path with no predicted grant`() = runTest(dispatcher) {
+    fun `day1 open celebrates in place - no modal state`() = runTest(dispatcher) {
+        // Unified Day-1 flow (Aug 2026 CTO decision): the "You're in!" modal
+        // is gone — Day 1 stages the grant and celebrates on the dashboard
+        // exactly like Day 2+, only the toast headline differs.
         coEvery { api.getActiveGiveaway() } returns WinrApi.GetActiveGiveawayResponse(
             giveaway = giveaway,
             claimedToday = false,
@@ -194,11 +198,52 @@ class ExperienceRevealFlowTest {
 
         viewModel.load()
         runCurrent()
-        // Day 1 never stages a prediction — the modal is the reveal.
-        assertNull(viewModel.uiState.value.pendingRevealGrant)
+        // Day 1 stages the predicted grant like any other unclaimed open.
+        val staged = viewModel.uiState.value
+        assertTrue(staged.screen is ExperienceScreen.Streak)
+        assertEquals(1, staged.pendingRevealGrant?.entries)
+        assertEquals(0, staged.preClaimTotalEntries)
 
         advanceUntilIdle()
-        assertTrue(viewModel.uiState.value.screen is ExperienceScreen.DailyConfirmed)
+        val ui = viewModel.uiState.value
+        // Still the dashboard — reconciled in place, never a modal state.
+        val screen = ui.screen as ExperienceScreen.Streak
+        assertEquals(1, screen.streakState.totalEntries)
+        assertTrue(ui.claimedToday)
+        assertEquals(1, ui.pendingRevealGrant?.entries)
+        assertEquals(0, ui.preClaimTotalEntries)
+        assertTrue(ui.claimRevealed)
+    }
+
+    @Test
+    fun `email path claims before the dashboard and stages the real grant`() = runTest(dispatcher) {
+        // Day-1 email submit: the claim is awaited INSIDE the re-load (capture
+        // spinner still up), the dashboard mounts with the REAL grant staged
+        // (0 → N count-up under the "YOU'RE IN!" toast), and the background
+        // auto-claim is skipped — exactly one claim call.
+        coEvery { api.submitEmail(any(), any(), any()) } returns WinrApi.SubmitEmailResult(success = true)
+        coEvery { api.getActiveGiveaway() } returns WinrApi.GetActiveGiveawayResponse(
+            giveaway = giveaway,
+            claimedToday = false,
+            streakDay = 1,
+            totalEntries = 0,
+        )
+        coEvery { api.claimDailyEntries(any()) } returns WinrApi.ClaimDailyEntriesResponse(
+            entries = 1, streakDay = 1, totalEntries = 1,
+            weeklyBonusEntries = null, monthlyBonusEntries = null, milestone = null,
+        )
+
+        viewModel.submitEmail("ada@example.com")
+        advanceUntilIdle()
+
+        val ui = viewModel.uiState.value
+        val screen = ui.screen as ExperienceScreen.Streak
+        assertTrue(ui.claimedToday)
+        assertEquals(1, screen.streakState.totalEntries)
+        // The staged grant is the REAL claim response, from a 0 baseline.
+        assertEquals(1, ui.pendingRevealGrant?.entries)
+        assertEquals(0, ui.preClaimTotalEntries)
+        coVerify(exactly = 1) { api.claimDailyEntries(any()) }
     }
 
     @Test
