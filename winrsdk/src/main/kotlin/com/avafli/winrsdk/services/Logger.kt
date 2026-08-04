@@ -14,7 +14,11 @@ internal class Logger(private val isDebug: Boolean = false) {
     }
 
     fun info(message: String) {
-        Log.i(TAG, message)
+        // Gated like the other SDKs (iOS/Web/Flutter default to error/warn):
+        // publishers' release builds shouldn't emit WINR chatter.
+        if (isDebug) {
+            Log.i(TAG, message)
+        }
     }
 
     fun warn(message: String) {

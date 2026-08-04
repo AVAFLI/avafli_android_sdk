@@ -7,6 +7,10 @@ plugins {
 }
 
 android {
+    // Unit tests run against unminified debug classes only — the release
+    // variant's R8 pass obfuscates internals and made testReleaseUnitTest
+    // fail on ClassNotFound for every suite (audit blocker).
+
     namespace = "com.avafli.winrsdk"
     compileSdk = 35
 
@@ -127,5 +131,11 @@ afterEvaluate {
                 }
             }
         }
+    }
+}
+
+androidComponents {
+    beforeVariants(selector().withBuildType("release")) {
+        it.enableUnitTest = false
     }
 }
