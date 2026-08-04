@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -37,7 +38,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.avafli.winrsdk.R
 import kotlin.math.roundToInt
-import kotlinx.coroutines.delay
 
 // Day 2+ prize card (Joe's Aug-2026 dark full-bleed revision, ported from iOS
 // WINRV2PrizeCard): the prize art fills the WHOLE card, a solid black stats
@@ -237,8 +237,9 @@ private fun Headline(
 
 /**
  * The stats-strip total, ported from iOS WINRV2CountUpText: counts up
- * smoothly (~0.7s ease-out) when the value increases and pops a brief star
- * burst as it lands on the new total.
+ * smoothly (~0.7s ease-out) when the value increases and pops Joe's Figma
+ * confetti-burst GIF as it lands on the new total (one-shot, removed when
+ * the GIF finishes).
  */
 @Composable
 internal fun WINRV2CountUpText(value: Int, accent: Color) {
@@ -257,9 +258,8 @@ internal fun WINRV2CountUpText(value: Int, accent: Color) {
             shown = from + ((value - from) * this.value).roundToInt()
         }
         shown = value
+        // The GIF's onFinished removes the burst overlay.
         burst = true
-        delay(900)
-        burst = false
     }
 
     Box(contentAlignment = Alignment.Center) {
@@ -268,10 +268,13 @@ internal fun WINRV2CountUpText(value: Int, accent: Color) {
             style = WINRV2Font.inter(15.sp, FontWeight.Black, tracking = (-0.3).sp, color = accent),
         )
         if (burst) {
-            WINRV2ConfettiField(
-                modifier = Modifier.matchParentSize(),
-                count = 8,
-                speed = 1.4,
+            // Joe's Figma confetti burst: one-shot GIF shown as the count
+            // lands, removed once it finishes. Larger than the text but must
+            // not affect layout (requiredSize draws past the bounds).
+            WINRV2GifBurst(
+                resId = R.raw.winr_confetti_burst,
+                modifier = Modifier.requiredSize(width = 54.dp, height = 44.dp),
+                onFinished = { burst = false },
             )
         }
     }

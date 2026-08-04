@@ -45,10 +45,11 @@ import kotlin.math.max
 import kotlin.math.sin
 
 //
-// Motion for the V2 experience, ported from iOS WINRV2Effects.swift (Joe's Figma
-// prototype GIFs): confetti fields, the draw-on white checkmark, and the pulsing
-// glow on the active streak tile. Everything is real Canvas/Compose animation
-// (no GIFs) so it stays crisp at any scale and respects the publisher accent.
+// Motion for the V2 experience, ported from iOS WINRV2Effects.swift: native
+// Canvas/Compose confetti fields, the draw-on white checkmark, and the pulsing
+// glow used by the modals and toast bar. The Day 2+ reveal beat itself plays
+// Joe's ACTUAL Figma animation files (bundled GIFs) via WINRV2GifBurst — see
+// WINRV2Gif.kt.
 //
 
 // MARK: - Confetti

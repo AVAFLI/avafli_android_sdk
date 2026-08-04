@@ -15,6 +15,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,21 +50,34 @@ internal fun WINRV2StreakTile(
     modifier: Modifier = Modifier,
 ) {
     when (state) {
-        WINRV2TileState.Active ->
-            // Joe's active-tile motion: breathing glow + confetti specks scattered
-            // around the tile. The confetti field is larger than the tile but must
-            // not affect layout (it draws past the tile bounds, like iOS .background).
+        WINRV2TileState.Active -> {
+            // Joe's ACTUAL Figma animation: the explosion GIF (check + confetti
+            // burst together) mounts exactly when the tile flips to Active — the
+            // reveal beat — plays ONCE at ~150% of the tile so it overflows the
+            // bounds like an explosion, then is REMOVED; the tile's own small
+            // check (icon slot) is the resting state, matching Joe's settled
+            // frame and the completed tiles. The overlay is larger than the tile
+            // but must not affect layout (requiredSize draws past the tile
+            // bounds, like iOS .overlay).
+            var burstFinished by remember { mutableStateOf(false) }
             Box(
                 modifier.size(width = 106.dp, height = 134.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                WINRV2ConfettiField(
-                    modifier = Modifier.requiredSize(width = 152.dp, height = 176.dp),
-                    count = 12,
-                    speed = 0.7,
+                TileCard(
+                    accent, day, entries, state, visitMode,
+                    Modifier.winrPulseGlow(accent),
+                    activeBurstFinished = burstFinished,
                 )
-                TileCard(accent, day, entries, state, visitMode, Modifier.winrPulseGlow(accent))
+                if (!burstFinished) {
+                    WINRV2GifBurst(
+                        resId = R.raw.winr_tile_burst,
+                        modifier = Modifier.requiredSize(200.dp),
+                        onFinished = { burstFinished = true },
+                    )
+                }
             }
+        }
 
         WINRV2TileState.Ready ->
             // Pre-reveal the tile is CALM — a static glow only. Every moving
@@ -80,6 +97,7 @@ private fun TileCard(
     state: WINRV2TileState,
     visitMode: Boolean,
     modifier: Modifier = Modifier,
+    activeBurstFinished: Boolean = false,
 ) {
     val noun = if (visitMode) "VISIT" else "DAY"
     val numberColor = when (state) {
@@ -126,10 +144,19 @@ private fun TileCard(
                     contentDescription = null,
                     modifier = Modifier.size(20.dp),
                 )
-                WINRV2TileState.Active -> WINRV2AnimatedCheckmark(
-                    modifier = Modifier.size(20.dp),
-                    lineWidth = 2.5.dp,
-                )
+                // During the burst the GIF overlay paints the check (the slot
+                // stays an empty spacer so the card layout matches the other
+                // states); once it finishes the tile rests on the same small
+                // static check as completed tiles.
+                WINRV2TileState.Active -> if (activeBurstFinished) {
+                    Image(
+                        painter = painterResource(R.drawable.winr_check_tile_completed),
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                    )
+                } else {
+                    Unit
+                }
                 // Joe's frames: the current tile pre-check shows ONLY the
                 // glowing number — no icon. The enclosing 24dp slot keeps its
                 // size so the check can draw into place without the card

@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -53,7 +54,13 @@ internal fun WINRV2ExperienceRoot(
 
     var drawerAppeared by remember { mutableStateOf(false) }
     var showWinnerModal by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { drawerAppeared = true }
+    val context = LocalContext.current
+    LaunchedEffect(Unit) {
+        drawerAppeared = true
+        // Decode Joe's Figma reveal GIFs off-main NOW so mounting them at the
+        // reveal beat is instant (the 47-frame tile GIF costs ~0.7s to decode).
+        WINRV2GifAssets.prewarm(context)
+    }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val screenHeight = maxHeight
