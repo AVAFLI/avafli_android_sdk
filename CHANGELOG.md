@@ -1,5 +1,9 @@
 # Changelog
 
+## [2.0.1] - 2026-08-04
+### Fixed
+- Ship the Gradle wrapper + JitPack build config so `com.github.AVAFLI:winr_android_sdk` resolves from JitPack.
+
 All notable changes to the WINR Android SDK will be documented in this file.
 
 ## [2.0.0] - 2026-08-03
