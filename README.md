@@ -140,6 +140,10 @@ WINR.configure(config)
 
 The V2 experience presents itself automatically once per calendar day (first app-open of the day). Entries are claimed automatically when it opens. On Day 1 a celebration modal confirms the grant; from Day 2 on, the dashboard holds the previous day's numbers behind a "CLAIM N ENTRIES" button — tapping it is the celebration (the day tile checks off and the totals advance in place). There is no launch API — after `configure()`, the SDK handles everything: presentation timing, entry claiming, and celebration.
 
+## Winner Experience
+
+When one of your users is drawn as a giveaway winner, the drawer automatically opens on a winner splash instead of the dashboard, then walks them through a prize-claim form (name, shipping address, optional photo) and a confirmation with their claim number. This requires no integration work — the flow appears only for the drawn winner and disappears once their claim is submitted.
+
 ## Push Notifications
 
 Drive re-engagement with daily reminders. Publishers forward their FCM token to WINR:

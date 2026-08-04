@@ -2,6 +2,15 @@
 
 All notable changes to the WINR Android SDK will be documented in this file.
 
+## [2.3.0] - 2026-08-04
+
+### Added
+- **Winner prize-claim flow** — when the backend marks the user as the drawn winner (`prizeClaim.status == "pending"` on `getActiveGiveaway`), the drawer opens on the winner splash instead of the dashboard: CONGRATULATIONS! + prize strip → single-page claim form (name, address, 50-state picker, optional phone/photo; email stays locked to the account) → `submitPrizeClaim` → confirmation with the gold OFFICIAL WINNER card and RETURN TO APP. Appears automatically; no integration work. The daily auto-claim still fires silently while the flow is up, and an already-submitted claim shows the normal dashboard. Mirrors iOS `2127ec1` (2.3.0).
+
+### Changed
+- Post-reveal come-back bar now celebrates "{N} ENTRIES ADDED / You're on a roll!" (animated swap on the CLAIM reveal and in any claimed-today dashboard state); pre-reveal/unclaimed states keep the come-back pitch.
+- Prize card is dark and full-bleed: the prize image fills the whole card, the streak/total-entries stats sit in a solid black strip inside the top edge, and the headline overlays the bottom over a black→transparent scrim (right-aligned "WIN $1,000 / CASH PRIZE" for cash; centered "Win a {Prize}" + accent value line otherwise). The capture screen's white prize strip is unchanged.
+
 ## [2.2.0] - 2026-08-04
 ### Changed
 - **Day 2+ reveal flow** — the auto-claim still fires silently the moment the drawer opens, but returning users no longer get the celebration modal. The dashboard opens pinned to yesterday's numbers (streak N-1, pre-claim total, today's tile glowing with a flame and no checkmark) behind a "CLAIM N ENTRIES" button; tapping it is the celebration — the tile checks off with confetti, the streak label and total spring forward, and the button becomes GOT IT. Mirrors iOS `e7fae27`.
