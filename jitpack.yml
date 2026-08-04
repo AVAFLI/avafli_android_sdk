@@ -1,8 +1,2 @@
 jdk:
-  - openjdk17
-
-before_install:
-  - sdk install java 17.0.9-zulu
-
-install:
-  - ./gradlew :winrsdk:publishToMavenLocal
+  - openjdk21
