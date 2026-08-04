@@ -1,7 +1,7 @@
 # WINR Android SDK
 **Drop-in sweepstakes, prizing, and gamification for your Android app**
 
-[![JitPack](https://jitpack.io/v/avafli/winr-android-sdk.svg)](https://jitpack.io/#avafli/winr-android-sdk)
+[![JitPack](https://jitpack.io/v/AVAFLI/winr_android_sdk.svg)](https://jitpack.io/#AVAFLI/winr_android_sdk)
 [![API](https://img.shields.io/badge/API-26%2B-brightgreen.svg)](https://android-arsenal.com/api?level=26)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.1%2B-7F52FF.svg?logo=kotlin&logoColor=white)](https://kotlinlang.org)
 [![Compose](https://img.shields.io/badge/Jetpack%20Compose-Material%203-4285F4.svg?logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
@@ -72,7 +72,7 @@ In your app-level `build.gradle.kts`:
 
 ```kotlin
 dependencies {
-    implementation("com.github.AVAFLI:winr_android_sdk:2.2.0")
+    implementation("com.github.AVAFLI:winr_android_sdk:v2.3.0")
 }
 ```
 
@@ -138,7 +138,7 @@ WINR.configure(config)
 
 ## The Experience
 
-The V2 experience presents itself automatically once per calendar day (first app-open of the day). Entries are claimed automatically when it opens. On Day 1 a celebration modal confirms the grant; from Day 2 on, the dashboard holds the previous day's numbers behind a "CLAIM N ENTRIES" button — tapping it is the celebration (the day tile checks off and the totals advance in place). There is no launch API — after `configure()`, the SDK handles everything: presentation timing, entry claiming, and celebration.
+The V2 experience presents itself automatically once per calendar day (first app-open of the day). Entries are claimed automatically when it opens, and the celebration is the first thing the user sees: the dashboard opens with today's grant already showing — the day tile checks off with a confetti burst, the total counts up and pops, and the bar leads with a "YOU'RE ON A ROLL!" toast before settling into the come-back message. There is no button to tap to collect entries (the pill just reads GOT IT and closes) and no launch API — after `configure()`, the SDK handles everything: presentation timing, entry claiming, and celebration. Brand-new users first submit their email, then get a one-time "You're in!" welcome modal.
 
 ## Winner Experience
 
