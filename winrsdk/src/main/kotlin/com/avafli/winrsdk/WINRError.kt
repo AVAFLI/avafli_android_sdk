@@ -37,6 +37,12 @@ sealed class WINRError(message: String, cause: Throwable? = null) : Exception(me
      */
     class ServiceUnavailable : WINRError("The WINR experience is no longer available.")
 
+    /**
+     * The user opted out (RTD — Right To Delete). The experience is permanently
+     * silenced on this device: never auto-presented, and manual present() refuses.
+     */
+    class OptedOut : WINRError("The user has opted out of the WINR experience.")
+
     /** An unknown error occurred. */
     class Unknown(message: String = "An unknown error occurred", cause: Throwable? = null) :
         WINRError(message, cause)

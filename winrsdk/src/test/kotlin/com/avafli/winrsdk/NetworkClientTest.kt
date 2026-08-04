@@ -32,6 +32,7 @@ class NetworkClientTest {
             context = mockk(relaxed = true),
             apiKey = "test-key",
             environment = WINREnvironment.Development,
+            user = WINRUser(id = "test-user", firstName = "Test", lastName = "User"),
             options = WINROptions(
                 debugLogging = true,
                 enableCertificatePinning = false,

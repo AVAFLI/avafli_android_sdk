@@ -1,0 +1,238 @@
+package com.avafli.winrsdk.ui.v2
+
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.sp
+import com.avafli.winrsdk.R
+import com.avafli.winrsdk.domain.Milestone
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.net.HttpURLConnection
+import java.net.URL
+import java.text.NumberFormat
+import java.util.Locale
+
+//
+// Design system for the V2 experience — tokens, fonts, and ladder math, ported
+// 1:1 from the iOS WINRV2Theme.swift (Joe's Figma WINR-High-V2). Everything is
+// intentionally HARDCODED to the design except the publisher-configurable
+// primary color: publishers can customize ONLY logo, prize image, primary color.
+//
+
+// MARK: - Colors (Figma design tokens)
+
+internal object WINRV2Color {
+    /** background/primary — the drawer + tile background ("gunmetal"). */
+    val gunmetal = Color(0xFF1D2330)
+
+    /** black (deep charcoal) — header circle buttons. */
+    val deepCharcoal = Color(0xFF0B0D12)
+
+    /** Modal panel background. */
+    val panel = Color(0xFF141519)
+
+    /** Modal hairline border. */
+    val panelBorder = Color(0xFF515151)
+
+    /** WINR brand blue — the DEFAULT primary when a publisher hasn't set one. */
+    val winrBlue = Color(0xFF268FFF)
+
+    val textPrimary = Color.White
+    val textSecondary = Color.White.copy(alpha = 0.75f)
+    val textTertiary = Color.White.copy(alpha = 0.6f)
+    val foregroundSecondary = Color.White.copy(alpha = 0.5f)
+}
+
+/**
+ * The publisher's primary color (branding.primaryColor) with the WINR-blue default.
+ * Drives: CTA buttons, streak-tile outlines/glow, accent text, power-up tiles.
+ */
+internal fun winrV2Accent(hex: String?): Color {
+    if (hex.isNullOrBlank()) return WINRV2Color.winrBlue
+    var h = hex.trim()
+    if (h.startsWith("#")) h = h.substring(1)
+    if (h.length != 6) return WINRV2Color.winrBlue
+    return try {
+        Color(0xFF000000 or h.toLong(16))
+    } catch (_: Exception) {
+        WINRV2Color.winrBlue
+    }
+}
+
+// MARK: - Fonts (Inter + Oswald, bundled in res/font)
+
+internal object WINRV2Font {
+    val interFamily = FontFamily(
+        Font(R.font.winr_inter_regular, FontWeight.Normal),
+        Font(R.font.winr_inter_medium, FontWeight.Medium),
+        Font(R.font.winr_inter_semibold, FontWeight.SemiBold),
+        Font(R.font.winr_inter_bold, FontWeight.Bold),
+        Font(R.font.winr_inter_extrabold, FontWeight.ExtraBold),
+        Font(R.font.winr_inter_black, FontWeight.Black),
+    )
+
+    val oswaldFamily = FontFamily(
+        Font(R.font.winr_oswald_medium, FontWeight.Medium),
+        Font(R.font.winr_oswald_bold, FontWeight.Bold),
+    )
+
+    fun inter(
+        size: TextUnit,
+        weight: FontWeight = FontWeight.Normal,
+        tracking: TextUnit = TextUnit.Unspecified,
+        color: Color = Color.Unspecified,
+        textAlign: TextAlign = TextAlign.Unspecified,
+        lineHeight: TextUnit = TextUnit.Unspecified,
+    ): TextStyle = TextStyle(
+        fontFamily = interFamily,
+        fontSize = size,
+        fontWeight = weight,
+        letterSpacing = tracking,
+        color = color,
+        textAlign = textAlign,
+        lineHeight = lineHeight,
+    )
+
+    fun oswald(
+        size: TextUnit,
+        bold: Boolean = false,
+        color: Color = Color.Unspecified,
+    ): TextStyle = TextStyle(
+        fontFamily = oswaldFamily,
+        fontSize = size,
+        fontWeight = if (bold) FontWeight.Bold else FontWeight.Medium,
+        color = color,
+    )
+}
+
+// MARK: - Number formatting ("1,000" grouping, like iOS .formatted())
+
+internal fun Int.winrFormatted(): String =
+    NumberFormat.getIntegerInstance(Locale.US).format(this.toLong())
+
+// MARK: - Ladder math (mirrors the backend exactly)
+
+internal object WINRV2Ladder {
+    /**
+     * Explicit ladder values cover days 1..ladder.size; beyond that the daily
+     * increment is the bonusEntries of the LATEST passed milestone (the
+     * "+25 EVERY DAY!" accelerators). No milestones → flat at the ladder top.
+     */
+    fun entries(day: Int, ladder: List<Int>, milestones: List<Milestone>?): Int {
+        if (ladder.isEmpty()) return 10
+        if (day <= ladder.size) return ladder[(day - 1).coerceAtLeast(0)]
+        val ms = (milestones ?: emptyList()).sortedBy { it.day }
+        var value = ladder[ladder.size - 1]
+        for (d in (ladder.size + 1)..day) {
+            var rate = 0
+            for (m in ms) {
+                if (m.day < d) rate = m.bonusEntries
+            }
+            value += rate
+        }
+        return value
+    }
+}
+
+// MARK: - Remote images (logo / prize art / avatars) — dependency-free loader
+
+private val winrImageCache = object : LinkedHashMap<String, ImageBitmap>(16, 0.75f, true) {
+    override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, ImageBitmap>?): Boolean =
+        size > 12
+}
+
+/**
+ * Loads a remote bitmap off the main thread with a tiny in-memory LRU cache.
+ * Returns null while loading / on failure (callers render their fallback).
+ */
+@Composable
+internal fun rememberWinrRemoteImage(url: String?): ImageBitmap? {
+    val image by produceState<ImageBitmap?>(
+        initialValue = url?.let { synchronized(winrImageCache) { winrImageCache[it] } },
+        key1 = url
+    ) {
+        if (url.isNullOrBlank()) {
+            value = null
+            return@produceState
+        }
+        synchronized(winrImageCache) { winrImageCache[url] }?.let {
+            value = it
+            return@produceState
+        }
+        value = withContext(Dispatchers.IO) {
+            try {
+                val connection = URL(url).openConnection() as HttpURLConnection
+                connection.connectTimeout = 10_000
+                connection.readTimeout = 15_000
+                connection.instanceFollowRedirects = true
+                connection.inputStream.use { stream ->
+                    android.graphics.BitmapFactory.decodeStream(stream)?.asImageBitmap()
+                }?.also { bitmap ->
+                    synchronized(winrImageCache) { winrImageCache[url] = bitmap }
+                }
+            } catch (_: Exception) {
+                null
+            }
+        }
+    }
+    return image
+}
+
+// MARK: - Auto-shrinking text (SwiftUI minimumScaleFactor equivalent)
+
+/**
+ * Single-style text that scales its font down (to [minScale]) until it fits,
+ * mirroring SwiftUI's `lineLimit + minimumScaleFactor` behavior used across V2.
+ */
+@Composable
+internal fun WINRAutoSizeText(
+    text: String,
+    style: TextStyle,
+    modifier: Modifier = Modifier,
+    maxLines: Int = 1,
+    minScale: Float = 0.5f,
+    textAlign: TextAlign? = null,
+) {
+    var scale by remember(text, style) { mutableStateOf(1f) }
+    var ready by remember(text, style) { mutableStateOf(false) }
+    androidx.compose.material3.Text(
+        text = text,
+        modifier = modifier.drawWithContent { if (ready) drawContent() },
+        style = style.copy(
+            fontSize = style.fontSize * scale,
+            letterSpacing = if (style.letterSpacing != TextUnit.Unspecified) {
+                style.letterSpacing * scale
+            } else {
+                style.letterSpacing
+            },
+        ),
+        maxLines = maxLines,
+        softWrap = maxLines > 1,
+        overflow = TextOverflow.Clip,
+        textAlign = textAlign ?: style.textAlign,
+        onTextLayout = { result ->
+            if (result.hasVisualOverflow && scale > minScale) {
+                scale = (scale - 0.05f).coerceAtLeast(minScale)
+            } else {
+                ready = true
+            }
+        }
+    )
+}

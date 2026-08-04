@@ -2,16 +2,15 @@ package com.avafli.winrsdk.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.avafli.winrsdk.domain.Giveaway
+import com.avafli.winrsdk.WINR
 import com.avafli.winrsdk.domain.DailyEntryGrant
-import com.avafli.winrsdk.domain.Milestone
+import com.avafli.winrsdk.domain.Giveaway
 import com.avafli.winrsdk.domain.SdkConfig
-import com.avafli.winrsdk.domain.ScreenMedia
-import com.avafli.winrsdk.domain.SdkCopy
 import com.avafli.winrsdk.domain.StreakEngine
 import com.avafli.winrsdk.domain.StreakState
 import com.avafli.winrsdk.network.WinrApi
 import com.avafli.winrsdk.services.Logger
+import com.avafli.winrsdk.services.analytics.AnalyticsAdapter
 import com.avafli.winrsdk.storage.PreferencesStorage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,9 +20,14 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import java.time.LocalDate
 import java.util.TimeZone
 
-// ── State machine (mirrors iOS WINRExperienceViewModel.State) ──
+// ── V2 state machine (mirrors iOS WINRExperienceViewModel) ──
+//
+// loading → emailCapture (until consent) → streak dashboard, with an automatic
+// claim on open that lands on the celebration modal (dailyConfirmed). The
+// rewarded-video bonus flow is parked (Phase 1) and has been removed.
 
 internal sealed class ExperienceScreen {
     object Loading : ExperienceScreen()
@@ -34,12 +38,13 @@ internal sealed class ExperienceScreen {
         val entriesToday: Int,
         val ladder: List<Int>
     ) : ExperienceScreen()
-    data class Bonus(val grant: DailyEntryGrant) : ExperienceScreen()
-    data class MilestoneCelebration(
-        val milestone: Milestone,
-        val grant: DailyEntryGrant
+
+    /** Celebration modal over the (blurred) dashboard. */
+    data class DailyConfirmed(
+        val grant: DailyEntryGrant,
+        val totalEntries: Int
     ) : ExperienceScreen()
-    data class Completed(val grant: DailyEntryGrant) : ExperienceScreen()
+
     object HowItWorks : ExperienceScreen()
     data class Error(val message: String) : ExperienceScreen()
 }
@@ -48,26 +53,18 @@ internal data class ExperienceUiState(
     val screen: ExperienceScreen = ExperienceScreen.Loading,
     val claimedToday: Boolean = false,
     val giveaway: Giveaway? = null,
-    val sdkCopy: SdkCopy? = null,
-    // Legacy flat fields kept for backward compat
-    val isLoading: Boolean = true,
-    val streakState: StreakState = StreakState(),
-    val isClaiming: Boolean = false,
-    val hasClaimed: Boolean = false,
-    val entriesEarned: Int = 0,
-    val totalEntries: Int = 0,
-    val canDouble: Boolean = false,
-    val isDoubled: Boolean = false,
+    val sdkConfig: SdkConfig? = null,
     val isSubmittingEmail: Boolean = false,
-    val emailSubmitted: Boolean = false,
-    val error: String? = null,
-    val lastGrant: DailyEntryGrant? = null
+    /** Current streak day for display (backend truth, falling back to local). */
+    val displayStreakDay: Int = 1,
+    val displayTotalEntries: Int = 0,
 )
 
 internal class WINRExperienceViewModel(
     private val api: WinrApi,
     private val preferencesStorage: PreferencesStorage,
-    private val logger: Logger
+    private val logger: Logger,
+    private val analytics: AnalyticsAdapter? = null,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ExperienceUiState())
@@ -75,306 +72,353 @@ internal class WINRExperienceViewModel(
 
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
-    private var streakEngine: StreakEngine? = null
     private var onResult: ((Result<DailyEntryGrant>) -> Unit)? = null
+    private var publisherUserId: String? = null
+
+    private var activeGiveaway: Giveaway? = null
     private var sdkConfig: SdkConfig? = null
+    private var cachedBackendClaimedToday: Boolean? = null
+    private var cachedBackendStreakDay: Int? = null
+    private var cachedBackendTotalEntries: Int? = null
+    private var isClaimingDaily = false
+
+    /** One-shot guard for the "already claimed on another device" re-sync. */
+    private var didResyncAfterAlreadyClaimed = false
 
     /** Saved primary screen so "How It Works" can navigate back. */
     private var lastPrimaryScreen: ExperienceScreen? = null
 
     fun setSdkConfig(config: SdkConfig?) {
         sdkConfig = config
-    }
-
-    fun getSdkMediaForScreen(screen: String): ScreenMedia? {
-        return when (screen) {
-            "emailCapture" -> sdkConfig?.media?.emailCapture
-            "howItWorks" -> sdkConfig?.media?.howItWorks
-            "streakDashboard" -> sdkConfig?.media?.streakDashboard
-            "bonusEntries" -> sdkConfig?.media?.bonusEntries
-            "milestone" -> sdkConfig?.media?.milestone
-            "completed" -> sdkConfig?.media?.completed
-            else -> null
-        }
+        _uiState.value = _uiState.value.copy(sdkConfig = config)
     }
 
     fun setResultCallback(callback: ((Result<DailyEntryGrant>) -> Unit)?) {
         onResult = callback
     }
 
-    // ── Load ──
-
-    fun loadGiveaway(existingGiveaway: Giveaway?) {
-        viewModelScope.launch {
-            try {
-                val giveaway: Giveaway
-                var backendResponse: WinrApi.GetActiveGiveawayResponse? = null
-                if (existingGiveaway != null) {
-                    giveaway = existingGiveaway
-                } else {
-                    val response = api.getActiveGiveaway()
-                    backendResponse = response
-                    // Check if backend returned no active giveaway (like iOS implementation)
-                    if (response.giveaway == null) {
-                        // Clear cached giveaway and set state to NoActiveGiveaway
-                        _uiState.value = _uiState.value.copy(
-                            screen = ExperienceScreen.NoActiveGiveaway,
-                            isLoading = false,
-                            giveaway = null,
-                            sdkCopy = response.sdkConfig?.copy
-                        )
-                        return@launch
-                    }
-                    giveaway = response.giveaway
-                    // Update sdkConfig from latest response
-                    if (response.sdkConfig != null) {
-                        sdkConfig = response.sdkConfig
-                    }
-                }
-                streakEngine = StreakEngine(giveaway)
-
-                val savedState = loadStreakState()
-                streakEngine?.setState(savedState)
-                streakEngine?.checkStreakReset()
-
-                // Trust the backend streak when it reports one (it's the source of
-                // truth). This unifies the displayed streak across devices — after
-                // cross-device adoption the local state belongs to a throwaway
-                // device-user, so we reseed from the canonical user's backend streak.
-                val backendDay = backendResponse?.streakDay
-                if (backendDay != null) {
-                    val today = java.time.LocalDate.now().toString()
-                    val backendClaimed = backendResponse?.claimedToday == true
-                    val seeded = streakEngine?.getState()?.copy(
-                        currentDay = backendDay,
-                        claimedToday = backendClaimed,
-                        totalEntries = backendResponse?.totalEntries
-                            ?: streakEngine?.getState()?.totalEntries ?: 0,
-                        // Anchor claimedToday on lastClaimDate so hasClaimedToday() agrees.
-                        lastClaimDate = if (backendClaimed) today
-                            else streakEngine?.getState()?.lastClaimDate,
-                    )
-                    if (seeded != null) {
-                        streakEngine?.setState(seeded)
-                        saveStreakState(seeded)
-                    }
-                }
-
-                // Backend is the source of truth for email consent — seed the local
-                // flag from it so a user whose flag was lost (e.g. reinstall) isn't
-                // re-prompted for email.
-                if (backendResponse?.emailConsentStatus == true) {
-                    preferencesStorage.saveEmailSubmitted(true)
-                }
-
-                val state = streakEngine?.getState() ?: StreakState()
-                val alreadyClaimed = streakEngine?.hasClaimedToday() ?: false
-                val emailDone = preferencesStorage.isEmailSubmitted()
-
-                if (!emailDone) {
-                    _uiState.value = _uiState.value.copy(
-                        screen = ExperienceScreen.EmailCapture,
-                        isLoading = false,
-                        giveaway = giveaway,
-                        sdkCopy = sdkConfig?.copy,
-                        streakState = state,
-                        hasClaimed = alreadyClaimed,
-                        claimedToday = alreadyClaimed,
-                        totalEntries = state.totalEntries,
-                        emailSubmitted = false
-                    )
-                    return@launch
-                }
-
-                moveToStreakDashboard(giveaway, state, alreadyClaimed)
-            } catch (e: Exception) {
-                logger.error("Failed to load giveaway: ${e.message}", e)
-                _uiState.value = _uiState.value.copy(
-                    screen = ExperienceScreen.Error(e.message ?: "Failed to load giveaway"),
-                    isLoading = false,
-                    error = e.message ?: "Failed to load giveaway"
-                )
-            }
-        }
-    }
-
-    private fun moveToStreakDashboard(giveaway: Giveaway, state: StreakState, claimed: Boolean) {
-        val ladder = giveaway.streakLadder.map { it * giveaway.maxDailyBaseEntries }
-        val dayIndex = (state.currentDay.coerceAtLeast(1) - 1).coerceIn(0, ladder.size - 1)
-        val entriesToday = ladder[dayIndex]
-
-        _uiState.value = _uiState.value.copy(
-            screen = ExperienceScreen.Streak(state, entriesToday, ladder),
-            isLoading = false,
-            giveaway = giveaway,
-            sdkCopy = sdkConfig?.copy,
-            streakState = state,
-            hasClaimed = claimed,
-            claimedToday = claimed,
-            totalEntries = state.totalEntries,
-            canDouble = giveaway.doublingEnabled && !claimed,
-            emailSubmitted = true
-        )
-    }
-
-    // ── Email ──
-
-    private var publisherUserId: String? = null
-
     fun setPublisherUserId(id: String?) {
         publisherUserId = id
     }
 
-    fun submitEmail(email: String, marketingConsent: Boolean = false) {
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isSubmittingEmail = true, error = null)
-            try {
-                val result = api.submitEmail(email, marketingConsent, publisherUserId)
-                if (result.success) {
-                    preferencesStorage.saveEmailSubmitted(true)
-                    _uiState.value = _uiState.value.copy(
-                        isSubmittingEmail = false,
-                        emailSubmitted = true
-                    )
-                    if (result.adopted) {
-                        // Switched to the canonical user (credentials already saved in
-                        // WinrApi). Re-load from the backend so the unified streak shows.
-                        loadGiveaway(null)
-                    } else {
-                        // Advance to streak dashboard
-                        val giveaway = _uiState.value.giveaway ?: return@launch
-                        val state = streakEngine?.getState() ?: StreakState()
-                        val claimed = streakEngine?.hasClaimedToday() ?: false
-                        moveToStreakDashboard(giveaway, state, claimed)
-                    }
-                } else {
-                    _uiState.value = _uiState.value.copy(
-                        isSubmittingEmail = false,
-                        error = "Failed to submit email"
-                    )
-                }
-            } catch (e: Exception) {
-                logger.error("Failed to submit email: ${e.message}", e)
-                _uiState.value = _uiState.value.copy(
-                    isSubmittingEmail = false,
-                    error = e.message ?: "Failed to submit email"
-                )
+    // ── Display helpers ──
+
+    /** The effective reward ladder (giveaway config, else Android defaults). */
+    private val displayLadder: List<Int>
+        get() = activeGiveaway?.streakLadder?.takeIf { it.isNotEmpty() }
+            ?: Giveaway(id = "", title = "", prizeDescription = "").streakLadder
+
+    // ── Load ──
+
+    fun load(cachedGiveaway: Giveaway? = null) {
+        viewModelScope.launch { loadInternal(cachedGiveaway) }
+    }
+
+    private suspend fun loadInternal(cachedGiveaway: Giveaway? = null) {
+        // Always fetch fresh claim status from the backend. The giveaway config
+        // may already be cached, but claimedToday can change between opens.
+        var backendClaimedToday: Boolean? = null
+        var backendStreakDay: Int? = null
+
+        try {
+            val response = api.getActiveGiveaway()
+
+            // RTD: an opted-out person never sees the experience content.
+            if (response.optedOut == true) {
+                setScreen(ExperienceScreen.NoActiveGiveaway)
+                return
             }
+
+            if (response.giveaway == null) {
+                activeGiveaway = null
+                setScreen(ExperienceScreen.NoActiveGiveaway)
+                return
+            }
+
+            activeGiveaway = response.giveaway
+            response.sdkConfig?.let {
+                sdkConfig = it
+                WINR.updateSdkConfig(it)
+            }
+            backendClaimedToday = response.claimedToday
+            backendStreakDay = response.streakDay
+            cachedBackendTotalEntries = response.totalEntries
+
+            // Backend is the source of truth for email consent. If it confirms an
+            // email on file, seed the local "submitted" flag so a user whose local
+            // flag was lost (e.g. reinstall) isn't re-prompted for email.
+            if (response.emailConsentStatus == true) {
+                preferencesStorage.saveEmailSubmitted(true)
+                WINR.noteEmailConsent()
+            }
+        } catch (e: Exception) {
+            // Offline fallback: use the cached giveaway.
+            if (activeGiveaway == null) activeGiveaway = cachedGiveaway
+            logger.debug("Using cached giveaway (offline): ${e.message}")
+        }
+
+        cachedBackendClaimedToday = backendClaimedToday
+        cachedBackendStreakDay = backendStreakDay
+
+        // Email-capture gate: shown until the user completes the consent flow.
+        if (!preferencesStorage.isEmailSubmitted()) {
+            _uiState.value = _uiState.value.copy(
+                screen = ExperienceScreen.EmailCapture,
+                giveaway = activeGiveaway,
+                sdkConfig = sdkConfig,
+            )
+            return
+        }
+
+        computeStreakAndMoveToDashboard(backendClaimedToday, backendStreakDay)
+
+        // V2 experience: entries are granted automatically when the drawer opens —
+        // no tap required. Registered + consented + not-yet-claimed → claim now.
+        // Failures are silent (the dashboard just shows the unclaimed state).
+        if (_uiState.value.screen is ExperienceScreen.Streak && !_uiState.value.claimedToday) {
+            claimDailyEntries(auto = true)
         }
     }
 
-    fun skipEmailCapture() {
-        // Email is required — stay on email capture (matches iOS)
-        _uiState.value = _uiState.value.copy(screen = ExperienceScreen.EmailCapture)
+    // ── Dashboard state ──
+
+    private fun computeStreakAndMoveToDashboard(
+        backendClaimedToday: Boolean? = null,
+        backendStreakDay: Int? = null,
+    ) {
+        val ladder = displayLadder
+
+        // ─── Backend is source of truth for claim status ───
+        if (backendClaimedToday != null) {
+            val day = backendStreakDay
+                ?: preferencesStorage.getStreakDay().takeIf { it > 0 }
+                ?: 1
+            val entriesToday = ladder[(day - 1).coerceIn(0, ladder.size - 1)]
+            val total = cachedBackendTotalEntries ?: preferencesStorage.getTotalEntries()
+
+            // Sync local state with the backend (seed running totals from the
+            // backend so entries claimed on OTHER devices are reflected).
+            val today = LocalDate.now().toString()
+            val state = StreakState(
+                currentDay = day,
+                claimedToday = backendClaimedToday,
+                totalEntries = total,
+                lastClaimDate = if (backendClaimedToday) today else preferencesStorage.getLastClaimDate(),
+            )
+            saveStreakState(state)
+
+            _uiState.value = _uiState.value.copy(
+                screen = ExperienceScreen.Streak(state, entriesToday, ladder),
+                claimedToday = backendClaimedToday,
+                giveaway = activeGiveaway,
+                sdkConfig = sdkConfig,
+                displayStreakDay = day,
+                displayTotalEntries = total,
+            )
+            return
+        }
+
+        // ─── Offline fallback: local streak engine ───
+        val engine = StreakEngine(
+            activeGiveaway ?: Giveaway(id = "", title = "", prizeDescription = "")
+        )
+        engine.setState(loadStreakState())
+        engine.checkStreakReset()
+        val state = engine.getState()
+        val claimed = engine.hasClaimedToday()
+        val day = state.currentDay.coerceAtLeast(1)
+        val entriesToday = ladder[(day - 1).coerceIn(0, ladder.size - 1)]
+
+        _uiState.value = _uiState.value.copy(
+            screen = ExperienceScreen.Streak(state, entriesToday, ladder),
+            claimedToday = claimed,
+            giveaway = activeGiveaway,
+            sdkConfig = sdkConfig,
+            displayStreakDay = day,
+            displayTotalEntries = state.totalEntries,
+        )
+    }
+
+    /** V2: the celebration modal's GOT IT — settle onto the dashboard. */
+    fun showDashboardAfterCelebration() {
+        computeStreakAndMoveToDashboard(
+            backendClaimedToday = true,
+            backendStreakDay = cachedBackendStreakDay,
+        )
+    }
+
+    // ── Email capture ──
+
+    fun submitEmail(email: String, marketingConsent: Boolean = true) {
+        if (email.isEmpty()) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isSubmittingEmail = true)
+
+            // NOTE: we deliberately do NOT persist the raw email locally (PII-High).
+            // Registration state is the non-PII "email submitted" flag.
+            preferencesStorage.saveEmailSubmitted(true)
+
+            try {
+                // Cross-device streak unification: if this email already belonged to
+                // an existing user under this publisher, WinrApi switches to the
+                // canonical user's credentials internally (adopted == true).
+                api.submitEmail(email, marketingConsent, publisherUserId)
+                WINR.noteEmailConsent()
+                logger.debug("Email submitted to backend")
+            } catch (e: Exception) {
+                logger.error("Email submit to backend failed (will retry later): ${e.message}", e)
+            }
+
+            _uiState.value = _uiState.value.copy(isSubmittingEmail = false)
+
+            // Re-load so the (possibly switched) canonical user's authoritative
+            // streak + claim status drive the UI.
+            loadInternal()
+        }
     }
 
     // ── How It Works ──
 
     fun showHowItWorks() {
         lastPrimaryScreen = _uiState.value.screen
-        _uiState.value = _uiState.value.copy(screen = ExperienceScreen.HowItWorks)
+        setScreen(ExperienceScreen.HowItWorks)
     }
 
     fun hideHowItWorks() {
-        val prev = lastPrimaryScreen
-        if (prev != null) {
-            _uiState.value = _uiState.value.copy(screen = prev)
+        val previous = lastPrimaryScreen
+        if (previous != null) {
+            setScreen(previous)
         } else {
-            loadGiveaway(_uiState.value.giveaway)
+            setScreen(ExperienceScreen.Loading)
+            load()
         }
     }
 
-    fun primaryFromHowItWorks() {
-        hideHowItWorks()
-    }
+    // ── Daily claim (V2: automatic on open) ──
 
-    // ── Claim ──
+    fun claimDailyEntries(auto: Boolean = false) {
+        val screen = _uiState.value.screen as? ExperienceScreen.Streak ?: return
+        if (isClaimingDaily) return
+        isClaimingDaily = true
 
-    fun claimDailyEntries() {
         viewModelScope.launch {
-            // Client-side dup guard: if we already claimed today, skip the network call
-            // entirely and reflect the already-claimed state. The server remains the
-            // source of truth, but this avoids a guaranteed-reject round trip.
-            if (streakEngine?.hasClaimedToday() == true) {
-                logger.debug("Daily entries already claimed today (client guard), skipping claim")
-                showAlreadyClaimed()
-                return@launch
-            }
-
-            _uiState.value = _uiState.value.copy(isClaiming = true, error = null)
             try {
-                val timezone = TimeZone.getDefault().id
-                val response = api.claimDailyEntries(timezone)
+                val response = api.claimDailyEntries(TimeZone.getDefault().id)
 
-                val grant = streakEngine?.processDailyClaim(
+                // Bonus entries from all sources (weekly/monthly bonuses, milestones).
+                val streakBonusEntries = (response.weeklyBonusEntries ?: 0) +
+                    (response.monthlyBonusEntries ?: 0) +
+                    (response.milestone?.bonusEntries ?: 0) +
+                    (response.monthlyMilestone?.bonusEntries ?: 0)
+
+                val grant = DailyEntryGrant(
                     entries = response.entries,
                     streakDay = response.streakDay,
                     totalEntries = response.totalEntries,
                     weeklyBonusEntries = response.weeklyBonusEntries,
                     monthlyBonusEntries = response.monthlyBonusEntries,
-                    milestone = response.milestone
-                ) ?: DailyEntryGrant(
-                    entries = response.entries,
-                    streakDay = response.streakDay,
-                    totalEntries = response.totalEntries
+                    milestone = response.milestone,
                 )
 
-                val state = streakEngine?.getState() ?: StreakState()
-                saveStreakState(state)
+                // Keep the display caches in sync so the post-celebration dashboard
+                // shows the fresh totals (not the pre-claim snapshot).
+                cachedBackendTotalEntries = response.totalEntries
+                cachedBackendStreakDay = response.streakDay
+                cachedBackendClaimedToday = true
 
-                val giveaway = _uiState.value.giveaway
+                saveStreakState(
+                    StreakState(
+                        currentDay = response.streakDay,
+                        claimedToday = true,
+                        totalEntries = response.totalEntries,
+                        lastClaimDate = LocalDate.now().toString(),
+                    )
+                )
 
-                // Check milestone → bonus → complete
-                val nextScreen: ExperienceScreen = when {
-                    response.milestone != null ->
-                        ExperienceScreen.MilestoneCelebration(response.milestone, grant)
-                    giveaway?.doublingEnabled == true ->
-                        ExperienceScreen.Bonus(grant)
-                    else ->
-                        ExperienceScreen.Completed(grant)
-                }
-
+                // V2: a claim ALWAYS lands on the celebration modal. The grant's
+                // entries carry base + streak bonuses so "YOU EARNED N" is complete.
                 _uiState.value = _uiState.value.copy(
-                    screen = nextScreen,
-                    isClaiming = false,
-                    hasClaimed = true,
+                    screen = ExperienceScreen.DailyConfirmed(
+                        grant = grant.copy(entries = response.entries + streakBonusEntries),
+                        totalEntries = response.totalEntries,
+                    ),
                     claimedToday = true,
-                    entriesEarned = grant.entries,
-                    totalEntries = grant.totalEntries,
-                    streakState = state,
-                    canDouble = giveaway?.doublingEnabled == true,
-                    lastGrant = grant
+                    displayStreakDay = response.streakDay,
+                    displayTotalEntries = response.totalEntries,
                 )
+                isClaimingDaily = false
 
+                analytics?.trackEvent(
+                    "winr_daily_entry_claimed",
+                    buildMap {
+                        put("day", response.streakDay)
+                        put("entries", response.entries)
+                        response.weeklyBonusEntries?.let { put("weekly_bonus", it) }
+                        response.monthlyBonusEntries?.let { put("monthly_bonus", it) }
+                        response.milestone?.let { put("milestone_day", it.day) }
+                    }
+                )
                 onResult?.invoke(Result.success(grant))
             } catch (e: Exception) {
-                logger.error("Failed to claim entries: ${e.message}", e)
-
-                if (isAlreadyClaimedError(e)) {
-                    // Server confirms today's entry is already claimed — reflect as claimed.
-                    showAlreadyClaimed()
-                    return@launch
-                }
-
-                _uiState.value = _uiState.value.copy(
-                    isClaiming = false,
-                    error = e.message ?: "Failed to claim entries"
-                )
-                onResult?.invoke(Result.failure(e))
+                isClaimingDaily = false
+                handleClaimFailure(e, screen, auto)
             }
         }
     }
 
+    private suspend fun handleClaimFailure(
+        e: Exception,
+        screen: ExperienceScreen.Streak,
+        auto: Boolean,
+    ) {
+        // "Already claimed" means the user already got their entries today —
+        // show the dashboard claimed state silently.
+        if (isAlreadyClaimedError(e)) {
+            logger.debug("Already claimed today — updating local state")
+            val updated = screen.streakState.copy(
+                claimedToday = true,
+                lastClaimDate = LocalDate.now().toString(),
+            )
+            saveStreakState(updated)
+            _uiState.value = _uiState.value.copy(
+                screen = ExperienceScreen.Streak(updated, screen.entriesToday, screen.ladder),
+                claimedToday = true,
+            )
+            // Another device beat us between the status fetch and the claim, so
+            // our cached totals are one claim behind — re-load once to pull the
+            // authoritative streak/total. One-shot: never loop if status + claim
+            // keep disagreeing.
+            if (auto && !didResyncAfterAlreadyClaimed) {
+                didResyncAfterAlreadyClaimed = true
+                loadInternal()
+            }
+            return
+        }
+
+        // Auto-claim failures are SILENT by design: the dashboard simply shows
+        // the unclaimed state. Never fake a local success for an auto-claim.
+        if (auto) {
+            logger.debug("Auto-claim declined: ${e.message}")
+            _uiState.value = _uiState.value.copy(
+                screen = ExperienceScreen.Streak(screen.streakState, screen.entriesToday, screen.ladder),
+                claimedToday = false,
+            )
+            return
+        }
+
+        logger.error("Failed to claim entries: ${e.message}", e)
+        setScreen(ExperienceScreen.Error(e.message ?: "Failed to claim entries"))
+        onResult?.invoke(Result.failure(e))
+    }
+
     /**
      * Determine whether [e] represents an "already claimed today" rejection.
-     * Prefers the server's structured error code/type (parsed from the ServerError body)
-     * and falls back to message-substring matching only as a last resort.
+     * Prefers the server's structured error code/type (parsed from the ServerError
+     * body) and falls back to message-substring matching only as a last resort.
      */
     private fun isAlreadyClaimedError(e: Throwable): Boolean {
-        // Typed error from the SDK error hierarchy.
         if (e is com.avafli.winrsdk.WINRError.AlreadyClaimed) return true
 
-        // Structured server error: parse the JSON body for an error code/status field.
         if (e is com.avafli.winrsdk.WINRError.ServerError) {
             val structured = try {
                 val body = e.message ?: ""
@@ -395,85 +439,27 @@ internal class WINRExperienceViewModel(
             if (structured) return true
         }
 
-        // Last-resort fallback: legacy message-substring match.
         return e.message?.contains("Already claimed", ignoreCase = true) == true
-    }
-
-    /** Render the already-claimed streak dashboard state. */
-    private fun showAlreadyClaimed() {
-        val state = streakEngine?.getState() ?: StreakState()
-        val giveaway = _uiState.value.giveaway
-        val ladder = giveaway?.streakLadder?.map {
-            it * (giveaway.maxDailyBaseEntries)
-        } ?: emptyList()
-        val dayIndex = (state.currentDay.coerceAtLeast(1) - 1)
-            .coerceIn(0, ladder.size.coerceAtLeast(1) - 1)
-        val entriesToday = ladder.getOrElse(dayIndex) { 1 }
-
-        _uiState.value = _uiState.value.copy(
-            screen = ExperienceScreen.Streak(state, entriesToday, ladder),
-            isClaiming = false,
-            hasClaimed = true,
-            claimedToday = true
-        )
-    }
-
-    // ── Bonus (rewarded ad) ──
-
-    fun watchAdAndDouble() {
-        viewModelScope.launch {
-            try {
-                val timezone = TimeZone.getDefault().id
-                val response = api.claimBonusEntries(timezone)
-
-                val currentGrant = _uiState.value.lastGrant ?: return@launch
-                val doubledGrant = streakEngine?.doubleEntries(currentGrant) ?: currentGrant
-
-                _uiState.value = _uiState.value.copy(
-                    screen = ExperienceScreen.Completed(doubledGrant),
-                    entriesEarned = doubledGrant.entries,
-                    totalEntries = response.totalEntries,
-                    canDouble = false,
-                    isDoubled = true,
-                    lastGrant = doubledGrant
-                )
-            } catch (e: Exception) {
-                logger.error("Failed to claim bonus entries: ${e.message}", e)
-                _uiState.value = _uiState.value.copy(
-                    error = e.message ?: "Failed to double entries"
-                )
-            }
-        }
-    }
-
-    fun skipBonus() {
-        val grant = (_uiState.value.screen as? ExperienceScreen.Bonus)?.grant ?: return
-        _uiState.value = _uiState.value.copy(screen = ExperienceScreen.Completed(grant))
-    }
-
-    fun dismissMilestoneCelebration() {
-        val screen = _uiState.value.screen as? ExperienceScreen.MilestoneCelebration ?: return
-        val giveaway = _uiState.value.giveaway
-        val nextScreen = if (giveaway?.doublingEnabled == true) {
-            ExperienceScreen.Bonus(screen.grant)
-        } else {
-            ExperienceScreen.Completed(screen.grant)
-        }
-        _uiState.value = _uiState.value.copy(screen = nextScreen)
     }
 
     // ── Helpers ──
 
-    private fun loadStreakState(): StreakState {
-        return StreakState(
-            currentDay = preferencesStorage.getStreakDay(),
-            totalEntries = preferencesStorage.getTotalEntries(),
-            weeklyDaysCompleted = preferencesStorage.getWeeklyDaysCompleted(),
-            monthlyDaysCompleted = preferencesStorage.getMonthlyDaysCompleted(),
-            lastClaimDate = preferencesStorage.getLastClaimDate(),
-            completedDays = preferencesStorage.getCompletedDays()
+    private fun setScreen(screen: ExperienceScreen) {
+        _uiState.value = _uiState.value.copy(
+            screen = screen,
+            giveaway = activeGiveaway ?: _uiState.value.giveaway,
+            sdkConfig = sdkConfig ?: _uiState.value.sdkConfig,
         )
     }
+
+    private fun loadStreakState(): StreakState = StreakState(
+        currentDay = preferencesStorage.getStreakDay(),
+        totalEntries = preferencesStorage.getTotalEntries(),
+        weeklyDaysCompleted = preferencesStorage.getWeeklyDaysCompleted(),
+        monthlyDaysCompleted = preferencesStorage.getMonthlyDaysCompleted(),
+        lastClaimDate = preferencesStorage.getLastClaimDate(),
+        completedDays = preferencesStorage.getCompletedDays(),
+    )
 
     private fun saveStreakState(state: StreakState) {
         preferencesStorage.saveStreakDay(state.currentDay)

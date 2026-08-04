@@ -20,5 +20,4 @@ data class WINRConfiguration(
 ) {
     val baseUrl: String get() = environment.baseUrl
     val isDebug: Boolean get() = options.debugLogging
-    val branding: WINRBranding get() = options.branding
 }

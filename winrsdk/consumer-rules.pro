@@ -8,7 +8,6 @@
 -keep class com.avafli.winrsdk.WINRError { *; }
 -keep class com.avafli.winrsdk.WINROptions { *; }
 -keep class com.avafli.winrsdk.WINRUser { *; }
--keep class com.avafli.winrsdk.WINRBranding { *; }
 -keep class com.avafli.winrsdk.domain.DailyEntryGrant { *; }
 -keep class com.avafli.winrsdk.domain.Campaign { *; }
 
