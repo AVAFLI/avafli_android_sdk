@@ -63,9 +63,10 @@ internal fun WINRV2StreakTile(
             }
 
         WINRV2TileState.Ready ->
-            // Pre-reveal: glow marks today's tile, but the confetti and
-            // checkmark are saved for the auto-reveal moment.
-            TileCard(accent, day, entries, state, visitMode, modifier.winrPulseGlow(accent))
+            // Pre-reveal the tile is CALM — a static glow only. Every moving
+            // element (pulse, confetti, check draw) is saved for the single
+            // celebration moment so nothing animates early.
+            TileCard(accent, day, entries, state, visitMode, modifier.winrStaticGlow(accent))
 
         else -> TileCard(accent, day, entries, state, visitMode, modifier)
     }

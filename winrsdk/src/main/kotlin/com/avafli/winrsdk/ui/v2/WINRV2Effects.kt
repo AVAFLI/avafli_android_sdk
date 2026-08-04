@@ -217,6 +217,27 @@ internal fun Modifier.winrPulseGlow(accent: Color): Modifier = composed {
 }
 
 /**
+ * The ready (pre-reveal) tile treatment: the same accent glow as
+ * [winrPulseGlow] but fully STATIC — no breathing. Every moving element
+ * (pulse, confetti, check draw) waits for the single reveal beat. Mirrors
+ * iOS `.shadow(color: accent.opacity(0.75), radius: 10)`.
+ */
+internal fun Modifier.winrStaticGlow(accent: Color): Modifier = drawBehind {
+    val blur = 10.dp.toPx()
+    val glowRadius = max(size.width, size.height) / 2f + blur * 2f
+    val brush = Brush.radialGradient(
+        colors = listOf(accent.copy(alpha = 0.75f), accent.copy(alpha = 0f)),
+        center = Offset(size.width / 2f, size.height / 2f),
+        radius = glowRadius,
+    )
+    drawRect(
+        brush = brush,
+        topLeft = Offset(-blur * 2f, -blur * 2f),
+        size = Size(size.width + blur * 4f, size.height + blur * 4f),
+    )
+}
+
+/**
  * Recedes the dashboard rendered behind the celebration modal.
  *
  * API 31+: a real 3dp render-effect blur ([Modifier.blur]).

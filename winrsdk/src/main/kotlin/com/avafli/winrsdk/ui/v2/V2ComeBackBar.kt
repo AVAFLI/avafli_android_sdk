@@ -86,9 +86,9 @@ internal fun WINRV2ComeBackBar(
             .clipToBounds(),
         contentAlignment = Alignment.Center,
     ) {
-        // iOS: pitch enters/exits at the leading edge, the ADDED toast at the
-        // trailing edge — a horizontal slide (not a crossfade), on a spring
-        // (response 0.5, damping 0.85).
+        // Carousel: every state slides IN from the right and OUT to the
+        // left — one continuous forward direction, never a rewind. Spring
+        // mirrors iOS (response 0.5, damping 0.85).
         val swapSpring = spring<androidx.compose.ui.unit.IntOffset>(
             dampingRatio = 0.85f,
             stiffness = 158f,
@@ -96,15 +96,8 @@ internal fun WINRV2ComeBackBar(
         AnimatedContent(
             targetState = phase,
             transitionSpec = {
-                if (targetState == WINRV2BarPhase.Added) {
-                    // Toast slides in from the trailing edge; pitch slides out leading.
-                    (slideInHorizontally(swapSpring) { it } + fadeIn()) togetherWith
-                        (slideOutHorizontally(swapSpring) { -it } + fadeOut())
-                } else {
-                    // Pitch slides back in from the leading edge; toast exits trailing.
-                    (slideInHorizontally(swapSpring) { -it } + fadeIn()) togetherWith
-                        (slideOutHorizontally(swapSpring) { it } + fadeOut())
-                }
+                (slideInHorizontally(swapSpring) { it } + fadeIn()) togetherWith
+                    (slideOutHorizontally(swapSpring) { -it } + fadeOut())
             },
             label = "winrComeBackSwap",
         ) { barPhase ->

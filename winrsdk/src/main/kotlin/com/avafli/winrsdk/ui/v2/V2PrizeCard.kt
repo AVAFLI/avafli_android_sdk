@@ -1,5 +1,8 @@
 package com.avafli.winrsdk.ui.v2
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -15,6 +18,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -28,6 +36,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.avafli.winrsdk.R
+import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
 
 // Day 2+ prize card (Joe's Aug-2026 dark full-bleed revision, ported from iOS
 // WINRV2PrizeCard): the prize art fills the WHOLE card, a solid black stats
@@ -146,10 +156,7 @@ private fun StatsStrip(
                     .rotate(-25f),
             )
             Column(Modifier.padding(start = 10.dp)) {
-                Text(
-                    totalEntries.winrFormatted(),
-                    style = WINRV2Font.inter(15.sp, FontWeight.Black, tracking = (-0.3).sp, color = accent),
-                )
+                WINRV2CountUpText(value = totalEntries, accent = accent)
                 Text(
                     "Total Entries",
                     style = WINRV2Font.inter(12.sp, FontWeight.Medium, color = Color.White),
@@ -222,6 +229,50 @@ private fun Headline(
                     )
                 }
             }
+        }
+    }
+}
+
+// MARK: - Counting total readout
+
+/**
+ * The stats-strip total, ported from iOS WINRV2CountUpText: counts up
+ * smoothly (~0.7s ease-out) when the value increases and pops a brief star
+ * burst as it lands on the new total.
+ */
+@Composable
+internal fun WINRV2CountUpText(value: Int, accent: Color) {
+    var shown by remember { mutableStateOf(value) }
+    var burst by remember { mutableStateOf(false) }
+
+    LaunchedEffect(value) {
+        val from = shown
+        if (value == from) return@LaunchedEffect
+        val counter = Animatable(0f)
+        counter.animateTo(
+            targetValue = 1f,
+            // Ease-out ramp over ~0.7s (mirrors iOS's 1-(1-t)^3).
+            animationSpec = tween(700, easing = CubicBezierEasing(0.33f, 1f, 0.68f, 1f)),
+        ) {
+            shown = from + ((value - from) * this.value).roundToInt()
+        }
+        shown = value
+        burst = true
+        delay(900)
+        burst = false
+    }
+
+    Box(contentAlignment = Alignment.Center) {
+        Text(
+            shown.winrFormatted(),
+            style = WINRV2Font.inter(15.sp, FontWeight.Black, tracking = (-0.3).sp, color = accent),
+        )
+        if (burst) {
+            WINRV2ConfettiField(
+                modifier = Modifier.matchParentSize(),
+                count = 8,
+                speed = 1.4,
+            )
         }
     }
 }
