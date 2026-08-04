@@ -20,12 +20,6 @@ class StreakEngineTest {
             streakLadder = listOf(1, 2, 3, 5, 8, 13, 21),
             doublingEnabled = true,
             maxDailyBaseEntries = 1,
-            streakConfig = StreakConfig(
-                weeklyBonusThreshold = 5,
-                weeklyBonusEntries = 10,
-                monthlyBonusThreshold = 20,
-                monthlyBonusEntries = 50
-            ),
             milestones = listOf(
                 Milestone(day = 3, bonusEntries = 5, badge = "streak_3"),
                 Milestone(day = 7, bonusEntries = 25, badge = "streak_7")
@@ -146,46 +140,6 @@ class StreakEngineTest {
     fun `has claimed today returns true after claim`() {
         engine.processDailyClaim(entries = 1, streakDay = 1, totalEntries = 1)
         assertTrue(engine.hasClaimedToday())
-    }
-
-    @Test
-    fun `weekly bonus progress tracks correctly`() {
-        val (current, threshold) = engine.getWeeklyBonusProgress()
-        assertEquals(0, current)
-        assertEquals(5, threshold)
-
-        engine.processDailyClaim(entries = 1, streakDay = 1, totalEntries = 1)
-        val (afterClaim, _) = engine.getWeeklyBonusProgress()
-        assertEquals(1, afterClaim)
-    }
-
-    @Test
-    fun `monthly bonus progress tracks correctly`() {
-        val (current, threshold) = engine.getMonthlyBonusProgress()
-        assertEquals(0, current)
-        assertEquals(20, threshold)
-    }
-
-    @Test
-    fun `weekly bonus earned flag set when bonus received`() {
-        engine.processDailyClaim(
-            entries = 1,
-            streakDay = 5,
-            totalEntries = 19,
-            weeklyBonusEntries = 10
-        )
-        assertTrue(engine.getState().weeklyBonusEarned)
-    }
-
-    @Test
-    fun `monthly bonus earned flag set when bonus received`() {
-        engine.processDailyClaim(
-            entries = 1,
-            streakDay = 1,
-            totalEntries = 100,
-            monthlyBonusEntries = 50
-        )
-        assertTrue(engine.getState().monthlyBonusEarned)
     }
 
     @Test

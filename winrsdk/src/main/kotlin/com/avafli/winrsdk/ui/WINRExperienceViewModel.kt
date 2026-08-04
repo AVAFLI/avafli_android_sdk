@@ -455,8 +455,6 @@ internal class WINRExperienceViewModel(
     private fun loadStreakState(): StreakState = StreakState(
         currentDay = preferencesStorage.getStreakDay(),
         totalEntries = preferencesStorage.getTotalEntries(),
-        weeklyDaysCompleted = preferencesStorage.getWeeklyDaysCompleted(),
-        monthlyDaysCompleted = preferencesStorage.getMonthlyDaysCompleted(),
         lastClaimDate = preferencesStorage.getLastClaimDate(),
         completedDays = preferencesStorage.getCompletedDays(),
     )
@@ -464,8 +462,6 @@ internal class WINRExperienceViewModel(
     private fun saveStreakState(state: StreakState) {
         preferencesStorage.saveStreakDay(state.currentDay)
         preferencesStorage.saveTotalEntries(state.totalEntries)
-        preferencesStorage.saveWeeklyDaysCompleted(state.weeklyDaysCompleted)
-        preferencesStorage.saveMonthlyDaysCompleted(state.monthlyDaysCompleted)
         state.lastClaimDate?.let { preferencesStorage.saveLastClaimDate(it) }
         preferencesStorage.saveCompletedDays(state.completedDays)
     }

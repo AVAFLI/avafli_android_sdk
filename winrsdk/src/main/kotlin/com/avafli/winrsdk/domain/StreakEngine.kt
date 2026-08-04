@@ -42,8 +42,6 @@ class StreakEngine(private val giveaway: Giveaway) {
         entries: Int,
         streakDay: Int,
         totalEntries: Int,
-        weeklyBonusEntries: Int? = null,
-        monthlyBonusEntries: Int? = null,
         milestone: Milestone? = null
     ): DailyEntryGrant {
         val today = LocalDate.now().toString()
@@ -55,10 +53,6 @@ class StreakEngine(private val giveaway: Giveaway) {
             currentDay = streakDay,
             claimedToday = true,
             totalEntries = totalEntries,
-            weeklyDaysCompleted = state.weeklyDaysCompleted + 1,
-            monthlyDaysCompleted = state.monthlyDaysCompleted + 1,
-            weeklyBonusEarned = weeklyBonusEntries != null && weeklyBonusEntries > 0,
-            monthlyBonusEarned = monthlyBonusEntries != null && monthlyBonusEntries > 0,
             lastClaimDate = today,
             completedDays = completedDays
         )
@@ -67,8 +61,6 @@ class StreakEngine(private val giveaway: Giveaway) {
             entries = entries,
             streakDay = streakDay,
             totalEntries = totalEntries,
-            weeklyBonusEntries = weeklyBonusEntries,
-            monthlyBonusEntries = monthlyBonusEntries,
             milestone = milestone
         )
     }
@@ -112,26 +104,6 @@ class StreakEngine(private val giveaway: Giveaway) {
         } catch (e: Exception) {
             false
         }
-    }
-
-    /**
-     * Get the weekly bonus progress (days completed / threshold).
-     */
-    fun getWeeklyBonusProgress(): Pair<Int, Int> {
-        return Pair(
-            state.weeklyDaysCompleted,
-            giveaway.streakConfig.weeklyBonusThreshold
-        )
-    }
-
-    /**
-     * Get the monthly bonus progress (days completed / threshold).
-     */
-    fun getMonthlyBonusProgress(): Pair<Int, Int> {
-        return Pair(
-            state.monthlyDaysCompleted,
-            giveaway.streakConfig.monthlyBonusThreshold
-        )
     }
 
     /**

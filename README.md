@@ -110,7 +110,7 @@ WINR.configure(config)
 | --------- | ---- | -------- | ----------- |
 | `context` | `Context` | ✅ | Application or Activity context |
 | `apiKey` | `String` | ✅ | Your WINR API key from the dashboard |
-| `environment` | `WINREnvironment` | — | `.Production` (default), `.Staging`, or `.Development` |
+| `environment` | `WINREnvironment` | — | `.Production` (default) |
 | `user` | `WINRUser` | ✅ | The authenticated user |
 | `options` | `WINROptions?` | — | Optional behavior toggles |
 

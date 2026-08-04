@@ -10,14 +10,6 @@ data class StreakState(
     val claimedToday: Boolean = false,
     /** Total entries accumulated. */
     val totalEntries: Int = 0,
-    /** Days completed this week (for weekly bonus). */
-    val weeklyDaysCompleted: Int = 0,
-    /** Days completed this month (for monthly bonus). */
-    val monthlyDaysCompleted: Int = 0,
-    /** Whether weekly bonus has been earned this period. */
-    val weeklyBonusEarned: Boolean = false,
-    /** Whether monthly bonus has been earned this period. */
-    val monthlyBonusEarned: Boolean = false,
     /** Last claim date as ISO string (yyyy-MM-dd). */
     val lastClaimDate: String? = null,
     /** History of completed days in current 7-day cycle (indices 0-6). */

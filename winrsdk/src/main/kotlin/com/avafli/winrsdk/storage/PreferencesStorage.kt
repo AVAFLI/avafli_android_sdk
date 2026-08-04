@@ -43,22 +43,6 @@ internal class PreferencesStorage(context: Context) {
         return prefs.getInt(KEY_TOTAL_ENTRIES, 0)
     }
 
-    fun saveWeeklyDaysCompleted(days: Int) {
-        prefs.edit().putInt(KEY_WEEKLY_DAYS, days).apply()
-    }
-
-    fun getWeeklyDaysCompleted(): Int {
-        return prefs.getInt(KEY_WEEKLY_DAYS, 0)
-    }
-
-    fun saveMonthlyDaysCompleted(days: Int) {
-        prefs.edit().putInt(KEY_MONTHLY_DAYS, days).apply()
-    }
-
-    fun getMonthlyDaysCompleted(): Int {
-        return prefs.getInt(KEY_MONTHLY_DAYS, 0)
-    }
-
     fun saveEmailSubmitted(submitted: Boolean) {
         prefs.edit().putBoolean(KEY_EMAIL_SUBMITTED, submitted).apply()
     }
@@ -113,8 +97,6 @@ internal class PreferencesStorage(context: Context) {
         private const val KEY_STREAK_DAY = "streak_day"
         private const val KEY_LAST_CLAIM_DATE = "last_claim_date"
         private const val KEY_TOTAL_ENTRIES = "total_entries"
-        private const val KEY_WEEKLY_DAYS = "weekly_days_completed"
-        private const val KEY_MONTHLY_DAYS = "monthly_days_completed"
         private const val KEY_EMAIL_SUBMITTED = "email_submitted"
         private const val KEY_COMPLETED_DAYS = "completed_days"
         private const val KEY_LAST_AUTO_PRESENT = "winr_last_auto_present"
