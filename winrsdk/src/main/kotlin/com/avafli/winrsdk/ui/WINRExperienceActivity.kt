@@ -30,6 +30,7 @@ internal class WINRExperienceActivity : ComponentActivity() {
         viewModel.setSdkConfig(WINR.getSdkConfig())
         viewModel.setResultCallback(WINR.consumePendingCallback())
         viewModel.setPublisherUserId(WINR.getPublisherUserId())
+        viewModel.setPrefillUser(WINR.getConfiguredUser())
         // Always fetches fresh status from the backend; the cached giveaway is
         // the offline fallback only.
         viewModel.load(WINR.getCachedGiveaway())

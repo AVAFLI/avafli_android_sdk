@@ -204,6 +204,17 @@ private fun DrawerContent(
             )
         }
 
+        is ExperienceScreen.WinnerClaim -> WINRV2WinnerClaimFlow(
+            ui = ui,
+            claim = screen.claim,
+            accent = accent,
+            logoUrl = logoUrl,
+            claimFormPrefill = viewModel.claimFormPrefill(),
+            onContinue = { viewModel.winnerClaimContinue() },
+            onSubmit = { form -> viewModel.submitPrizeClaim(form) },
+            onClose = onDismiss,
+        )
+
         is ExperienceScreen.HowItWorks -> WINRV2HowItWorksScreen(
             accent = accent,
             logoUrl = logoUrl,

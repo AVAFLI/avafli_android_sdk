@@ -3,8 +3,11 @@ package com.avafli.winrsdk.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.avafli.winrsdk.WINR
+import com.avafli.winrsdk.WINRUser
 import com.avafli.winrsdk.domain.DailyEntryGrant
 import com.avafli.winrsdk.domain.Giveaway
+import com.avafli.winrsdk.domain.PrizeClaimBlock
+import com.avafli.winrsdk.domain.PrizeClaimForm
 import com.avafli.winrsdk.domain.SdkConfig
 import com.avafli.winrsdk.domain.StreakEngine
 import com.avafli.winrsdk.domain.StreakState
@@ -48,7 +51,22 @@ internal sealed class ExperienceScreen {
     ) : ExperienceScreen()
 
     object HowItWorks : ExperienceScreen()
+
+    /**
+     * This person is the drawn winner and hasn't submitted their claim yet —
+     * the drawer shows the winner splash → claim form → confirmation flow
+     * instead of the dashboard. Takes precedence on open.
+     */
+    data class WinnerClaim(val claim: PrizeClaimBlock) : ExperienceScreen()
+
     data class Error(val message: String) : ExperienceScreen()
+}
+
+/** Sub-screen of the winner claim flow (`screen is WinnerClaim`). */
+internal sealed class WinnerClaimStep {
+    object Splash : WinnerClaimStep()
+    object Form : WinnerClaimStep()
+    data class Confirmation(val claimNumber: String, val submittedAt: String) : WinnerClaimStep()
 }
 
 internal data class ExperienceUiState(
@@ -77,6 +95,20 @@ internal data class ExperienceUiState(
     val claimRevealed: Boolean = false,
     /** Total entries as of before today's claim, for pre-reveal display. */
     val preClaimTotalEntries: Int? = null,
+
+    // ── Winner prize claim (mirrors iOS) ──
+
+    /** Which screen of the winner claim flow is showing. */
+    val winnerClaimStep: WinnerClaimStep = WinnerClaimStep.Splash,
+    /** Spinner state for the claim form's SUBMIT pill. */
+    val isSubmittingClaim: Boolean = false,
+    /**
+     * Transport-level submit failure surfaced inline on the form ("Not the
+     * winner"/"Already submitted" instead fall back to the dashboard silently).
+     */
+    val claimSubmitError: String? = null,
+    /** The submitted form, kept for the confirmation screen's winner card. */
+    val submittedClaimForm: PrizeClaimForm? = null,
 )
 
 internal class WINRExperienceViewModel(
@@ -104,6 +136,15 @@ internal class WINRExperienceViewModel(
     /** One-shot guard for the "already claimed on another device" re-sync. */
     private var didResyncAfterAlreadyClaimed = false
 
+    /**
+     * Set after a "Not the winner"/"Already submitted" rejection so the next
+     * load skips the winner flow and lands on the normal dashboard.
+     */
+    private var suppressWinnerClaim = false
+
+    /** Host-app-provided identity used to prefill the claim form. */
+    private var prefillUser: WINRUser? = null
+
     /** Saved primary screen so "How It Works" can navigate back. */
     private var lastPrimaryScreen: ExperienceScreen? = null
 
@@ -119,6 +160,17 @@ internal class WINRExperienceViewModel(
     fun setPublisherUserId(id: String?) {
         publisherUserId = id
     }
+
+    fun setPrefillUser(user: WINRUser?) {
+        prefillUser = user
+    }
+
+    /** Prefill for the claim form (host-app-provided identity). */
+    fun claimFormPrefill(): PrizeClaimForm = PrizeClaimForm(
+        firstName = prefillUser?.firstName ?: "",
+        lastName = prefillUser?.lastName ?: "",
+        phone = prefillUser?.phone ?: "",
+    )
 
     // ── Display helpers ──
 
@@ -138,6 +190,7 @@ internal class WINRExperienceViewModel(
         // may already be cached, but claimedToday can change between opens.
         var backendClaimedToday: Boolean? = null
         var backendStreakDay: Int? = null
+        var pendingPrizeClaim: PrizeClaimBlock? = null
 
         try {
             val response = api.getActiveGiveaway()
@@ -148,13 +201,22 @@ internal class WINRExperienceViewModel(
                 return
             }
 
-            if (response.giveaway == null) {
+            // Winner prize claim: a PENDING block takes precedence over the
+            // dashboard on open (routed below, once the caches are synced).
+            // A "submitted" block is ignored — the normal dashboard shows.
+            if (response.prizeClaim?.isPending == true && !suppressWinnerClaim) {
+                pendingPrizeClaim = response.prizeClaim
+            }
+
+            // Check if backend returned no active giveaway. (A pending prize
+            // claim can outlive its giveaway — the winner flow still shows.)
+            if (response.giveaway == null && pendingPrizeClaim == null) {
                 activeGiveaway = null
                 setScreen(ExperienceScreen.NoActiveGiveaway)
                 return
             }
 
-            activeGiveaway = response.giveaway
+            response.giveaway?.let { activeGiveaway = it }
             response.sdkConfig?.let {
                 sdkConfig = it
                 WINR.updateSdkConfig(it)
@@ -178,6 +240,27 @@ internal class WINRExperienceViewModel(
 
         cachedBackendClaimedToday = backendClaimedToday
         cachedBackendStreakDay = backendStreakDay
+
+        // Winner prize claim takes precedence over auto-claim/dashboard on open —
+        // but the daily auto-claim still fires silently in the background so the
+        // winner's entries keep accruing. Shown even before the email gate: the
+        // claim is keyed to the account server-side.
+        pendingPrizeClaim?.let { claim ->
+            _uiState.value = _uiState.value.copy(
+                screen = ExperienceScreen.WinnerClaim(claim),
+                winnerClaimStep = WinnerClaimStep.Splash,
+                giveaway = activeGiveaway,
+                sdkConfig = sdkConfig,
+            )
+            analytics?.trackEvent(
+                "winr_winner_claim_shown",
+                mapOf("giveaway_id" to claim.giveawayId),
+            )
+            if (backendClaimedToday != true && preferencesStorage.isEmailSubmitted()) {
+                silentDailyClaim()
+            }
+            return
+        }
 
         // Email-capture gate: shown until the user completes the consent flow.
         if (!preferencesStorage.isEmailSubmitted()) {
@@ -481,6 +564,98 @@ internal class WINRExperienceViewModel(
         }
 
         return e.message?.contains("Already claimed", ignoreCase = true) == true
+    }
+
+    // ── Winner prize claim ──
+
+    /**
+     * Fire-and-forget daily claim while the winner flow is on screen — the
+     * winner still accrues their streak entries, but nothing is revealed.
+     */
+    private fun silentDailyClaim() {
+        viewModelScope.launch {
+            try {
+                val response = api.claimDailyEntries(TimeZone.getDefault().id)
+                cachedBackendClaimedToday = true
+                cachedBackendStreakDay = response.streakDay
+                cachedBackendTotalEntries = response.totalEntries
+                _uiState.value = _uiState.value.copy(claimedToday = true)
+                logger.debug("Silent daily claim during winner flow: +${response.entries}")
+            } catch (e: Exception) {
+                logger.debug("Silent daily claim declined during winner flow: ${e.message}")
+            }
+        }
+    }
+
+    /** Splash CONTINUE → the claim form. */
+    fun winnerClaimContinue() {
+        if (_uiState.value.screen !is ExperienceScreen.WinnerClaim) return
+        _uiState.value = _uiState.value.copy(winnerClaimStep = WinnerClaimStep.Form)
+    }
+
+    /**
+     * SUBMIT on the claim form. Success → confirmation screen. A backend
+     * "Not the winner"/"Already submitted" rejection falls back to the normal
+     * dashboard silently (logged); transport failures surface inline.
+     */
+    fun submitPrizeClaim(form: PrizeClaimForm) {
+        val screen = _uiState.value.screen as? ExperienceScreen.WinnerClaim ?: return
+        if (_uiState.value.isSubmittingClaim) return
+        if (!form.isValid) return
+        _uiState.value = _uiState.value.copy(claimSubmitError = null, isSubmittingClaim = true)
+
+        viewModelScope.launch {
+            try {
+                val response = api.submitPrizeClaim(
+                    giveawayId = screen.claim.giveawayId,
+                    firstName = form.firstName.trim(),
+                    lastName = form.lastName.trim(),
+                    phone = form.phone.trim().ifEmpty { null },
+                    street = form.street.trim(),
+                    apt = form.apt.trim().ifEmpty { null },
+                    city = form.city.trim(),
+                    state = form.state.trim(),
+                    zip = form.zip.trim(),
+                    country = form.country,
+                    photoBase64 = form.photoBase64,
+                    story = null,
+                )
+                _uiState.value = _uiState.value.copy(
+                    isSubmittingClaim = false,
+                    submittedClaimForm = form,
+                    winnerClaimStep = WinnerClaimStep.Confirmation(
+                        claimNumber = response.claimNumber,
+                        submittedAt = response.submittedAt,
+                    ),
+                )
+                analytics?.trackEvent(
+                    "winr_prize_claim_submitted",
+                    mapOf(
+                        "giveaway_id" to screen.claim.giveawayId,
+                        "claim_number" to response.claimNumber,
+                    ),
+                )
+            } catch (e: Exception) {
+                val message = e.message ?: ""
+                if (message.contains("Not the winner") || message.contains("Already submitted")) {
+                    // Stale/duplicate winner state — never trap the user in the
+                    // claim flow. Fall back to the normal dashboard silently.
+                    logger.info("Prize claim rejected ($message) — falling back to dashboard")
+                    suppressWinnerClaim = true
+                    _uiState.value = _uiState.value.copy(
+                        isSubmittingClaim = false,
+                        screen = ExperienceScreen.Loading,
+                    )
+                    loadInternal()
+                    return@launch
+                }
+                logger.error("Prize claim submit failed: ${e.message}", e)
+                _uiState.value = _uiState.value.copy(
+                    isSubmittingClaim = false,
+                    claimSubmitError = "Something went wrong. Please check your connection and try again.",
+                )
+            }
+        }
     }
 
     // ── Helpers ──

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Half-filled shield (SF "shield.lefthalf.filled" equivalent): outline ring
+     plus a solid left half. Tinted at the call site. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Outline ring -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12,2 L4,5 v6.09 c0,5.05 3.41,9.76 8,10.91 c4.59,-1.15 8,-5.86 8,-10.91 V5 L12,2 z M12,4.14 l6,2.25 v4.7 c0,4.07 -2.66,7.85 -6,8.88 c-3.34,-1.03 -6,-4.81 -6,-8.88 v-4.7 L12,4.14 z" />
+    <!-- Solid left half -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12,2 L4,5 v6.09 c0,5.05 3.41,9.76 8,10.91 V2 z" />
+</vector>

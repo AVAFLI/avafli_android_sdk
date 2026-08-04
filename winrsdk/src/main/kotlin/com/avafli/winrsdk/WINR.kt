@@ -374,6 +374,9 @@ object WINR {
 
     internal fun getPublisherUserId(): String? = config?.user?.id
 
+    /** Host-app-provided identity — prefills the winner prize-claim form. */
+    internal fun getConfiguredUser(): WINRUser? = config?.user
+
     // --- Private helpers ---
 
     private suspend fun registerDeviceIfNeeded(context: Context) {
