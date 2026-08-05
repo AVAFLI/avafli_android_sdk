@@ -2,6 +2,7 @@ package com.avafli.winrsdk.ui.v2
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -26,6 +27,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
@@ -82,26 +84,46 @@ internal fun WINRV2PrizeCard(
 
 @Composable
 private fun Hero(prizeImageUrl: String?) {
-    if (prizeImageUrl != null) {
-        val art = rememberWinrRemoteImage(prizeImageUrl)
-        if (art != null) {
-            Image(
-                bitmap = art,
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-            )
-        } else {
-            Box(Modifier.fillMaxSize().background(WINRV2Color.deepCharcoal))
-        }
-    } else {
+    if (prizeImageUrl.isNullOrBlank()) {
+        BundledHero()
+        return
+    }
+    val art = rememberWinrRemoteImageState(prizeImageUrl)
+
+    // Deep charcoal under everything: a cold URL never flashes blank/white
+    // against the card, it darkens and then the art fades up over it.
+    Box(Modifier.fillMaxSize().background(WINRV2Color.deepCharcoal))
+
+    // The warm path (WINRV2ImageWarmer decoded this at registration/refresh)
+    // resolves the bitmap during the FIRST composition, so this target is
+    // already 1f and animateFloatAsState starts there — no fade, the art
+    // paints with the rest of the card. A cold URL starts at 0f and fades in
+    // over ~200ms when the bytes land.
+    val alpha by animateFloatAsState(
+        targetValue = if (art.bitmap != null) 1f else 0f,
+        animationSpec = tween(WINR_IMAGE_FADE_MS),
+        label = "winrHeroFade",
+    )
+    art.bitmap?.let { bitmap ->
         Image(
-            painter = painterResource(R.drawable.winr_cash_hero_single),
+            bitmap = bitmap,
             contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().alpha(alpha),
             contentScale = ContentScale.Crop,
         )
     }
+    // Broken URL — fall back to the bundled cash hero rather than a dark hole.
+    if (art.failed) BundledHero()
+}
+
+@Composable
+private fun BundledHero() {
+    Image(
+        painter = painterResource(R.drawable.winr_cash_hero_single),
+        contentDescription = null,
+        modifier = Modifier.fillMaxSize(),
+        contentScale = ContentScale.Crop,
+    )
 }
 
 /** Solid black strip inside the top of the card: accent title + white sub. */

@@ -24,6 +24,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,9 +50,14 @@ import kotlinx.coroutines.delay
  * Day 2+, over "Your {N} entries have been added automatically." — never the
  * pitch first; it holds ~2.5s then slides ONCE to the come-back pitch, the
  * final state. Non-celebration opens (same-day reopens) rest on the pitch
- * directly. If `claimed` flips true
- * mid-life without a celebration mount (late-arriving grant), the toast slides
- * in, holds, and slides back — same single forward carousel.
+ * directly.
+ *
+ * [celebrating] is the load-bearing signal, NOT the mount-time seed: since the
+ * cache-first render can mount this bar BEFORE the grant is staged, a
+ * celebration that arrives late must still play. It slides in, holds, and
+ * slides back — the same single forward carousel — and the `toastPlayed`
+ * one-shot guarantees it happens EXACTLY once, whether it was seeded at mount
+ * or arrived afterwards.
  */
 private enum class WINRV2BarPhase { Pitch, Added }
 
@@ -66,38 +72,38 @@ internal fun WINRV2ComeBackBar(
     claimed: Boolean = false,
     claimedEntries: Int = 0,
     celebrationOpen: Boolean = false,
+    celebrating: Boolean = celebrationOpen,
     firstDay: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
+    // One-shot: the toast plays exactly once for this bar, no matter whether
+    // the celebration was seeded at mount or staged afterwards. Survives a
+    // config change, so a rotation mid-celebration doesn't replay it.
+    var toastPlayed by rememberSaveable { mutableStateOf(false) }
     // Captured at mount: a celebration open starts ON the toast (no slide-in,
-    // it IS the first frame) and later parameter flips must not re-trigger it.
-    val celebrationAtMount = remember { celebrationOpen }
+    // it IS the first frame) and later parameter flips must not re-seed it.
+    // A rebuilt bar whose toast already played rests on the pitch instead.
+    val celebrationAtMount = remember { celebrationOpen && !toastPlayed }
     var phase by remember {
         mutableStateOf(if (celebrationAtMount) WINRV2BarPhase.Added else WINRV2BarPhase.Pitch)
     }
     var lastClaimed by remember { mutableStateOf(claimed) }
     // LaunchedEffect scoping makes the hold timers teardown-safe: the delays
     // are cancelled automatically if the bar leaves composition mid-hold.
-    LaunchedEffect(Unit) {
-        if (celebrationAtMount) {
-            // Celebration open: toast first, then ONE slide to the pitch.
-            delay(TOAST_HOLD_MS)
-            phase = WINRV2BarPhase.Pitch
-        }
+    LaunchedEffect(celebrating) {
+        if (!celebrating || toastPlayed) return@LaunchedEffect
+        toastPlayed = true
+        // A celebration open already seeded this phase (assigning it again is
+        // a no-op); a late-arriving one slides the toast in from the right.
+        phase = WINRV2BarPhase.Added
+        delay(TOAST_HOLD_MS)
+        phase = WINRV2BarPhase.Pitch
     }
     LaunchedEffect(claimed) {
         if (claimed == lastClaimed) return@LaunchedEffect // mount: keep initial phase
         lastClaimed = claimed
-        if (claimed && !celebrationAtMount && phase == WINRV2BarPhase.Pitch) {
-            // Late-arriving grant on a non-celebration mount: celebrate, hold,
-            // then slide back to the pitch.
-            phase = WINRV2BarPhase.Added
-            delay(TOAST_HOLD_MS)
-            phase = WINRV2BarPhase.Pitch
-        } else if (!claimed) {
-            // Claim retracted (predicted grant failed) — settle on the pitch.
-            phase = WINRV2BarPhase.Pitch
-        }
+        // Claim retracted (predicted grant failed) — settle on the pitch.
+        if (!claimed) phase = WINRV2BarPhase.Pitch
     }
 
     Box(

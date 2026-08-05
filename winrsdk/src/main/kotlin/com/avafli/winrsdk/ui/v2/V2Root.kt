@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -57,6 +56,12 @@ internal fun WINRV2ExperienceRoot(
     val context = LocalContext.current
     LaunchedEffect(Unit) {
         drawerAppeared = true
+        // Same idea for the publisher's remote art: normally already warm (the
+        // SDK warms it at registration/refresh), but a drawer opened before
+        // that landed gets one more chance to have it decoded before the prize
+        // card paints.
+        WINRV2ImageWarmer.prewarm(ui.giveaway?.prizeImageUrl)
+        WINRV2ImageWarmer.prewarm(logoUrl)
         // Decode Joe's Figma confetti-burst GIF off-main NOW so mounting it at
         // the reveal beat is instant.
         WINRV2GifAssets.prewarm(context)
@@ -126,7 +131,7 @@ private fun DrawerContent(
     onWinnerTap: () -> Unit,
 ) {
     when (val screen = ui.screen) {
-        is ExperienceScreen.Loading -> LoadingState()
+        is ExperienceScreen.Loading -> WINRV2LoadingSkeleton()
 
         is ExperienceScreen.NoActiveGiveaway,
         is ExperienceScreen.Error -> EmptyState(onDismiss)
@@ -199,22 +204,6 @@ private fun DrawerContent(
             visitMode = visitMode,
             onDone = { viewModel.hideHowItWorks() },
             onClose = onDismiss,
-        )
-    }
-}
-
-@Composable
-private fun LoadingState() {
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        CircularProgressIndicator(color = Color.White, strokeWidth = 2.5.dp)
-        Text(
-            "Loading…",
-            style = WINRV2Font.inter(14.sp, color = WINRV2Color.textTertiary),
-            modifier = Modifier.padding(top = 16.dp),
         )
     }
 }

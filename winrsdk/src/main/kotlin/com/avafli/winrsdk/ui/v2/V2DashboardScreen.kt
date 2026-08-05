@@ -99,6 +99,12 @@ internal fun WINRV2DashboardScreen(
                 // this open IS the celebration: the bar starts ON the toast
                 // (never the pitch first) and slides once to the pitch.
                 celebrationOpen = pendingClaimEntries != null && preReveal,
+                // A staged grant AT ALL means this open celebrates. Kept
+                // separate from [celebrationOpen] because the cache-first
+                // render mounts the dashboard before the grant exists — the
+                // bar must accept the celebration when it arrives, not only
+                // when it was there at mount.
+                celebrating = pendingClaimEntries != null,
             )
             Column(
                 modifier = Modifier

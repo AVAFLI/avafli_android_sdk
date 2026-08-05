@@ -17,6 +17,7 @@ import com.avafli.winrsdk.storage.PreferencesStorage
 import com.avafli.winrsdk.storage.SecureStorage
 import com.avafli.winrsdk.ui.WINRExperienceActivity
 import com.avafli.winrsdk.ui.WINRExperienceViewModel
+import com.avafli.winrsdk.ui.v2.WINRV2ImageWarmer
 import kotlinx.coroutines.*
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.contentOrNull
@@ -393,6 +394,7 @@ object WINR {
                     cachedOptedOut = true
                     preferencesStorage?.saveOptedOut(true)
                 }
+                prewarmPublisherArt()
             } catch (e: WINRError) {
                 if (isSuspendedError(e)) throw WINRError.ServiceUnavailable()
                 logger?.warn("Failed to refresh giveaway: ${e.message}")
@@ -437,9 +439,24 @@ object WINR {
             preferencesStorage?.saveOptedOut(true)
         }
 
+        prewarmPublisherArt()
+
         // Do not log the uuid (PII-linked identifier) at info level.
         logger?.info("Device registered successfully")
         logger?.debug("Registered uuid present: ${response.uuid.isNotEmpty()}")
+    }
+
+    /**
+     * Decodes the publisher's remote art (prize hero + logo) into the shared
+     * image cache as soon as the SDK learns the giveaway config — at
+     * registration and on every giveaway refresh, mirroring the bundled-GIF
+     * prewarm — so the drawer paints the prize card complete on its first frame
+     * instead of the art popping in after everything else. Fire-and-forget;
+     * failures just fall back to loading at display time.
+     */
+    private fun prewarmPublisherArt() {
+        WINRV2ImageWarmer.prewarm(cachedGiveaway?.prizeImageUrl)
+        WINRV2ImageWarmer.prewarm(cachedSdkConfig?.branding?.logoUrl)
     }
 
     /**

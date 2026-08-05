@@ -15,6 +15,7 @@ import com.avafli.winrsdk.network.WinrApi
 import com.avafli.winrsdk.services.Logger
 import com.avafli.winrsdk.services.analytics.AnalyticsAdapter
 import com.avafli.winrsdk.storage.PreferencesStorage
+import com.avafli.winrsdk.ui.v2.WINRV2ImageWarmer
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -198,7 +199,79 @@ internal class WINRExperienceViewModel(
     // ── Load ──
 
     fun load(cachedGiveaway: Giveaway? = null) {
+        // Paint the dashboard from cache on the FIRST frame — before any
+        // network call resolves — then let [loadInternal] reconcile silently.
+        hydrateFromCache(cachedGiveaway)
         viewModelScope.launch { loadInternal(cachedGiveaway) }
+    }
+
+    // ── Cache-first render ──
+
+    /**
+     * True once the dashboard has been painted from cached values, so the
+     * network reconcile knows it is updating a LIVE dashboard rather than
+     * replacing a loading screen.
+     */
+    private var hydratedFromCache = false
+
+    /**
+     * Renders the dashboard IMMEDIATELY from cached state (the giveaway config
+     * the SDK already holds from registration + the persisted streak), skipping
+     * the loading phase entirely.
+     *
+     * The drawer used to sit on a spinner for as long as its `getActiveGiveaway`
+     * → claim round-trips took (seconds on a slow network) even though every
+     * value it needed was already on the device. Everything here is a LOCAL
+     * read, so it lands synchronously with the Activity's `setContent`;
+     * [loadInternal] then reconciles the same way the celebration staging
+     * already does — silently, in place, with the reveal flags untouched so a
+     * staged celebration still fires exactly once.
+     *
+     * Bails out (leaving the skeleton up) when anything is missing or when a
+     * fresh response already resolved the screen: a first-ever open, an
+     * unconsented user who must see email capture first, or a cold cache all
+     * take the genuine loading path.
+     */
+    internal fun hydrateFromCache(cachedGiveaway: Giveaway? = null) {
+        // Never stomp fresher truth.
+        if (_uiState.value.screen !is ExperienceScreen.Loading) return
+
+        val giveaway = cachedGiveaway ?: activeGiveaway ?: return
+
+        // Day 1 / unconsented users must land on email capture, never on a
+        // cached dashboard.
+        if (!preferencesStorage.isEmailSubmitted()) return
+
+        val day = preferencesStorage.getStreakDay()
+        if (day <= 0) return
+
+        activeGiveaway = giveaway
+        val ladder = displayLadder
+        val entriesToday = ladder[(day - 1).coerceIn(0, ladder.size - 1)]
+        val total = preferencesStorage.getTotalEntries()
+        val lastClaimDate = preferencesStorage.getLastClaimDate()
+        val claimedToday = lastClaimDate == LocalDate.now().toString()
+        val state = StreakState(
+            currentDay = day,
+            claimedToday = claimedToday,
+            totalEntries = total,
+            lastClaimDate = lastClaimDate,
+            completedDays = preferencesStorage.getCompletedDays(),
+        )
+
+        hydratedFromCache = true
+        // pendingRevealGrant / claimRevealed are deliberately left alone: this
+        // is a plain resting dashboard, and the celebration (if today has one)
+        // is staged by the network path exactly as it always was.
+        _uiState.value = _uiState.value.copy(
+            screen = ExperienceScreen.Streak(state, entriesToday, ladder),
+            claimedToday = claimedToday,
+            giveaway = giveaway,
+            sdkConfig = sdkConfig,
+            displayStreakDay = day,
+            displayTotalEntries = total,
+        )
+        logger.debug("Dashboard painted from cache (day $day) — reconciling in background")
     }
 
     private suspend fun loadInternal(
@@ -235,10 +308,15 @@ internal class WINRExperienceViewModel(
                 return
             }
 
-            response.giveaway?.let { activeGiveaway = it }
+            response.giveaway?.let {
+                activeGiveaway = it
+                // Keep the prize art warm across prize changes mid-session.
+                WINRV2ImageWarmer.prewarm(it.prizeImageUrl)
+            }
             response.sdkConfig?.let {
                 sdkConfig = it
                 WINR.updateSdkConfig(it)
+                WINRV2ImageWarmer.prewarm(it.branding?.logoUrl)
             }
             backendClaimedToday = response.claimedToday
             backendStreakDay = response.streakDay
@@ -400,13 +478,28 @@ internal class WINRExperienceViewModel(
         }
 
         // ─── Offline fallback: local streak engine ───
-        val engine = StreakEngine(
-            activeGiveaway ?: Giveaway(id = "", title = "", prizeDescription = "")
-        )
-        engine.setState(loadStreakState())
-        engine.checkStreakReset()
-        val state = engine.getState()
-        val claimed = engine.hasClaimedToday()
+        val local = runCatching {
+            val engine = StreakEngine(
+                activeGiveaway ?: Giveaway(id = "", title = "", prizeDescription = "")
+            )
+            engine.setState(loadStreakState())
+            engine.checkStreakReset()
+            engine
+        }.getOrElse { e ->
+            // A cache-rendered dashboard is already on screen and correct
+            // enough — a local streak-engine hiccup is not worth replacing it
+            // with an error screen.
+            if (hydratedFromCache) {
+                logger.debug("Local streak engine failed after a cache render — keeping the dashboard: ${e.message}")
+            } else {
+                logger.error("Local streak engine failed: ${e.message}", e)
+                setScreen(ExperienceScreen.Error(e.message ?: "Failed to load your streak"))
+            }
+            return
+        }
+
+        val state = local.getState()
+        val claimed = local.hasClaimedToday()
         val day = state.currentDay.coerceAtLeast(1)
         val entriesToday = ladder[(day - 1).coerceIn(0, ladder.size - 1)]
 
@@ -523,6 +616,14 @@ internal class WINRExperienceViewModel(
                 // an existing user under this publisher, WinrApi switches to the
                 // canonical user's credentials internally (adopted == true).
                 api.submitEmail(email, marketingConsent, publisherUserId)
+                // Refresh the SDK-level consent cache HERE, on the submit
+                // itself, rather than waiting for the next getActiveGiveaway
+                // to echo emailConsentStatus back. Today a stale `false` is
+                // masked because auto-present checks the once-per-day mark
+                // before the consent flag, so the unregistered-impression
+                // counter never gets the chance to burn an open on a user who
+                // just registered — but correctness must not depend on that
+                // ordering.
                 WINR.noteEmailConsent()
                 logger.debug("Email submitted to backend")
             } catch (e: Exception) {

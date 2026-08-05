@@ -22,7 +22,11 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
 import com.avafli.winrsdk.R
 import com.avafli.winrsdk.domain.Milestone
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
@@ -202,41 +206,137 @@ private val winrImageCache = object : LinkedHashMap<String, ImageBitmap>(16, 0.7
         size > 12
 }
 
+/** Already-decoded bitmap for [url], or null when it has never been loaded. */
+internal fun winrCachedImage(url: String): ImageBitmap? =
+    synchronized(winrImageCache) { winrImageCache[url] }
+
+/**
+ * Fetches + decodes [url] off the main thread into the shared LRU cache.
+ * Returns null on any failure (callers render their fallback). A cache hit
+ * returns without touching the network, so this is safe to call repeatedly.
+ */
+internal suspend fun winrLoadRemoteImage(url: String): ImageBitmap? {
+    winrCachedImage(url)?.let { return it }
+    return withContext(Dispatchers.IO) {
+        try {
+            val connection = URL(url).openConnection() as HttpURLConnection
+            connection.connectTimeout = 10_000
+            connection.readTimeout = 15_000
+            connection.instanceFollowRedirects = true
+            connection.inputStream.use { stream ->
+                android.graphics.BitmapFactory.decodeStream(stream)?.asImageBitmap()
+            }?.also { bitmap ->
+                synchronized(winrImageCache) { winrImageCache[url] = bitmap }
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+}
+
+/**
+ * Load outcome for a remote image, so a display site can tell "still loading"
+ * (dark placeholder) apart from "broken" (bundled fallback) — and whether the
+ * bytes were already warm, which decides fade vs. no fade.
+ */
+internal data class WINRV2RemoteImageState(
+    val bitmap: ImageBitmap? = null,
+    val failed: Boolean = false,
+    /**
+     * True when [bitmap] was already decoded at the first composition (the
+     * warm path — [WINRV2ImageWarmer] normally gets there first), so it paints
+     * with the rest of its container instead of fading in.
+     */
+    val wasWarm: Boolean = false,
+)
+
+/**
+ * Loads a remote bitmap off the main thread with a tiny in-memory LRU cache,
+ * reporting loading / loaded / failed so callers can place a placeholder and a
+ * fallback correctly.
+ */
+@Composable
+internal fun rememberWinrRemoteImageState(url: String?): WINRV2RemoteImageState {
+    val state by produceState(
+        initialValue = url?.let { cached ->
+            winrCachedImage(cached)?.let { WINRV2RemoteImageState(it, wasWarm = true) }
+        } ?: WINRV2RemoteImageState(),
+        key1 = url,
+    ) {
+        if (url.isNullOrBlank()) {
+            value = WINRV2RemoteImageState()
+            return@produceState
+        }
+        if (value.bitmap != null) return@produceState
+        val bitmap = winrLoadRemoteImage(url)
+        value = WINRV2RemoteImageState(bitmap = bitmap, failed = bitmap == null)
+    }
+    return state
+}
+
 /**
  * Loads a remote bitmap off the main thread with a tiny in-memory LRU cache.
  * Returns null while loading / on failure (callers render their fallback).
  */
 @Composable
-internal fun rememberWinrRemoteImage(url: String?): ImageBitmap? {
-    val image by produceState<ImageBitmap?>(
-        initialValue = url?.let { synchronized(winrImageCache) { winrImageCache[it] } },
-        key1 = url
-    ) {
-        if (url.isNullOrBlank()) {
-            value = null
-            return@produceState
-        }
-        synchronized(winrImageCache) { winrImageCache[url] }?.let {
-            value = it
-            return@produceState
-        }
-        value = withContext(Dispatchers.IO) {
-            try {
-                val connection = URL(url).openConnection() as HttpURLConnection
-                connection.connectTimeout = 10_000
-                connection.readTimeout = 15_000
-                connection.instanceFollowRedirects = true
-                connection.inputStream.use { stream ->
-                    android.graphics.BitmapFactory.decodeStream(stream)?.asImageBitmap()
-                }?.also { bitmap ->
-                    synchronized(winrImageCache) { winrImageCache[url] = bitmap }
-                }
-            } catch (_: Exception) {
-                null
+internal fun rememberWinrRemoteImage(url: String?): ImageBitmap? =
+    rememberWinrRemoteImageState(url).bitmap
+
+// MARK: - Remote-image prewarming (publisher prize art + logo)
+
+/** Fade-in for a remote image whose bytes arrive after its container painted. */
+internal const val WINR_IMAGE_FADE_MS = 200
+
+/**
+ * Decodes the publisher's remote art into the shared image cache ahead of the
+ * drawer opening, so the prize card paints its art on its FIRST frame instead
+ * of popping in a beat after everything else.
+ *
+ * This is the remote-image sibling of [WINRV2GifAssets.prewarm]: the SDK
+ * learns `prizeImageUrl` / `branding.logoUrl` at registration and on every
+ * giveaway refresh, long before the experience is presented, which is exactly
+ * the moment to pay the download. Fire-and-forget — a failure just means the
+ * display site loads it normally.
+ */
+internal object WINRV2ImageWarmer {
+
+    /** URLs already warmed (or in flight) — a repeated refresh is a no-op. */
+    private val warmed = mutableSetOf<String>()
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /**
+     * The decode step, injectable so tests can exercise the warm-once /
+     * retry-after-failure bookkeeping without a network or an Android
+     * `BitmapFactory`. Returns true when the URL is now cached.
+     */
+    internal var fetcher: suspend (String) -> Boolean = { winrLoadRemoteImage(it) != null }
+
+    /**
+     * Kicks off a decode for [url] unless it is already warm or in flight.
+     * Returns the launched job (null when nothing was started) so callers —
+     * tests, mostly — can await it; production call sites ignore it.
+     */
+    fun prewarm(url: String?): Job? {
+        if (url.isNullOrBlank()) return null
+        synchronized(warmed) { if (!warmed.add(url)) return null }
+        return scope.launch {
+            val ok = try {
+                fetcher(url)
+            } catch (_: Throwable) {
+                false
             }
+            // Drop it again on failure so the next refresh can retry.
+            if (!ok) synchronized(warmed) { warmed.remove(url) }
         }
     }
-    return image
+
+    internal fun isWarmed(url: String): Boolean = synchronized(warmed) { warmed.contains(url) }
+
+    internal fun resetForTesting() {
+        synchronized(warmed) { warmed.clear() }
+        fetcher = { winrLoadRemoteImage(it) != null }
+    }
 }
 
 // MARK: - Auto-shrinking text (SwiftUI minimumScaleFactor equivalent)

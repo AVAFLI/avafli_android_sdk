@@ -2,6 +2,50 @@
 
 All notable changes to the WINR Android SDK will be documented in this file.
 
+## [2.3.3] - 2026-08-05
+
+Load-experience defects found testing the SDK inside a real publisher app
+(ports the Flutter/iOS 2.3.3 work).
+
+### Fixed
+- **The drawer no longer sits on a spinner for seconds.** It auto-opens ahead
+  of its sequential network calls (`registerDevice` → `getActiveGiveaway` →
+  claim). When the device already holds a giveaway config and a persisted
+  streak, the real dashboard now paints IMMEDIATELY from that cache —
+  synchronously with the Activity's `setContent`, before any request resolves
+  — and the fresh response reconciles silently in place, the same no-replay
+  reconcile the celebration staging already used. A celebration staged AFTER
+  the cache render still fires exactly once: the come-back bar now accepts a
+  late-arriving toast (one-shot guarded, so it can never play twice) instead
+  of missing it. The email-capture gate is unchanged: an unconsented user
+  never sees a cached dashboard. A local streak-engine failure after a
+  successful cache render leaves the live dashboard up rather than replacing
+  it with an error screen.
+- **Cold start shows a skeleton, not a bare spinner.** With nothing cached to
+  paint, the loading view is now a pulsing block-out of the real layout (grab
+  handle, header, prize card, three streak tiles, come-back bar, CTA pill) in
+  the drawer's own gunmetal, on one shared pulse so it reads as a single
+  surface breathing — replacing the centered `CircularProgressIndicator` and
+  "Loading…".
+- **The prize image arrives with the card instead of popping in after it.**
+  The publisher's `prizeImageUrl` and `branding.logoUrl` are now decoded into
+  the SDK's image cache as soon as it learns the giveaway config — at
+  registration, on every giveaway refresh, and once more when the experience
+  root mounts, mirroring the bundled-GIF prewarm — so the card normally paints
+  its art on its first frame. Warmed URLs are tracked so repeat refreshes are
+  free, and a failed URL is dropped so the next refresh retries it. A cold URL
+  fades in over ~200ms against the card's deep-charcoal placeholder rather
+  than flashing, and a broken one falls back to the bundled cash hero.
+- **Email consent cache is refreshed on submit.** A successful email submit
+  now marks the SDK-level consent flag immediately rather than waiting for the
+  next `getActiveGiveaway` to echo it back, so the unregistered-impression cap
+  can never burn an auto-open on a user who just registered.
+
+### Tests
+- 15 new: the cache-render-vs-skeleton decision (including the email-gate
+  bail-out, the silent reconcile, and the never-stomp-fresher-truth guard) and
+  the image warmer (warm once, no-op on repeat, retry after failure).
+
 ## [2.3.0] - 2026-08-04
 
 ### Added
