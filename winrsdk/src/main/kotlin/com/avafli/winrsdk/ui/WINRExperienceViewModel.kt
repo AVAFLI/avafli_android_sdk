@@ -602,7 +602,17 @@ internal class WINRExperienceViewModel(
 
     // ── Email capture ──
 
-    fun submitEmail(email: String, marketingConsent: Boolean = true) {
+    /**
+     * [ageConfirmed] and [emailConsent] are the capture screen's two checkbox
+     * states, transmitted verbatim. The age gate must be ticked for the CTA to
+     * enable; the email/marketing checkbox is pre-checked but optional.
+     */
+    fun submitEmail(
+        email: String,
+        marketingConsent: Boolean = true,
+        ageConfirmed: Boolean = true,
+        emailConsent: Boolean = marketingConsent,
+    ) {
         if (email.isEmpty()) return
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isSubmittingEmail = true)
@@ -615,7 +625,13 @@ internal class WINRExperienceViewModel(
                 // Cross-device streak unification: if this email already belonged to
                 // an existing user under this publisher, WinrApi switches to the
                 // canonical user's credentials internally (adopted == true).
-                api.submitEmail(email, marketingConsent, publisherUserId)
+                api.submitEmail(
+                    email = email,
+                    marketingConsent = marketingConsent,
+                    publisherUserId = publisherUserId,
+                    ageConfirmed = ageConfirmed,
+                    emailConsent = emailConsent,
+                )
                 // Refresh the SDK-level consent cache HERE, on the submit
                 // itself, rather than waiting for the next getActiveGiveaway
                 // to echo emailConsentStatus back. Today a stale `false` is

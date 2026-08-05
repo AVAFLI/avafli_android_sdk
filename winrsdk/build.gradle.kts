@@ -102,7 +102,7 @@ afterEvaluate {
                 from(components["release"])
                 groupId = "com.avafli"
                 artifactId = "winrsdk"
-                version = "2.3.3"
+                version = "2.4.0"
 
                 pom {
                     name.set("WINR SDK")

@@ -142,7 +142,18 @@ private fun DrawerContent(
             rulesUrl = rulesUrl,
             giveaway = ui.giveaway,
             isSubmitting = ui.isSubmittingEmail,
-            onSubmit = { email -> viewModel.submitEmail(email, marketingConsent = true) },
+            // Nested per-screen copy wins over the flat legacy field; the
+            // screen falls back to its own default when both are absent.
+            emailConsentText = ui.sdkConfig?.copy?.emailCapture?.emailConsentText
+                ?: ui.sdkConfig?.copy?.emailConsentText,
+            onSubmit = { email, ageConfirmed, emailConsent ->
+                viewModel.submitEmail(
+                    email = email,
+                    marketingConsent = emailConsent,
+                    ageConfirmed = ageConfirmed,
+                    emailConsent = emailConsent,
+                )
+            },
             onInfo = { viewModel.showHowItWorks() },
             onClose = onDismiss,
         )

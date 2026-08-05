@@ -181,11 +181,27 @@ internal class WinrApi(
     }
 
     /**
-     * Submit user email with marketing consent and optional publisher user ID.
+     * Submit user email with the capture screen's two consent states and an
+     * optional publisher user ID.
+     *
+     * [ageConfirmed] is the 18+ age-gate checkbox (required to submit) and
+     * [emailConsent] is the marketing/email checkbox (pre-checked, but the user
+     * may untick it and still enter). Both carry the real checkbox states and
+     * are stored server-side. The legacy `marketingConsent` field is still sent
+     * for older backends, which treat a `marketingConsent`-only payload as the
+     * pre-2.4.0 behavior.
      */
-    suspend fun submitEmail(email: String, marketingConsent: Boolean = false, publisherUserId: String? = null): SubmitEmailResult {
+    suspend fun submitEmail(
+        email: String,
+        marketingConsent: Boolean = false,
+        publisherUserId: String? = null,
+        ageConfirmed: Boolean = false,
+        emailConsent: Boolean = marketingConsent,
+    ): SubmitEmailResult {
         val body = buildMap<String, JsonElement> {
             put("email", JsonPrimitive(email))
+            put("ageConfirmed", JsonPrimitive(ageConfirmed))
+            put("emailConsent", JsonPrimitive(emailConsent))
             put("marketingConsent", JsonPrimitive(marketingConsent))
             publisherUserId?.let { put("publisherUserId", JsonPrimitive(it)) }
         }
@@ -530,6 +546,6 @@ internal class WinrApi(
     companion object {
         // Single source of truth for the wire-format sdk_version. Keep in sync
         // with the Maven publish version in winrsdk/build.gradle.kts.
-        const val SDK_VERSION = "2.3.3"
+        const val SDK_VERSION = "2.4.0"
     }
 }

@@ -41,12 +41,16 @@ internal fun WINRV2CaptureScreen(
     rulesUrl: String?,
     giveaway: Giveaway?,
     isSubmitting: Boolean,
-    onSubmit: (String) -> Unit,
+    emailConsentText: String? = null,
+    onSubmit: (String, Boolean, Boolean) -> Unit,
     onInfo: () -> Unit,
     onClose: () -> Unit,
 ) {
     var email by remember { mutableStateOf("") }
+    // Age gate requires an affirmative tick; the email/marketing consent is
+    // pre-checked and never gates the CTA.
     var isAdult by remember { mutableStateOf(false) }
+    var wantsEmail by remember { mutableStateOf(true) }
 
     val day1Entries = giveaway?.streakLadder?.firstOrNull() ?: 10
     val canSubmit = isAdult && email.contains("@") && email.contains(".")
@@ -90,7 +94,14 @@ internal fun WINRV2CaptureScreen(
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
                 EmailField(email, onValueChange = { email = it })
-                AgeGateCheckbox(isAdult) { isAdult = !isAdult }
+                ConsentCheckbox(
+                    checked = isAdult,
+                    text = "I confirm I am 18 years of age or older",
+                ) { isAdult = !isAdult }
+                ConsentCheckbox(
+                    checked = wantsEmail,
+                    text = emailConsentText ?: DEFAULT_EMAIL_CONSENT_TEXT,
+                ) { wantsEmail = !wantsEmail }
                 WINRV2PillButton(
                     accent = accent,
                     title = "CLAIM MY $day1Entries ENTRIES",
@@ -98,7 +109,7 @@ internal fun WINRV2CaptureScreen(
                     enabled = canSubmit && !isSubmitting,
                     modifier = Modifier.alpha(if (canSubmit) 1f else 0.5f),
                 ) {
-                    onSubmit(email.trim())
+                    onSubmit(email.trim(), isAdult, wantsEmail)
                 }
             }
 
@@ -196,8 +207,16 @@ private fun EmailField(value: String, onValueChange: (String) -> Unit) {
     }
 }
 
+/** Fallback when the backend supplies no `emailConsentText` override. */
+private const val DEFAULT_EMAIL_CONSENT_TEXT = "Get notified about prizes and rewards"
+
+/**
+ * The capture screen's checkbox row — shared verbatim by the 18+ age gate and
+ * the email/marketing consent so both have identical box, check, spacing, and
+ * text treatment.
+ */
 @Composable
-private fun AgeGateCheckbox(checked: Boolean, onToggle: () -> Unit) {
+private fun ConsentCheckbox(checked: Boolean, text: String, onToggle: () -> Unit) {
     Row(
         modifier = Modifier.clickable(
             interactionSource = remember { MutableInteractionSource() },
@@ -231,7 +250,7 @@ private fun AgeGateCheckbox(checked: Boolean, onToggle: () -> Unit) {
             }
         }
         Text(
-            "I confirm I am 18 years of age or older",
+            text,
             style = WINRV2Font.inter(14.sp, color = Color.White),
         )
     }
