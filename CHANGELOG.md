@@ -5,26 +5,30 @@ All notable changes to the WINR Android SDK will be documented in this file.
 ## [2.4.0] - 2026-08-05
 
 ### Added
-- **Email-consent checkbox on the capture screen.** A second checkbox sits
+- **Marketing-consent checkbox on the capture screen.** A second checkbox sits
   directly below the 18+ age gate, styled identically (same 20dp box, drawn
   check, spacing, and text treatment), reading the server-supplied
   `copy.emailCapture.emailConsentText` — falling back to the flat legacy
-  `copy.emailConsentText`, then to "Get notified about prizes and rewards".
-  It is PRE-CHECKED by default and does NOT gate entry: the CTA stays governed
-  by the age gate plus a valid email, so a user may untick it and still enter.
+  `copy.emailConsentText`, then to "I agree to receive marketing emails from
+  this app". The backend populates that key with a publisher-named string
+  ("…from {PublisherName}"); the name is interpolated server-side, never in
+  the SDK. The box is PRE-CHECKED by default and covers MARKETING email only:
+  declining it affects neither entry nor winner contact. The CTA stays
+  governed by the age gate plus a valid email, so a user may untick the
+  marketing box and still enter, and a winner is still contacted about their
+  prize — that is operational and no checkbox gates it.
 
 ### Changed
 - **Age confirmation is now transmitted and stored server-side.** `submitEmail`
-  sends the real state of both checkboxes as `ageConfirmed` and `emailConsent`
-  (previously the 18+ tick was a purely local gate that never left the device,
-  and consent was hardcoded to `true`). The legacy `marketingConsent` field is
-  still sent, mirroring the email-consent box, so older backends keep their
-  pre-2.4.0 behavior.
+  sends the real state of both checkboxes as `ageConfirmed` and
+  `marketingConsent` (previously the 18+ tick was a purely local gate that
+  never left the device, and consent was hardcoded to `true`). `ageConfirmed`
+  is always sent — the backend reads it to detect a 2.4.0+ client.
 
 ### Tests
-- 3 new: both consent flags on the wire (including a declined email consent
-  with a confirmed age) and the ViewModel forwarding the checkbox states
-  verbatim.
+- 3 new: both consent flags on the wire (including a declined marketing
+  consent with a confirmed age) and the ViewModel forwarding the checkbox
+  states verbatim.
 
 ## [2.3.3] - 2026-08-05
 

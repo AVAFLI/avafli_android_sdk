@@ -47,10 +47,10 @@ internal fun WINRV2CaptureScreen(
     onClose: () -> Unit,
 ) {
     var email by remember { mutableStateOf("") }
-    // Age gate requires an affirmative tick; the email/marketing consent is
+    // Age gate requires an affirmative tick; the marketing consent is
     // pre-checked and never gates the CTA.
     var isAdult by remember { mutableStateOf(false) }
-    var wantsEmail by remember { mutableStateOf(true) }
+    var wantsMarketing by remember { mutableStateOf(true) }
 
     val day1Entries = giveaway?.streakLadder?.firstOrNull() ?: 10
     val canSubmit = isAdult && email.contains("@") && email.contains(".")
@@ -99,9 +99,9 @@ internal fun WINRV2CaptureScreen(
                     text = "I confirm I am 18 years of age or older",
                 ) { isAdult = !isAdult }
                 ConsentCheckbox(
-                    checked = wantsEmail,
-                    text = emailConsentText ?: DEFAULT_EMAIL_CONSENT_TEXT,
-                ) { wantsEmail = !wantsEmail }
+                    checked = wantsMarketing,
+                    text = emailConsentText ?: DEFAULT_MARKETING_CONSENT_TEXT,
+                ) { wantsMarketing = !wantsMarketing }
                 WINRV2PillButton(
                     accent = accent,
                     title = "CLAIM MY $day1Entries ENTRIES",
@@ -109,7 +109,7 @@ internal fun WINRV2CaptureScreen(
                     enabled = canSubmit && !isSubmitting,
                     modifier = Modifier.alpha(if (canSubmit) 1f else 0.5f),
                 ) {
-                    onSubmit(email.trim(), isAdult, wantsEmail)
+                    onSubmit(email.trim(), isAdult, wantsMarketing)
                 }
             }
 
@@ -207,13 +207,18 @@ private fun EmailField(value: String, onValueChange: (String) -> Unit) {
     }
 }
 
-/** Fallback when the backend supplies no `emailConsentText` override. */
-private const val DEFAULT_EMAIL_CONSENT_TEXT = "Get notified about prizes and rewards"
+/**
+ * Offline/no-config fallback for the marketing-consent row. In practice the
+ * backend populates the `emailConsentText` config key with a publisher-named
+ * string ("I agree to receive marketing emails from {PublisherName}") — the
+ * name is interpolated SERVER-side, never here.
+ */
+private const val DEFAULT_MARKETING_CONSENT_TEXT = "I agree to receive marketing emails from this app"
 
 /**
  * The capture screen's checkbox row — shared verbatim by the 18+ age gate and
- * the email/marketing consent so both have identical box, check, spacing, and
- * text treatment.
+ * the marketing consent so both have identical box, check, spacing, and text
+ * treatment.
  */
 @Composable
 private fun ConsentCheckbox(checked: Boolean, text: String, onToggle: () -> Unit) {

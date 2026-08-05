@@ -25,6 +25,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -32,9 +33,10 @@ import org.junit.Test
 /**
  * Pins the 2.4.0 email-capture consent contract: the capture screen's TWO
  * checkboxes — the 18+ age gate (must be ticked to submit) and the pre-checked
- * email/marketing consent (optional, never gates entry) — are transmitted
- * verbatim as `ageConfirmed` / `emailConsent` on submitEmail, alongside the
- * legacy `marketingConsent` field older backends still read.
+ * MARKETING consent (optional, never gates entry or winner contact) — are
+ * transmitted verbatim as `ageConfirmed` / `marketingConsent` on submitEmail.
+ * `ageConfirmed` is always sent: the backend reads it to detect a 2.4.0+
+ * client.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class EmailConsentTest {
@@ -70,37 +72,37 @@ class EmailConsentTest {
             marketingConsent = true,
             publisherUserId = null,
             ageConfirmed = true,
-            emailConsent = true,
         )
 
         val body = bodySlot.captured
         assertEquals("ada@example.com", body["email"]?.jsonPrimitive?.content)
         assertEquals(true, body["ageConfirmed"]?.jsonPrimitive?.booleanOrNull)
-        assertEquals(true, body["emailConsent"]?.jsonPrimitive?.booleanOrNull)
-        // Legacy field kept for older backends.
         assertEquals(true, body["marketingConsent"]?.jsonPrimitive?.booleanOrNull)
+        // `marketingConsent` is the only consent key on the wire — the
+        // short-lived `emailConsent` name was renamed before release.
+        assertNull(body["emailConsent"])
     }
 
     @Test
-    fun `submitEmail carries a declined email consent with a confirmed age`() = runTest {
+    fun `submitEmail carries a declined marketing consent with a confirmed age`() = runTest {
         val bodySlot = slot<Map<String, JsonElement>>()
         coEvery {
             networkClient.authenticatedPost("submitEmail", capture(bodySlot))
         } returns jsonObj("""{"success": true}""")
 
-        // The user unticked the pre-checked email box but still entered.
+        // The user unticked the pre-checked marketing box but still entered —
+        // and is still contactable as a winner, which no checkbox gates.
         api.submitEmail(
             email = "ada@example.com",
             marketingConsent = false,
             publisherUserId = null,
             ageConfirmed = true,
-            emailConsent = false,
         )
 
         val body = bodySlot.captured
         assertEquals(true, body["ageConfirmed"]?.jsonPrimitive?.booleanOrNull)
-        assertEquals(false, body["emailConsent"]?.jsonPrimitive?.booleanOrNull)
         assertEquals(false, body["marketingConsent"]?.jsonPrimitive?.booleanOrNull)
+        assertNull(body["emailConsent"])
     }
 
     @Test
@@ -112,10 +114,10 @@ class EmailConsentTest {
         every { storage.getTotalEntries() } returns 0
         every { storage.getLastClaimDate() } returns null
 
-        val ageSlot = slot<Boolean>()
         val consentSlot = slot<Boolean>()
+        val ageSlot = slot<Boolean>()
         coEvery {
-            mockApi.submitEmail(any(), any(), any(), capture(ageSlot), capture(consentSlot))
+            mockApi.submitEmail(any(), capture(consentSlot), any(), capture(ageSlot))
         } returns WinrApi.SubmitEmailResult(success = true)
         coEvery { mockApi.getActiveGiveaway() } returns WinrApi.GetActiveGiveawayResponse(
             giveaway = Giveaway(id = "g1", title = "T", prizeDescription = "P", streakLadder = listOf(1)),
@@ -134,7 +136,6 @@ class EmailConsentTest {
             email = "ada@example.com",
             marketingConsent = false,
             ageConfirmed = true,
-            emailConsent = false,
         )
         advanceUntilIdle()
 

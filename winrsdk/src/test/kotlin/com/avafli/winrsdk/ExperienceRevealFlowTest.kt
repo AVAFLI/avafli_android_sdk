@@ -221,7 +221,7 @@ class ExperienceRevealFlowTest {
         // spinner still up), the dashboard mounts with the REAL grant staged
         // (0 → N count-up under the "YOU'RE IN!" toast), and the background
         // auto-claim is skipped — exactly one claim call.
-        coEvery { api.submitEmail(any(), any(), any(), any(), any()) } returns WinrApi.SubmitEmailResult(success = true)
+        coEvery { api.submitEmail(any(), any(), any(), any()) } returns WinrApi.SubmitEmailResult(success = true)
         coEvery { api.getActiveGiveaway() } returns WinrApi.GetActiveGiveawayResponse(
             giveaway = giveaway,
             claimedToday = false,

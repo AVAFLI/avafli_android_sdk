@@ -603,15 +603,15 @@ internal class WINRExperienceViewModel(
     // ── Email capture ──
 
     /**
-     * [ageConfirmed] and [emailConsent] are the capture screen's two checkbox
-     * states, transmitted verbatim. The age gate must be ticked for the CTA to
-     * enable; the email/marketing checkbox is pre-checked but optional.
+     * [ageConfirmed] and [marketingConsent] are the capture screen's two
+     * checkbox states, transmitted verbatim. The age gate must be ticked for
+     * the CTA to enable; the marketing-email checkbox is pre-checked but
+     * optional — declining it affects neither entry nor winner contact.
      */
     fun submitEmail(
         email: String,
         marketingConsent: Boolean = true,
         ageConfirmed: Boolean = true,
-        emailConsent: Boolean = marketingConsent,
     ) {
         if (email.isEmpty()) return
         viewModelScope.launch {
@@ -630,7 +630,6 @@ internal class WINRExperienceViewModel(
                     marketingConsent = marketingConsent,
                     publisherUserId = publisherUserId,
                     ageConfirmed = ageConfirmed,
-                    emailConsent = emailConsent,
                 )
                 // Refresh the SDK-level consent cache HERE, on the submit
                 // itself, rather than waiting for the next getActiveGiveaway

@@ -143,15 +143,16 @@ private fun DrawerContent(
             giveaway = ui.giveaway,
             isSubmitting = ui.isSubmittingEmail,
             // Nested per-screen copy wins over the flat legacy field; the
-            // screen falls back to its own default when both are absent.
+            // screen falls back to its own default when both are absent. The
+            // config KEY stays `emailConsentText` for wire compatibility — it
+            // now carries the publisher-named MARKETING consent string.
             emailConsentText = ui.sdkConfig?.copy?.emailCapture?.emailConsentText
                 ?: ui.sdkConfig?.copy?.emailConsentText,
-            onSubmit = { email, ageConfirmed, emailConsent ->
+            onSubmit = { email, ageConfirmed, marketingConsent ->
                 viewModel.submitEmail(
                     email = email,
-                    marketingConsent = emailConsent,
+                    marketingConsent = marketingConsent,
                     ageConfirmed = ageConfirmed,
-                    emailConsent = emailConsent,
                 )
             },
             onInfo = { viewModel.showHowItWorks() },
