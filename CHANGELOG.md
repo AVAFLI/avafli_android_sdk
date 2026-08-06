@@ -2,6 +2,30 @@
 
 All notable changes to the WINR Android SDK will be documented in this file.
 
+
+## [2.5.0] - 2026-08-06
+
+### Breaking
+
+`WINR.deleteAccount()` is **removed**. Use `WINR.optOut()`. Same reasoning as
+the other WINR SDKs: the old call hard-deleted entry records (the evidence a
+drawing was fair), left no tombstone so delete-and-re-register farmed entries,
+and never cleaned prize-claim PII. `optOut()` is identity-wide and complete.
+
+`StreakEngine.doubleEntries()` is also removed — it served the retired
+rewarded-video flow and had no callers.
+
+### Fixed
+
+- **The example app never worked.** It shipped `apiKey = "YOUR_WINR_API_KEY"`,
+  so registration failed and the experience silently never appeared.
+- **Integration errors were reported as account suspension.** Any
+  `PERMISSION_DENIED` was treated as a suspended publisher, but the backend
+  returns that for four causes — invalid API key, unauthorized bundle id,
+  suspended key, suspended publisher. A developer with a wrong key was told to
+  check their billing. Suspension now requires the server to actually say so,
+  and genuine integration failures log at ERROR with the server's own wording.
+
 ## [2.4.0] - 2026-08-05
 
 ### Added
