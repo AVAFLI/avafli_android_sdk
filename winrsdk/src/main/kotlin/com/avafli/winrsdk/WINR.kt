@@ -136,7 +136,11 @@ object WINR {
                 logger?.info("Publisher account suspended; WINR experience unavailable")
                 consumePendingCallback()?.invoke(Result.failure(e))
             } catch (e: Exception) {
-                logger?.error("Background device registration failed: ${e.message}", e)
+                // An integration mistake (wrong API key, bundle ID not registered to this
+                // publisher) lands here rather than in the suspension branch above, and is
+                // logged at ERROR with the server's own wording — it is the developer's
+                // problem to fix and they need to be told what it actually is.
+                logger?.error("WINR device registration failed — the experience will not appear. ${e.message}", e)
             }
             registrationComplete = true
             autoPresentIfEligible()
@@ -470,8 +474,19 @@ object WINR {
                         ?: obj["error"]?.jsonObject?.get("code")
                         ?: obj["code"]
                         ?: obj["status"])?.jsonPrimitive?.contentOrNull
+                    // PERMISSION_DENIED alone is NOT suspension. The backend returns it
+                    // for four distinct causes — invalid API key, unauthorized bundle ID,
+                    // suspended key, suspended publisher — and only the last two are a
+                    // degrade the SDK should absorb silently. The first two are
+                    // integration mistakes, and reporting them as "account suspended"
+                    // sends a developer to check their billing when their key is wrong.
+                    // Require the message to actually say so.
+                    val msgField = (obj["error"]?.jsonObject?.get("message")
+                        ?: obj["message"])?.jsonPrimitive?.contentOrNull ?: ""
+                    val saysSuspended = msgField.contains("suspend", ignoreCase = true) ||
+                        msgField.contains("revoke", ignoreCase = true)
                     code?.uppercase()?.let {
-                        it == "PERMISSION_DENIED" || it == "SUSPENDED" || it == "REVOKED"
+                        (it == "PERMISSION_DENIED" && saysSuspended) || it == "SUSPENDED" || it == "REVOKED"
                     } ?: false
                 } else false
             } catch (_: Exception) {
