@@ -215,21 +215,32 @@ val options = WINROptions(
 **Events emitted by the SDK:**
 - `winr_daily_entry_claimed` — Daily entries awarded (auto-claimed on open). Params: `day`, `entries`, plus `weekly_bonus`, `monthly_bonus`, and `milestone_day` when awarded.
 
-## GDPR / Delete User Data
+## GDPR / CCPA
 
-Support GDPR/CCPA deletion requests:
+Handle erasure requests with `optOut()`:
 
 ```kotlin
 lifecycleScope.launch {
-    WINR.deleteAccount()
-        .onSuccess { /* All data deleted */ }
+    WINR.optOut()
+        .onSuccess { /* Data erased, experience silenced */ }
         .onFailure { error -> /* Handle error */ }
 }
 ```
 
-This permanently removes all user data, entries, preferences, and consent records from WINR servers.
+This is the complete Right-to-be-Forgotten path. It removes the person's personal
+information everywhere it is held — including prize-claim records, which carry name,
+address and phone — links their devices together so one call covers all of them, and
+permanently silences the experience on the device so it survives a reinstall.
 
-For Right-to-Delete opt-outs (user asks to never see WINR again), call `WINR.optOut()` — it tombstones the person on the backend and permanently silences the experience on the device.
+De-identified entry records are deliberately retained. They are the evidence that a
+drawing was fair and that a prize went to a real eligible person, which a sweepstakes
+operator must be able to show; GDPR Art. 17(3) exempts data needed for legal claims.
+The person is erased, the proof is kept.
+
+> A previous `deleteAccount()` method was removed in 2.5.0. It hard-deleted entry
+> records, which both destroyed that evidence and — because it left no tombstone —
+> allowed delete-and-re-register to farm unlimited entries. Use `optOut()`.
+
 
 ## API Reference
 
@@ -239,7 +250,6 @@ For Right-to-Delete opt-outs (user asks to never see WINR again), call `WINR.opt
 | ------ | ------- | ----------- |
 | `WINR.configure(config)` | `Unit` | Initialize the SDK; the experience auto-opens once per day |
 | `WINR.optOut()` | `suspend Result<Unit>` | RTD opt-out — permanently silence the experience |
-| `WINR.deleteAccount()` | `suspend Result<Unit>` | Permanently delete all user data |
 
 ### Push Notifications
 

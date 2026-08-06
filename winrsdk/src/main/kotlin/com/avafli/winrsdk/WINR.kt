@@ -313,27 +313,16 @@ object WINR {
         pushManager?.registerToken(token)
     }
 
-    /**
-     * Delete all user data (GDPR right-to-be-forgotten).
-     */
-    suspend fun deleteAccount(): Result<Unit> {
-        val currentApi = api ?: return Result.failure(WINRError.NotInitialized())
-
-        return try {
-            currentApi.deleteUserData()
-            secureStorage?.clearAll()
-            preferencesStorage?.clearAll()
-            cachedGiveaway = null
-            cachedSdkConfig = null
-            cachedEmailConsent = null
-            isSuspended = false
-            logger?.info("User account deleted successfully")
-            Result.success(Unit)
-        } catch (e: Exception) {
-            logger?.error("Failed to delete account: ${e.message}", e)
-            Result.failure(e)
-        }
-    }
+    // --- Right-to-be-Forgotten (GDPR/CCPA) ---
+    //
+    // `deleteAccount()` was REMOVED. It called a backend hard-delete that wiped the
+    // user's entries, leaving no tombstone — so delete -> re-register -> claim again
+    // the same day farmed unlimited entries. It also destroyed the records proving the
+    // drawing was fair, and left prize-claim PII orphaned.
+    //
+    // Use `optOut()` instead. It is the correct erasure: identity-wide, PII scrubbed
+    // everywhere including prize claims, tombstoned so it survives a reinstall, and
+    // the experience stays permanently silenced on the device.
 
     // --- Internal API for Activity/ViewModel ---
 

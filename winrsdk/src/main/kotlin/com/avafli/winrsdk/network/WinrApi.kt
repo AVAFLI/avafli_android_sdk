@@ -231,13 +231,6 @@ internal class WinrApi(
     /**
      * Delete all user data (GDPR right-to-be-forgotten).
      */
-    suspend fun deleteUserData(): DeleteUserDataResponse {
-        val response = networkClient.authenticatedPost("deleteUserData")
-        return DeleteUserDataResponse(
-            success = response["success"]?.jsonPrimitive?.booleanOrNull ?: false,
-            deletedEntries = response["deletedEntries"]?.jsonPrimitive?.intOrNull ?: 0
-        )
-    }
 
     /**
      * Register push notification token.
@@ -318,11 +311,6 @@ internal class WinrApi(
         val monthlyBonusEntries: Int?,
         val milestone: Milestone?,
         val monthlyMilestone: Milestone? = null
-    )
-
-    data class DeleteUserDataResponse(
-        val success: Boolean,
-        val deletedEntries: Int
     )
 
     // --- Parsing helpers ---
