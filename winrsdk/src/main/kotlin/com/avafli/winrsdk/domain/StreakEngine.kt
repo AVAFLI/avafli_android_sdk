@@ -114,17 +114,6 @@ class StreakEngine(private val giveaway: Giveaway) {
     }
 
     /**
-     * Double the entries for the current claim (after watching rewarded video).
-     */
-    fun doubleEntries(currentGrant: DailyEntryGrant): DailyEntryGrant {
-        if (!giveaway.doublingEnabled) return currentGrant
-        return currentGrant.copy(
-            entries = currentGrant.entries * 2,
-            doubled = true
-        )
-    }
-
-    /**
      * Get the next streak day (for display purposes).
      */
     fun getNextStreakDay(): Int {

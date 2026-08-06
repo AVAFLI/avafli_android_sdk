@@ -163,24 +163,6 @@ internal class WinrApi(
     }
 
     /**
-     * Claim bonus entries (after watching rewarded video).
-     */
-    suspend fun claimBonusEntries(timezone: String): ClaimBonusEntriesResponse {
-        val body = mapOf(
-            "timezone" to JsonPrimitive(timezone),
-            "platformOS" to JsonPrimitive("Android"),
-            "sdkVersion" to JsonPrimitive(SDK_VERSION)
-        )
-
-        val response = networkClient.authenticatedPost("claimBonusEntries", body)
-
-        return ClaimBonusEntriesResponse(
-            bonusEntries = response["bonusEntries"]?.jsonPrimitive?.int ?: 0,
-            totalEntries = response["totalEntries"]?.jsonPrimitive?.int ?: 0
-        )
-    }
-
-    /**
      * Submit user email with the capture screen's two consent states and an
      * optional publisher user ID.
      *
@@ -336,11 +318,6 @@ internal class WinrApi(
         val monthlyBonusEntries: Int?,
         val milestone: Milestone?,
         val monthlyMilestone: Milestone? = null
-    )
-
-    data class ClaimBonusEntriesResponse(
-        val bonusEntries: Int,
-        val totalEntries: Int
     )
 
     data class DeleteUserDataResponse(

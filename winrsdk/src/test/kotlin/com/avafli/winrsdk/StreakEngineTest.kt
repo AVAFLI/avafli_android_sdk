@@ -108,30 +108,6 @@ class StreakEngineTest {
     }
 
     @Test
-    fun `double entries doubles the grant entries`() {
-        val grant = DailyEntryGrant(
-            entries = 5,
-            streakDay = 4,
-            totalEntries = 11
-        )
-
-        val doubled = engine.doubleEntries(grant)
-        assertEquals(10, doubled.entries)
-        assertTrue(doubled.doubled)
-    }
-
-    @Test
-    fun `double entries does nothing when doubling disabled`() {
-        val noDblGiveaway = giveaway.copy(doublingEnabled = false)
-        val noDblEngine = StreakEngine(noDblGiveaway)
-
-        val grant = DailyEntryGrant(entries = 5, streakDay = 4, totalEntries = 11)
-        val result = noDblEngine.doubleEntries(grant)
-        assertEquals(5, result.entries)
-        assertFalse(result.doubled)
-    }
-
-    @Test
     fun `has claimed today returns false initially`() {
         assertFalse(engine.hasClaimedToday())
     }
