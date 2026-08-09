@@ -605,13 +605,18 @@ internal class WINRExperienceViewModel(
     /**
      * [ageConfirmed] and [marketingConsent] are the capture screen's two
      * checkbox states, transmitted verbatim. The age gate must be ticked for
-     * the CTA to enable; the marketing-email checkbox is pre-checked but
-     * optional — declining it affects neither entry nor winner contact.
+     * the CTA to enable; the marketing-email checkbox is unchecked by default
+     * and optional — declining it affects neither entry nor winner contact.
+     *
+     * Both parameters default to FALSE on purpose. A default of true meant a
+     * caller omitting the argument silently recorded consent the user never
+     * gave — and for [ageConfirmed], fabricated an age attestation. Absence of
+     * an affirmation must never become an affirmation.
      */
     fun submitEmail(
         email: String,
-        marketingConsent: Boolean = true,
-        ageConfirmed: Boolean = true,
+        marketingConsent: Boolean = false,
+        ageConfirmed: Boolean = false,
     ) {
         if (email.isEmpty()) return
         viewModelScope.launch {

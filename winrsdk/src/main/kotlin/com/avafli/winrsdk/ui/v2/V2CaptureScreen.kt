@@ -50,7 +50,9 @@ internal fun WINRV2CaptureScreen(
     // Age gate requires an affirmative tick; the marketing consent is
     // pre-checked and never gates the CTA.
     var isAdult by remember { mutableStateOf(false) }
-    var wantsMarketing by remember { mutableStateOf(true) }
+    // Unchecked by default: consent must be an affirmative act (pre-ticked boxes
+    // are invalid under GDPR and disfavored by US state regulators).
+    var wantsMarketing by remember { mutableStateOf(false) }
 
     val day1Entries = giveaway?.streakLadder?.firstOrNull() ?: 10
     val canSubmit = isAdult && email.contains("@") && email.contains(".")
