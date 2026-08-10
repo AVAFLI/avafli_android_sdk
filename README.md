@@ -50,6 +50,23 @@ WINR.configure(config)
 
 > **Auto-open:** After `configure()`, the SDK presents the experience automatically once per calendar day (after registration and on activity resumes — a new day re-opens it even if the app stayed in memory). It can be disabled remotely via the dashboard's `experience.autoOpenEnabled` kill switch; unregistered users see at most 3 auto-opens until they submit an email, and RTD opted-out users never see it.
 
+### Guest / logged-out users
+
+No account system, or the user isn't signed in? Pass `WINRUser.GUEST`:
+
+```kotlin
+WINR.configure(context, WINRConfiguration(
+    apiKey = "winr_live_…",
+    bundleId = packageName,
+    user = WINRUser.GUEST,
+))
+```
+
+The SDK mints a stable per-install guest id (`winr_guest_…`) for attribution —
+never fabricate placeholder ids yourself. The experience is fully functional
+for guests. When the user signs in, call `configure` again with the real user:
+attribution upgrades in place and the streak carries over automatically.
+
 ## Installation
 
 ### 1. Add JitPack repository

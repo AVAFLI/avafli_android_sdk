@@ -76,6 +76,18 @@ internal class SecureStorage(context: Context) {
         return prefs.getBoolean(key, default)
     }
 
+    /**
+     * Stable per-install guest identity, minted on first use. Persisted in
+     * EncryptedSharedPreferences so a guest's attribution doesn't churn per
+     * session.
+     */
+    fun loadOrCreateGuestId(): String {
+        getString("winr_guest_id")?.let { return it }
+        val fresh = "winr_guest_" + java.util.UUID.randomUUID().toString().lowercase()
+        saveString("winr_guest_id", fresh)
+        return fresh
+    }
+
     fun remove(key: String) {
         prefs.edit().remove(key).apply()
     }

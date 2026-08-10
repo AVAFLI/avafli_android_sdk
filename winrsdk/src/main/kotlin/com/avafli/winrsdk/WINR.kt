@@ -123,7 +123,7 @@ object WINR {
 
         // Register device and submit user profile in background
         val user = resolvedConfig.user
-        logger?.debug("User set: ${user.id}")
+        logger?.debug(if (user.isGuest) "User set: guest session" else "User set: ${user.id}")
 
         scope.launch {
             try {
@@ -155,7 +155,11 @@ object WINR {
                         phone = user.phone,
                         smsConsent = false,
                         maidId = maidId,
-                        publisherUserId = user.id
+                        // Guests get the SDK-minted stable id; a later configure
+                        // with the signed-in user overwrites it in place.
+                        publisherUserId = if (user.isGuest) {
+                            secureStorage?.loadOrCreateGuestId() ?: "winr_guest_unpersisted"
+                        } else user.id
                     )
                 } catch (e: Exception) {
                     logger?.error("Failed to submit user profile: ${e.message}", e)
