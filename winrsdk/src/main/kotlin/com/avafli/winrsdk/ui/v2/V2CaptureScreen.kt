@@ -27,6 +27,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.avafli.winrsdk.R
@@ -301,6 +302,7 @@ private fun ConsentCheckbox(checked: Boolean, text: String, onToggle: () -> Unit
 internal fun WINRV2CodeEntryScreen(
     accent: Color,
     logoUrl: String?,
+    rulesUrl: String?,
     email: String,
     isVerifying: Boolean,
     errorText: String?,
@@ -395,14 +397,31 @@ internal fun WINRV2CodeEntryScreen(
                     onClick = { if (code.length == 6) onSubmit(code) },
                 )
 
-                Text(
-                    "Didn't get it? Send a new code",
-                    style = WINRV2Font.inter(13.sp, color = Color.White.copy(alpha = 0.6f)),
+                // Two-tone: the question reads as copy, the underlined action reads
+                // as a control.
+                Row(
                     modifier = Modifier
                         .clip(RoundedCornerShape(6.dp))
                         .clickable { onResend() }
                         .padding(6.dp),
-                )
+                ) {
+                    Text(
+                        "Didn't get it? ",
+                        style = WINRV2Font.inter(14.sp, color = Color.White.copy(alpha = 0.65f)),
+                    )
+                    Text(
+                        "Send a new code",
+                        style = WINRV2Font.inter(14.sp, FontWeight.Bold, color = Color(0xFF7FB0FF))
+                            .copy(textDecoration = TextDecoration.Underline),
+                    )
+                }
+
+                Spacer(Modifier.weight(1f, fill = true))
+
+                // Same legal footer as the capture screen — one consent flow, one
+                // footer; without it the sheet trails off into a void.
+                WINRV2LegalLinks(rulesUrl = rulesUrl, showPoweredBy = true)
+                Spacer(Modifier.height(24.dp))
             }
         }
     }

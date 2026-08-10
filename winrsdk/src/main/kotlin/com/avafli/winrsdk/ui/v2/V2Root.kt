@@ -139,6 +139,7 @@ private fun DrawerContent(
         is ExperienceScreen.CodeEntry -> WINRV2CodeEntryScreen(
             accent = accent,
             logoUrl = logoUrl,
+            rulesUrl = rulesUrl,
             email = screen.email,
             isVerifying = ui.isVerifyingCode,
             errorText = ui.codeError,
