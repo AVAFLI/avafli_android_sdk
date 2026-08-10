@@ -148,6 +148,7 @@ private fun DrawerContent(
             // now carries the publisher-named MARKETING consent string.
             emailConsentText = ui.sdkConfig?.copy?.emailCapture?.emailConsentText
                 ?: ui.sdkConfig?.copy?.emailConsentText,
+            prefilledEmail = viewModel.prefilledEmail(),
             onSubmit = { email, ageConfirmed, marketingConsent ->
                 viewModel.submitEmail(
                     email = email,

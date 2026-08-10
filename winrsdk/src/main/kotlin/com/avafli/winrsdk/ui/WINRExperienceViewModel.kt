@@ -182,6 +182,12 @@ internal class WINRExperienceViewModel(
         prefillUser = user
     }
 
+    /**
+     * Partner-authenticated email for the capture screen's read-only pre-fill.
+     * Null when the publisher didn't supply one via WINRUser.email.
+     */
+    fun prefilledEmail(): String? = prefillUser?.email
+
     /** Prefill for the claim form (host-app-provided identity). */
     fun claimFormPrefill(): PrizeClaimForm = PrizeClaimForm(
         firstName = prefillUser?.firstName ?: "",

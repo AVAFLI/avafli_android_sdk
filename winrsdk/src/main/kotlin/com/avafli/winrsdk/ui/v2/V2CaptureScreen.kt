@@ -42,20 +42,31 @@ internal fun WINRV2CaptureScreen(
     giveaway: Giveaway?,
     isSubmitting: Boolean,
     emailConsentText: String? = null,
+    /**
+     * Partner-authenticated email (WINRUser.email). Well-formed → rendered
+     * pre-filled and READ-ONLY; malformed or null → the editable field.
+     */
+    prefilledEmail: String? = null,
     onSubmit: (String, Boolean, Boolean) -> Unit,
     onInfo: () -> Unit,
     onClose: () -> Unit,
 ) {
     var email by remember { mutableStateOf("") }
-    // Age gate requires an affirmative tick; the marketing consent is
-    // pre-checked and never gates the CTA.
+    // Age gate requires an affirmative tick; marketing consent never gates the CTA.
     var isAdult by remember { mutableStateOf(false) }
     // Unchecked by default: consent must be an affirmative act (pre-ticked boxes
     // are invalid under GDPR and disfavored by US state regulators).
     var wantsMarketing by remember { mutableStateOf(false) }
 
+    // Shape check only — the server revalidates. Its job is to pick pre-fill vs
+    // editable, so a partner bug degrades to the normal typed flow instead of
+    // locking a garbage value into a read-only field.
+    val lockedEmail = prefilledEmail?.trim()?.lowercase()?.takeIf {
+        it.contains("@") && it.contains(".") && it.length in 6..254
+    }
+
     val day1Entries = giveaway?.streakLadder?.firstOrNull() ?: 10
-    val canSubmit = isAdult && email.contains("@") && email.contains(".")
+    val canSubmit = isAdult && (lockedEmail != null || (email.contains("@") && email.contains(".")))
 
     Box(Modifier.fillMaxSize()) {
         WINRV2TopGlow(accent, Modifier.matchParentSize())
@@ -95,7 +106,7 @@ internal fun WINRV2CaptureScreen(
                 modifier = Modifier.padding(horizontal = 22.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
-                EmailField(email, onValueChange = { email = it })
+                EmailField(lockedEmail ?: email, onValueChange = { email = it }, locked = lockedEmail != null)
                 ConsentCheckbox(
                     checked = isAdult,
                     text = "I confirm I am 18 years of age or older",
@@ -111,7 +122,7 @@ internal fun WINRV2CaptureScreen(
                     enabled = canSubmit && !isSubmitting,
                     modifier = Modifier.alpha(if (canSubmit) 1f else 0.5f),
                 ) {
-                    onSubmit(email.trim(), isAdult, wantsMarketing)
+                    onSubmit(lockedEmail ?: email.trim(), isAdult, wantsMarketing)
                 }
             }
 
@@ -169,7 +180,7 @@ private fun PrizeStrip(giveaway: Giveaway?) {
 }
 
 @Composable
-private fun EmailField(value: String, onValueChange: (String) -> Unit) {
+private fun EmailField(value: String, onValueChange: (String) -> Unit, locked: Boolean = false) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -187,23 +198,42 @@ private fun EmailField(value: String, onValueChange: (String) -> Unit) {
             modifier = Modifier.size(width = 22.dp, height = 18.dp),
         )
         Box(Modifier.weight(1f)) {
-            if (value.isEmpty()) {
+            if (locked) {
+                // Read-only but VISIBLE: the user must see exactly which address
+                // they are consenting for. Text, not a disabled field, so no
+                // keyboard affordance appears.
                 Text(
-                    "Enter your email address",
-                    style = WINRV2Font.inter(16.sp, color = WINRV2Color.gunmetal.copy(alpha = 0.5f)),
+                    value,
+                    style = WINRV2Font.inter(16.sp, color = WINRV2Color.gunmetal),
+                    maxLines = 1,
+                )
+            } else {
+                if (value.isEmpty()) {
+                    Text(
+                        "Enter your email address",
+                        style = WINRV2Font.inter(16.sp, color = WINRV2Color.gunmetal.copy(alpha = 0.5f)),
+                    )
+                }
+                BasicTextField(
+                    value = value,
+                    onValueChange = onValueChange,
+                    textStyle = WINRV2Font.inter(16.sp, color = WINRV2Color.gunmetal),
+                    singleLine = true,
+                    cursorBrush = SolidColor(WINRV2Color.gunmetal),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Email,
+                        autoCorrectEnabled = false,
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
-            BasicTextField(
-                value = value,
-                onValueChange = onValueChange,
-                textStyle = WINRV2Font.inter(16.sp, color = WINRV2Color.gunmetal),
-                singleLine = true,
-                cursorBrush = SolidColor(WINRV2Color.gunmetal),
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Email,
-                    autoCorrectEnabled = false,
-                ),
-                modifier = Modifier.fillMaxWidth(),
+        }
+        if (locked) {
+            Icon(
+                painter = painterResource(R.drawable.winr_lock),
+                contentDescription = "Email provided by this app",
+                tint = WINRV2Color.gunmetal.copy(alpha = 0.45f),
+                modifier = Modifier.size(14.dp),
             )
         }
     }
