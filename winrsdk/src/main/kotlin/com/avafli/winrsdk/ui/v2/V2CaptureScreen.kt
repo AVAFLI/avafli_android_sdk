@@ -292,3 +292,118 @@ private fun ConsentCheckbox(checked: Boolean, text: String, onToggle: () -> Unit
         )
     }
 }
+
+/**
+ * Verification code entry — shown when the typed email matches an EXISTING
+ * account and the OTP gate is on. One numeric field, auto-submits at 6 digits.
+ */
+@Composable
+internal fun WINRV2CodeEntryScreen(
+    accent: Color,
+    logoUrl: String?,
+    email: String,
+    isVerifying: Boolean,
+    errorText: String?,
+    onSubmit: (String) -> Unit,
+    onResend: () -> Unit,
+    onInfo: () -> Unit,
+    onClose: () -> Unit,
+) {
+    var code by remember { mutableStateOf("") }
+
+    Box(Modifier.fillMaxSize()) {
+        WINRV2TopGlow(accent, Modifier.matchParentSize())
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(18.dp),
+        ) {
+            WINRV2Header(
+                logoUrl = logoUrl,
+                onInfo = onInfo,
+                onClose = onClose,
+                modifier = Modifier.padding(top = 18.dp),
+            )
+
+            Text(
+                "CHECK YOUR EMAIL",
+                style = WINRV2Font.inter(28.sp, FontWeight.Black, color = Color.White),
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                "This email is already part of a WINR streak. Enter the 6-digit " +
+                    "code we sent to $email to pick it up on this device.",
+                style = WINRV2Font.inter(14.sp, color = Color.White.copy(alpha = 0.75f)),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 26.dp),
+            )
+
+            Column(
+                modifier = Modifier.padding(horizontal = 22.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(54.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color.White)
+                        .padding(horizontal = 20.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                        if (code.isEmpty()) {
+                            Text(
+                                "••••••",
+                                style = WINRV2Font.inter(22.sp, FontWeight.Bold, color = WINRV2Color.gunmetal.copy(alpha = 0.4f)),
+                            )
+                        }
+                        BasicTextField(
+                            value = code,
+                            onValueChange = { new ->
+                                val digits = new.filter { it.isDigit() }.take(6)
+                                code = digits
+                                // Auto-submit on the sixth digit.
+                                if (digits.length == 6 && !isVerifying) onSubmit(digits)
+                            },
+                            textStyle = WINRV2Font.inter(22.sp, FontWeight.Bold, color = WINRV2Color.gunmetal)
+                                .copy(textAlign = TextAlign.Center),
+                            singleLine = true,
+                            cursorBrush = SolidColor(WINRV2Color.gunmetal),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
+
+                if (errorText != null) {
+                    Text(
+                        errorText,
+                        style = WINRV2Font.inter(13.sp, color = Color(0xFFFF6B63)),
+                        textAlign = TextAlign.Center,
+                    )
+                }
+
+                WINRV2PillButton(
+                    accent = accent,
+                    title = "VERIFY",
+                    isLoading = isVerifying,
+                    enabled = !isVerifying && code.length == 6,
+                    onClick = { if (code.length == 6) onSubmit(code) },
+                )
+
+                Text(
+                    "Didn't get it? Send a new code",
+                    style = WINRV2Font.inter(13.sp, color = Color.White.copy(alpha = 0.6f)),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .clickable { onResend() }
+                        .padding(6.dp),
+                )
+            }
+        }
+    }
+}

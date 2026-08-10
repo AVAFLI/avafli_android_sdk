@@ -136,6 +136,18 @@ private fun DrawerContent(
         is ExperienceScreen.NoActiveGiveaway,
         is ExperienceScreen.Error -> EmptyState(onDismiss)
 
+        is ExperienceScreen.CodeEntry -> WINRV2CodeEntryScreen(
+            accent = accent,
+            logoUrl = logoUrl,
+            email = screen.email,
+            isVerifying = ui.isVerifyingCode,
+            errorText = ui.codeError,
+            onSubmit = { viewModel.submitVerificationCode(it) },
+            onResend = { viewModel.resendVerificationCode() },
+            onInfo = { viewModel.showHowItWorks() },
+            onClose = onDismiss,
+        )
+
         is ExperienceScreen.EmailCapture -> WINRV2CaptureScreen(
             accent = accent,
             logoUrl = logoUrl,

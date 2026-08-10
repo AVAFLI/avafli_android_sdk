@@ -44,6 +44,10 @@ internal sealed class ExperienceScreen {
     object Loading : ExperienceScreen()
     object NoActiveGiveaway : ExperienceScreen()
     object EmailCapture : ExperienceScreen()
+
+    /** Verified adoption: the typed email matches an existing account; the
+     *  merge waits on the 6-digit code sent to that inbox. */
+    data class CodeEntry(val email: String) : ExperienceScreen()
     data class Streak(
         val streakState: StreakState,
         val entriesToday: Int,
@@ -75,6 +79,8 @@ internal data class ExperienceUiState(
     val giveaway: Giveaway? = null,
     val sdkConfig: SdkConfig? = null,
     val isSubmittingEmail: Boolean = false,
+    val isVerifyingCode: Boolean = false,
+    val codeError: String? = null,
     /** Current streak day for display (backend truth, falling back to local). */
     val displayStreakDay: Int = 1,
     val displayTotalEntries: Int = 0,
@@ -158,6 +164,10 @@ internal class WINRExperienceViewModel(
      * load skips the winner flow and lands on the normal dashboard.
      */
     private var suppressWinnerClaim = false
+
+    /** Consents from the ORIGINAL submit — resend must reuse them (fabricating
+     *  values would overwrite the person's real marketing choice). Memory only. */
+    private var pendingVerification: Triple<String, Boolean, Boolean>? = null
 
     /** Host-app-provided identity used to prefill the claim form. */
     private var prefillUser: WINRUser? = null
@@ -636,12 +646,23 @@ internal class WINRExperienceViewModel(
                 // Cross-device streak unification: if this email already belonged to
                 // an existing user under this publisher, WinrApi switches to the
                 // canonical user's credentials internally (adopted == true).
-                api.submitEmail(
+                val result = api.submitEmail(
                     email = email,
                     marketingConsent = marketingConsent,
                     publisherUserId = publisherUserId,
                     ageConfirmed = ageConfirmed,
                 )
+                if (result.verificationRequired) {
+                    // The merge is parked until the person proves the inbox is
+                    // theirs. Raw email stays in view-model memory only.
+                    pendingVerification = Triple(email, ageConfirmed, marketingConsent)
+                    _uiState.value = _uiState.value.copy(
+                        isSubmittingEmail = false,
+                        codeError = null,
+                        screen = ExperienceScreen.CodeEntry(email),
+                    )
+                    return@launch
+                }
                 // Refresh the SDK-level consent cache HERE, on the submit
                 // itself, rather than waiting for the next getActiveGiveaway
                 // to echo emailConsentStatus back. Today a stale `false` is
@@ -664,6 +685,35 @@ internal class WINRExperienceViewModel(
             // mounts already celebrating — never an uncelebrated streak page.
             loadInternal(claimBeforeDashboard = true)
         }
+    }
+
+    /** Check the 6-digit adoption code; approved → the API has switched the
+     *  session to the canonical user, so reload into the dashboard. */
+    fun submitVerificationCode(code: String) {
+        if (_uiState.value.isVerifyingCode) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isVerifyingCode = true, codeError = null)
+            try {
+                api.verifyAdoptionCode(code)
+                WINR.noteEmailConsent()
+                pendingVerification = null
+                _uiState.value = _uiState.value.copy(isVerifyingCode = false)
+                loadInternal(claimBeforeDashboard = true)
+            } catch (e: Exception) {
+                logger.error("Adoption code check failed: ${e.message}", e)
+                _uiState.value = _uiState.value.copy(
+                    isVerifyingCode = false,
+                    codeError = "That code didn't match. Check the email and try again.",
+                )
+            }
+        }
+    }
+
+    /** Request a fresh code by re-submitting the ORIGINAL email + consents. */
+    fun resendVerificationCode() {
+        val (email, age, marketing) = pendingVerification ?: return
+        _uiState.value = _uiState.value.copy(screen = ExperienceScreen.EmailCapture)
+        submitEmail(email, marketingConsent = marketing, ageConfirmed = age)
     }
 
     // ── How It Works ──

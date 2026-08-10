@@ -190,6 +190,7 @@ internal class WinrApi(
         val result = SubmitEmailResult(
             success = response["success"]?.jsonPrimitive?.booleanOrNull ?: false,
             adopted = response["adopted"]?.jsonPrimitive?.booleanOrNull ?: false,
+            verificationRequired = response["verificationRequired"]?.jsonPrimitive?.booleanOrNull ?: false,
             uuid = response["uuid"]?.jsonPrimitive?.contentOrNull,
             token = response["token"]?.jsonPrimitive?.contentOrNull,
             refreshToken = response["refreshToken"]?.jsonPrimitive?.contentOrNull,
@@ -200,6 +201,29 @@ internal class WinrApi(
         if (result.adopted && result.token != null && result.uuid != null) {
             networkClient.saveSession(result.token, result.refreshToken, result.uuid)
             logger.info("Adopted existing account — streak unified across devices")
+        }
+        return result
+    }
+
+    /**
+     * Completes a verification-gated adoption with the emailed 6-digit code.
+     * Approved → the same session switch as a direct adoption.
+     */
+    suspend fun verifyAdoptionCode(code: String): SubmitEmailResult {
+        val response = networkClient.authenticatedPost(
+            "verifyAdoptionCode",
+            mapOf("code" to JsonPrimitive(code)),
+        )
+        val result = SubmitEmailResult(
+            success = response["success"]?.jsonPrimitive?.booleanOrNull ?: false,
+            adopted = response["adopted"]?.jsonPrimitive?.booleanOrNull ?: false,
+            uuid = response["uuid"]?.jsonPrimitive?.contentOrNull,
+            token = response["token"]?.jsonPrimitive?.contentOrNull,
+            refreshToken = response["refreshToken"]?.jsonPrimitive?.contentOrNull,
+        )
+        if (result.adopted && result.token != null && result.uuid != null) {
+            networkClient.saveSession(result.token, result.refreshToken, result.uuid)
+            logger.info("Adoption verified — streak unified across devices")
         }
         return result
     }
@@ -298,6 +322,9 @@ internal class WinrApi(
     data class SubmitEmailResult(
         val success: Boolean,
         val adopted: Boolean = false,
+        /** The typed email matches an EXISTING account and the OTP gate is on:
+         *  no merge happened — show the code screen and call verifyAdoptionCode. */
+        val verificationRequired: Boolean = false,
         val uuid: String? = null,
         val token: String? = null,
         val refreshToken: String? = null,
