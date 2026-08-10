@@ -45,9 +45,12 @@ internal object WINRClaimStepTheme {
     val fieldFill = Color(0xFF212832)
     val fieldBorder = Color(0xFF3D424B)
 
-    fun Modifier.fieldBackground(): Modifier = this
+    /** Inline-error red, matching the capture/code screens' error text. */
+    val errorRed = Color(0xFFFF6B63)
+
+    fun Modifier.fieldBackground(error: Boolean = false): Modifier = this
         .background(fieldFill, RoundedCornerShape(10.dp))
-        .border(1.dp, fieldBorder, RoundedCornerShape(10.dp))
+        .border(1.dp, if (error) errorRed else fieldBorder, RoundedCornerShape(10.dp))
 }
 
 /** The 12sp field label above the box. */
@@ -64,12 +67,16 @@ internal fun WINRClaimStepFieldLabel(text: String) {
 /**
  * A labeled claim-step text field per the frames: 12sp label, 59dp box,
  * #212832 fill / #3D424B 1dp border / r10, 20sp input text.
+ *
+ * [errorText], when non-null, turns the border error-red and renders the
+ * message inline under the box (Master Field List "User Message (UI)").
  */
 @Composable
 internal fun WINRClaimStepField(
     label: String,
     value: String,
     keyboardType: KeyboardType = KeyboardType.Text,
+    errorText: String? = null,
     onValueChange: (String) -> Unit,
 ) {
     with(WINRClaimStepTheme) {
@@ -80,7 +87,7 @@ internal fun WINRClaimStepField(
                     .padding(top = 6.dp)
                     .fillMaxWidth()
                     .height(59.dp)
-                    .fieldBackground()
+                    .fieldBackground(error = errorText != null)
                     .padding(horizontal = 25.dp),
                 contentAlignment = Alignment.CenterStart,
             ) {
@@ -95,6 +102,13 @@ internal fun WINRClaimStepField(
                         autoCorrectEnabled = false,
                     ),
                     modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            if (errorText != null) {
+                Text(
+                    errorText,
+                    style = WINRV2Font.inter(13.sp, color = errorRed),
+                    modifier = Modifier.padding(start = 8.dp, top = 5.dp),
                 )
             }
         }

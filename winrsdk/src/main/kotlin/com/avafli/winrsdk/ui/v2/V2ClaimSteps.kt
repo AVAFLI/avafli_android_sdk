@@ -69,6 +69,7 @@ import androidx.compose.ui.unit.sp
 import com.avafli.winrsdk.R
 import com.avafli.winrsdk.domain.PrizeClaimBlock
 import com.avafli.winrsdk.domain.PrizeClaimForm
+import com.avafli.winrsdk.domain.WINRFieldValidation
 import com.avafli.winrsdk.ui.v2.WINRClaimStepTheme.fieldBackground
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -398,16 +399,26 @@ private fun WINRClaimStep1(
         ctaEnabled = form.isStep1Valid,
         onCTA = onContinue,
     ) {
+        // Inline errors appear once a field holds a non-empty INVALID value —
+        // an empty field is just "not filled yet" (the dimmed CTA covers it).
+        // The same rules gate isStep1Valid, so an error always blocks CONTINUE.
+        fun nameError(value: String, message: String): String? =
+            message.takeIf { value.isNotBlank() && !WINRFieldValidation.isValidName(value) }
+
         Column(
             modifier = Modifier
                 .padding(top = 34.dp)
                 .padding(horizontal = 12.dp),
             verticalArrangement = Arrangement.spacedBy(21.dp),
         ) {
-            WINRClaimStepField("First Name", form.firstName) { onForm(form.copy(firstName = it)) }
-            WINRClaimStepField("Last Name (we will only show your last initial)", form.lastName) {
-                onForm(form.copy(lastName = it))
-            }
+            WINRClaimStepField(
+                "First Name", form.firstName,
+                errorText = nameError(form.firstName, V2Strings.INVALID_FIRST_NAME),
+            ) { onForm(form.copy(firstName = it)) }
+            WINRClaimStepField(
+                "Last Name (we will only show your last initial)", form.lastName,
+                errorText = nameError(form.lastName, V2Strings.INVALID_LAST_NAME),
+            ) { onForm(form.copy(lastName = it)) }
             // The winning email lives server-side (the SDK never stores the
             // raw address) and the claim is keyed to the account — shown
             // locked, masked by the backend for recognition.
@@ -415,9 +426,14 @@ private fun WINRClaimStep1(
                 label = "Winning Email Address (cannot be changed)",
                 value = maskedEmail ?: "On file with your winning entry",
             )
+            // Phone stays OPTIONAL (blank is fine), but a non-empty value must
+            // reduce to a valid 10-digit US number to CONTINUE.
             WINRClaimStepField(
                 "Phone Number (optional)", form.phone,
                 keyboardType = KeyboardType.Phone,
+                errorText = V2Strings.INVALID_PHONE.takeIf {
+                    !WINRFieldValidation.isValidOptionalPhone(form.phone)
+                },
             ) { onForm(form.copy(phone = it)) }
         }
     }

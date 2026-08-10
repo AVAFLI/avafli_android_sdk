@@ -67,11 +67,32 @@ class PrizeClaimFormTest {
     // ── Per-step validity (stepped flow) ──
 
     @Test
-    fun `step 1 requires first and last name only`() {
+    fun `step 1 requires first and last name`() {
         assertTrue(PrizeClaimForm(firstName = "Ada", lastName = "Lovelace").isStep1Valid)
         assertFalse(PrizeClaimForm(firstName = "Ada").isStep1Valid)
         assertFalse(PrizeClaimForm(lastName = "Lovelace").isStep1Valid)
         assertFalse(PrizeClaimForm(firstName = "  ", lastName = "Lovelace").isStep1Valid)
+    }
+
+    @Test
+    fun `step 1 names follow the Master Field List character rule`() {
+        assertTrue(PrizeClaimForm(firstName = "Mary Jane", lastName = "O'Brien-St. Clair").isStep1Valid)
+        assertTrue(PrizeClaimForm(firstName = "José", lastName = "Muñoz").isStep1Valid)
+        assertFalse(PrizeClaimForm(firstName = "Ada123", lastName = "Lovelace").isStep1Valid)
+        assertFalse(PrizeClaimForm(firstName = "Ada", lastName = "L0velace!").isStep1Valid)
+        assertFalse(PrizeClaimForm(firstName = "a".repeat(51), lastName = "Lovelace").isStep1Valid)
+    }
+
+    @Test
+    fun `step 1 phone stays optional but a non-empty invalid one blocks continue`() {
+        val base = PrizeClaimForm(firstName = "Ada", lastName = "Lovelace")
+        assertTrue(base.isStep1Valid) // blank phone: fine
+        assertTrue(base.copy(phone = "(555) 123-4567").isStep1Valid)
+        assertTrue(base.copy(phone = "+1 555 123 4567").isStep1Valid)
+        assertFalse(base.copy(phone = "12345").isStep1Valid)
+        assertFalse(base.copy(phone = "55512345678").isStep1Valid)
+        // ...and an invalid phone blocks overall submit too.
+        assertFalse(validForm.copy(phone = "12345").isValid)
     }
 
     @Test

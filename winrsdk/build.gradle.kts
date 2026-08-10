@@ -46,6 +46,12 @@ android {
         compose = true
     }
 
+    testOptions {
+        // android.util.Log (Logger.error/warn) must not crash JVM unit tests —
+        // the error paths under test call it. Log.* returns defaults instead.
+        unitTests.isReturnDefaultValues = true
+    }
+
     publishing {
         singleVariant("release") {
             withSourcesJar()
@@ -102,7 +108,7 @@ afterEvaluate {
                 from(components["release"])
                 groupId = "com.avafli"
                 artifactId = "winrsdk"
-                version = "2.5.0"
+                version = "2.6.0"
 
                 pom {
                     name.set("WINR SDK")

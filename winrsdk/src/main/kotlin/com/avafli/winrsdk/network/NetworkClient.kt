@@ -151,6 +151,12 @@ internal class NetworkClient(
             logger.debug("Response ${response.code} (${responseBody.length} bytes)")
 
             if (!response.isSuccessful) {
+                // Geo-fence rejections get their own typed error so the UI can
+                // show the dedicated "Not available in your location" state
+                // instead of a generic failure.
+                if (isGeoFenceRejection(response.code, responseBody)) {
+                    throw WINRError.GeoBlocked()
+                }
                 throw WINRError.ServerError(response.code, responseBody)
             }
 
@@ -231,6 +237,43 @@ internal class NetworkClient(
             throw WINRError.TokenRefreshFailed()
         } finally {
             isRefreshing.set(false)
+        }
+    }
+
+    companion object {
+        private val geoJson = Json { ignoreUnknownKeys = true; isLenient = true }
+
+        /**
+         * Detect a backend geo-fence rejection from a callable error response.
+         *
+         * The backend (functions/src/gatekeeper.ts, enforceGeoFence) throws
+         * HttpsError("permission-denied", …) with one of two fixed messages —
+         * "We couldn't verify your location. This promotion is only available
+         * in the United States." (inconclusive lookup, fence fails closed) or
+         * "This promotion is only available to users located in one of the 50
+         * United States or Washington, D.C." (confirmed non-US). Over the
+         * callable HTTP protocol that arrives as a 403 with body
+         * {"error": {"message": …, "status": "PERMISSION_DENIED"}}.
+         *
+         * Matching requires BOTH the PERMISSION_DENIED status and a location
+         * phrase from those messages, so other permission-denied rejections
+         * (e.g. ban enforcement) never masquerade as geo blocks.
+         */
+        internal fun isGeoFenceRejection(httpCode: Int, body: String): Boolean {
+            if (httpCode != 403) return false
+            return try {
+                val error = geoJson.parseToJsonElement(body)
+                    .jsonObject["error"]?.jsonObject ?: return false
+                val status = error["status"]?.jsonPrimitive?.contentOrNull
+                    ?: error["code"]?.jsonPrimitive?.contentOrNull
+                val message = error["message"]?.jsonPrimitive?.contentOrNull ?: ""
+                status?.uppercase() == "PERMISSION_DENIED" && (
+                    message.contains("promotion is only available", ignoreCase = true) ||
+                        message.contains("verify your location", ignoreCase = true)
+                    )
+            } catch (_: Exception) {
+                false
+            }
         }
     }
 

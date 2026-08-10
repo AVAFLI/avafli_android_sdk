@@ -69,10 +69,15 @@ internal data class PrizeClaimForm(
 
     /**
      * Step 1 "TELL US ABOUT YOURSELF": first + last name (email is
-     * server-side, phone optional).
+     * server-side). Names follow the Master Field List rule (unicode letters/
+     * spaces/apostrophes/hyphens/periods, max 50). Phone stays OPTIONAL, but a
+     * non-empty value must reduce to a valid 10-digit US number — an invalid
+     * one blocks CONTINUE (and submit) with an inline message.
      */
     val isStep1Valid: Boolean
-        get() = firstName.trim().isNotEmpty() && lastName.trim().isNotEmpty()
+        get() = WINRFieldValidation.isValidName(firstName) &&
+            WINRFieldValidation.isValidName(lastName) &&
+            WINRFieldValidation.isValidOptionalPhone(phone)
 
     /** Step 2 "WHERE SHOULD WE SEND YOUR PRIZE?": full US shipping address. */
     val isStep2Valid: Boolean

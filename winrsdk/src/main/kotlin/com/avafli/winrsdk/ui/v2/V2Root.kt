@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -31,6 +32,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.avafli.winrsdk.ui.ExperienceScreen
@@ -133,8 +135,18 @@ private fun DrawerContent(
     when (val screen = ui.screen) {
         is ExperienceScreen.Loading -> WINRV2LoadingSkeleton()
 
+        // Unrecognized errors keep the FRIENDLY empty state — raw backend/
+        // WINRError text is never rendered. Geo-block and session expiry are
+        // routed to their dedicated states below.
         is ExperienceScreen.NoActiveGiveaway,
         is ExperienceScreen.Error -> EmptyState(onDismiss)
+
+        is ExperienceScreen.GeoBlocked -> GeoBlockedState(onDismiss)
+
+        is ExperienceScreen.SessionExpired -> SessionExpiredState(
+            onRetry = { viewModel.retryAfterSessionExpiry() },
+            onDismiss = onDismiss,
+        )
 
         is ExperienceScreen.CodeEntry -> WINRV2CodeEntryScreen(
             accent = accent,
@@ -162,6 +174,7 @@ private fun DrawerContent(
             emailConsentText = ui.sdkConfig?.copy?.emailCapture?.emailConsentText
                 ?: ui.sdkConfig?.copy?.emailConsentText,
             prefilledEmail = viewModel.prefilledEmail(),
+            submitError = ui.emailSubmitError,
             onSubmit = { email, ageConfirmed, marketingConsent ->
                 viewModel.submitEmail(
                     email = email,
@@ -209,6 +222,10 @@ private fun DrawerContent(
                 onWinnerTap = onWinnerTap,
                 pendingClaimEntries = ui.pendingRevealGrant?.entries,
                 revealed = ui.claimRevealed,
+                notice = ui.dashboardNotice?.message,
+                onNoticeRetry = if (ui.dashboardNotice?.retryable == true) {
+                    { viewModel.retryDailyClaim() }
+                } else null,
             )
         }
 
@@ -234,27 +251,93 @@ private fun DrawerContent(
     }
 }
 
-/** Nothing to pitch (or opted out / errored) — quiet empty state. */
+/** Nothing to pitch (or opted out / unrecognized error) — quiet empty state. */
 @Composable
 private fun EmptyState(onDismiss: () -> Unit) {
+    StatusState(
+        headline = V2Strings.EMPTY_HEADLINE,
+        body = V2Strings.EMPTY_BODY,
+        primaryTitle = V2Strings.CLOSE,
+        onPrimary = onDismiss,
+    )
+}
+
+/** US-only geo-fence rejection — the person learns WHY nothing is available. */
+@Composable
+private fun GeoBlockedState(onDismiss: () -> Unit) {
+    StatusState(
+        headline = V2Strings.GEO_BLOCKED_HEADLINE,
+        body = V2Strings.GEO_BLOCKED_BODY,
+        primaryTitle = V2Strings.CLOSE,
+        onPrimary = onDismiss,
+    )
+}
+
+/** Token refresh failed — RETRY re-registers the device and reloads. */
+@Composable
+private fun SessionExpiredState(onRetry: () -> Unit, onDismiss: () -> Unit) {
+    StatusState(
+        headline = V2Strings.SESSION_EXPIRED,
+        body = null,
+        primaryTitle = V2Strings.RETRY,
+        onPrimary = onRetry,
+        secondaryTitle = V2Strings.CLOSE,
+        onSecondary = onDismiss,
+    )
+}
+
+/**
+ * Shared full-drawer status layout: bold headline, optional body, primary
+ * pill, optional secondary text action (the EmptyState look, generalized).
+ */
+@Composable
+private fun StatusState(
+    headline: String,
+    body: String?,
+    primaryTitle: String,
+    onPrimary: () -> Unit,
+    secondaryTitle: String? = null,
+    onSecondary: (() -> Unit)? = null,
+) {
     Column(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().padding(horizontal = 30.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
         Text(
-            "Nothing to see here yet",
-            style = WINRV2Font.inter(20.sp, FontWeight.Bold, color = Color.White),
+            headline,
+            style = WINRV2Font.inter(
+                20.sp, FontWeight.Bold,
+                color = Color.White,
+                textAlign = TextAlign.Center,
+            ),
         )
-        Text(
-            "Check back soon for your next chance to win!",
-            style = WINRV2Font.inter(14.sp, color = WINRV2Color.textTertiary),
-            modifier = Modifier.padding(top = 12.dp),
-        )
+        if (body != null) {
+            Text(
+                body,
+                style = WINRV2Font.inter(
+                    14.sp,
+                    color = WINRV2Color.textTertiary,
+                    textAlign = TextAlign.Center,
+                ),
+                modifier = Modifier.padding(top = 12.dp),
+            )
+        }
         WINRV2PillButton(
             accent = WINRV2Color.winrBlue,
-            title = "CLOSE",
+            title = primaryTitle,
             modifier = Modifier.padding(top = 24.dp).width(220.dp),
-        ) { onDismiss() }
+        ) { onPrimary() }
+        if (secondaryTitle != null && onSecondary != null) {
+            Text(
+                secondaryTitle,
+                style = WINRV2Font.inter(14.sp, FontWeight.Bold, color = WINRV2Color.textTertiary),
+                modifier = Modifier
+                    .padding(top = 16.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .clickable { onSecondary() }
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+            )
+        }
     }
 }

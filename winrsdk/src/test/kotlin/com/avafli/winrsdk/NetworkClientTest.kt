@@ -92,6 +92,38 @@ class NetworkClientTest {
         }
     }
 
+    // ── Geo-fence rejection detection (backend gatekeeper.ts contract) ──
+    //
+    // The backend throws HttpsError("permission-denied", …) with one of two
+    // fixed messages; over the callable protocol that is a 403 with
+    // {"error": {"message": …, "status": "PERMISSION_DENIED"}}.
+
+    @Test
+    fun `confirmed non-US geo body maps to a geo rejection`() {
+        val body = """{"error":{"message":"This promotion is only available to users located in one of the 50 United States or Washington, D.C.","status":"PERMISSION_DENIED"}}"""
+        assertTrue(NetworkClient.isGeoFenceRejection(403, body))
+    }
+
+    @Test
+    fun `unverified-location geo body maps to a geo rejection`() {
+        val body = """{"error":{"message":"We couldn't verify your location. This promotion is only available in the United States.","status":"PERMISSION_DENIED"}}"""
+        assertTrue(NetworkClient.isGeoFenceRejection(403, body))
+    }
+
+    @Test
+    fun `other permission-denied rejections are not geo rejections`() {
+        val banned = """{"error":{"message":"This device has been banned.","status":"PERMISSION_DENIED"}}"""
+        assertFalse(NetworkClient.isGeoFenceRejection(403, banned))
+    }
+
+    @Test
+    fun `non-403 codes and malformed bodies are not geo rejections`() {
+        val geoMessage = """{"error":{"message":"This promotion is only available to users located in one of the 50 United States or Washington, D.C.","status":"PERMISSION_DENIED"}}"""
+        assertFalse(NetworkClient.isGeoFenceRejection(401, geoMessage))
+        assertFalse(NetworkClient.isGeoFenceRejection(403, "not json"))
+        assertFalse(NetworkClient.isGeoFenceRejection(403, "{}"))
+    }
+
     @Test
     fun `secure storage token lifecycle`() {
         every { secureStorage.getToken() } returns "initial-token"

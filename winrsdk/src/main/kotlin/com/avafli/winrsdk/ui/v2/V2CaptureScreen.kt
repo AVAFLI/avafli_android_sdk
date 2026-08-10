@@ -30,8 +30,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.focus.onFocusChanged
 import com.avafli.winrsdk.R
 import com.avafli.winrsdk.domain.Giveaway
+import com.avafli.winrsdk.domain.WINRFieldValidation
 
 // New-user capture ("VISIT. EARN. WIN."), ported from iOS WINRV2CaptureView.
 
@@ -48,11 +50,21 @@ internal fun WINRV2CaptureScreen(
      * pre-filled and READ-ONLY; malformed or null → the editable field.
      */
     prefilledEmail: String? = null,
+    /** Transport failure of a previous submit — inline near the CTA; the user
+     *  stays here and can retry. */
+    submitError: String? = null,
     onSubmit: (String, Boolean, Boolean) -> Unit,
     onInfo: () -> Unit,
     onClose: () -> Unit,
 ) {
     var email by remember { mutableStateOf("") }
+    // Inline-error gating: the email error shows only after the field was
+    // touched (gained focus once, then lost it holding an invalid non-empty
+    // value) or after a submit attempt — never while a first entry is still
+    // being typed.
+    var emailFieldHadFocus by remember { mutableStateOf(false) }
+    var emailTouched by remember { mutableStateOf(false) }
+    var submitAttempted by remember { mutableStateOf(false) }
     // Age gate requires an affirmative tick; marketing consent never gates the CTA.
     var isAdult by remember { mutableStateOf(false) }
     // Unchecked by default: consent must be an affirmative act (pre-ticked boxes
@@ -67,7 +79,9 @@ internal fun WINRV2CaptureScreen(
     }
 
     val day1Entries = giveaway?.streakLadder?.firstOrNull() ?: 10
-    val canSubmit = isAdult && (lockedEmail != null || (email.contains("@") && email.contains(".")))
+    val emailValid = lockedEmail != null || WINRFieldValidation.isValidEmail(email)
+    val canSubmit = isAdult && emailValid
+    val showEmailError = lockedEmail == null && !emailValid && (emailTouched || submitAttempted)
 
     Box(Modifier.fillMaxSize()) {
         WINRV2TopGlow(accent, Modifier.matchParentSize())
@@ -107,7 +121,29 @@ internal fun WINRV2CaptureScreen(
                 modifier = Modifier.padding(horizontal = 22.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
-                EmailField(lockedEmail ?: email, onValueChange = { email = it }, locked = lockedEmail != null)
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    EmailField(
+                        lockedEmail ?: email,
+                        onValueChange = { email = it },
+                        locked = lockedEmail != null,
+                        onFocusChanged = { focused ->
+                            if (focused) {
+                                emailFieldHadFocus = true
+                            } else if (emailFieldHadFocus && email.isNotEmpty() &&
+                                !WINRFieldValidation.isValidEmail(email)
+                            ) {
+                                emailTouched = true
+                            }
+                        },
+                    )
+                    if (showEmailError) {
+                        Text(
+                            V2Strings.INVALID_EMAIL,
+                            style = WINRV2Font.inter(13.sp, color = Color(0xFFFF6B63)),
+                            modifier = Modifier.padding(start = 8.dp),
+                        )
+                    }
+                }
                 ConsentCheckbox(
                     checked = isAdult,
                     text = "I confirm I am 18 years of age or older",
@@ -120,10 +156,24 @@ internal fun WINRV2CaptureScreen(
                     accent = accent,
                     title = "CLAIM MY $day1Entries ENTRIES",
                     isLoading = isSubmitting,
-                    enabled = canSubmit && !isSubmitting,
+                    // Tappable even while invalid (only the spinner blocks it):
+                    // a submit attempt with a bad email surfaces the inline
+                    // error instead of a dead button. The alpha dim still
+                    // communicates "not ready".
+                    enabled = !isSubmitting,
                     modifier = Modifier.alpha(if (canSubmit) 1f else 0.5f),
                 ) {
-                    onSubmit(lockedEmail ?: email.trim(), isAdult, wantsMarketing)
+                    submitAttempted = true
+                    if (canSubmit) {
+                        onSubmit(lockedEmail ?: email.trim(), isAdult, wantsMarketing)
+                    }
+                }
+                if (submitError != null) {
+                    Text(
+                        submitError,
+                        style = WINRV2Font.inter(13.sp, color = Color(0xFFFF6B63), textAlign = TextAlign.Center),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
             }
 
@@ -181,7 +231,12 @@ private fun PrizeStrip(giveaway: Giveaway?) {
 }
 
 @Composable
-private fun EmailField(value: String, onValueChange: (String) -> Unit, locked: Boolean = false) {
+private fun EmailField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    locked: Boolean = false,
+    onFocusChanged: (Boolean) -> Unit = {},
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -225,7 +280,9 @@ private fun EmailField(value: String, onValueChange: (String) -> Unit, locked: B
                         keyboardType = KeyboardType.Email,
                         autoCorrectEnabled = false,
                     ),
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onFocusChanged { onFocusChanged(it.isFocused) },
                 )
             }
         }

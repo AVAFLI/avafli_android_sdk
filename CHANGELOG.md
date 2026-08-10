@@ -3,6 +3,43 @@
 All notable changes to the WINR Android SDK will be documented in this file.
 
 
+## 2.6.0 — 2026-08-10
+
+User-facing error messaging per the Master Field List; honest failure states —
+no fabricated claim success.
+
+- **Inline field validation with real messages** (all copy centralized in
+  `V2Strings`):
+  - Email capture: "Please enter a valid email address." under the field,
+    shown only after the field is touched or a submit is attempted.
+  - Winner claim step 1: "Please enter a valid first name." / "Please enter a
+    valid last name." (unicode letters, spaces, apostrophes, hyphens, periods;
+    max 50). `WINRClaimStepField` gained an optional `errorText` slot.
+  - Claim-form phone stays OPTIONAL, but a non-empty value must reduce to a
+    valid 10-digit US number ("Please enter a valid 10-digit mobile number.");
+    an invalid one blocks CONTINUE. The bare 10 digits are what's submitted.
+- **Dedicated geo-blocked state.** The backend's US-only geo-fence rejection
+  (permission-denied from `enforceGeoFence`) is now typed
+  (`WINRError.GeoBlocked`) and rendered as "Not available in your location"
+  with an explanation — no more generic empty state.
+- **Dedicated session-expired state.** A failed token refresh shows "Your
+  session has expired. Please try again." with a RETRY button that re-registers
+  the device and reloads. All other errors keep the friendly empty state; raw
+  backend error text is never rendered.
+- **Duplicate same-day entry is said out loud.** When a claim comes back
+  already-claimed and this device didn't know (raced another device/open), the
+  dashboard shows a transient notice — "You've already entered today. Come back
+  tomorrow to keep your streak going!" — instead of silently celebrating a
+  grant that didn't happen.
+- **Auto-claim transport failure is no longer silent.** The dashboard settles
+  UNCLAIMED (as before — never a fake success) and now says so: "We couldn't
+  record today's entry. Check your connection and try again." with a TRY AGAIN
+  affordance.
+- **Failed email submit no longer proceeds as success.** The user stays on the
+  capture screen with "Something went wrong sending your email. Please try
+  again." and can retry; the local "email submitted" flag is only persisted
+  after the backend accepts.
+
 ## 2.5.1 — 2026-08-10
 
 Consent correctness and cross-device security.

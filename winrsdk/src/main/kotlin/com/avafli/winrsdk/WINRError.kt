@@ -30,6 +30,14 @@ sealed class WINRError(message: String, cause: Throwable? = null) : Exception(me
     class ServerError(val code: Int, message: String) : WINRError("Server error ($code): $message")
 
     /**
+     * The backend geo-fence rejected the request: the promotion is US-only and
+     * this request's IP either resolved outside the United States or could not
+     * be verified (the fence fails closed). Mapped from the callable
+     * permission-denied error bodies emitted by functions/src/gatekeeper.ts.
+     */
+    class GeoBlocked : WINRError("This promotion is not available in your location.")
+
+    /**
      * The WINR experience is no longer available for this publisher — typically because
      * the publisher's account or API key has been suspended or revoked (e.g. billing lapse).
      * The SDK silently stops auto-opening the experience in this case.

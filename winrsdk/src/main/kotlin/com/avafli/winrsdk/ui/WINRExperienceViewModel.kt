@@ -3,8 +3,10 @@ package com.avafli.winrsdk.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.avafli.winrsdk.WINR
+import com.avafli.winrsdk.WINRError
 import com.avafli.winrsdk.WINRUser
 import com.avafli.winrsdk.domain.DailyEntryGrant
+import com.avafli.winrsdk.domain.WINRFieldValidation
 import com.avafli.winrsdk.domain.Giveaway
 import com.avafli.winrsdk.domain.PrizeClaimBlock
 import com.avafli.winrsdk.domain.PrizeClaimForm
@@ -15,6 +17,7 @@ import com.avafli.winrsdk.network.WinrApi
 import com.avafli.winrsdk.services.Logger
 import com.avafli.winrsdk.services.analytics.AnalyticsAdapter
 import com.avafli.winrsdk.storage.PreferencesStorage
+import com.avafli.winrsdk.ui.v2.V2Strings
 import com.avafli.winrsdk.ui.v2.WINRV2ImageWarmer
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -63,8 +66,29 @@ internal sealed class ExperienceScreen {
      */
     data class WinnerClaim(val claim: PrizeClaimBlock) : ExperienceScreen()
 
+    /**
+     * The backend geo-fence rejected this person (US-only promotion, fails
+     * closed on inconclusive lookups). Dedicated state — never the generic
+     * empty state — so the user learns WHY nothing is available.
+     */
+    object GeoBlocked : ExperienceScreen()
+
+    /**
+     * Token refresh failed (refresh token missing/rejected — local tokens are
+     * cleared by the NetworkClient). The RETRY affordance re-registers the
+     * device and reloads.
+     */
+    object SessionExpired : ExperienceScreen()
+
     data class Error(val message: String) : ExperienceScreen()
 }
+
+/**
+ * A non-blocking notice rendered as a banner on the streak dashboard.
+ * [retryable] notices carry a TRY AGAIN affordance and persist until retried
+ * or cleared; non-retryable ones auto-dismiss after a few seconds.
+ */
+internal data class DashboardNotice(val message: String, val retryable: Boolean)
 
 /** Sub-screen of the winner claim flow (`screen is WinnerClaim`). */
 internal sealed class WinnerClaimStep {
@@ -81,6 +105,14 @@ internal data class ExperienceUiState(
     val isSubmittingEmail: Boolean = false,
     val isVerifyingCode: Boolean = false,
     val codeError: String? = null,
+    /**
+     * Transport failure of the email submit itself — surfaced inline on the
+     * capture screen (the user stays there and can retry; a failed submit is
+     * never silently treated as success).
+     */
+    val emailSubmitError: String? = null,
+    /** Non-blocking dashboard banner (duplicate-entry / claim-transport notices). */
+    val dashboardNotice: DashboardNotice? = null,
     /** Current streak day for display (backend truth, falling back to local). */
     val displayStreakDay: Int = 1,
     val displayTotalEntries: Int = 0,
@@ -139,6 +171,9 @@ internal class WINRExperienceViewModel(
          * animate from, with no perceptible pre-claim flash.
          */
         internal const val AUTO_REVEAL_DELAY_MS = 150L
+
+        /** How long a non-retryable dashboard notice stays up before auto-dismissing. */
+        internal const val DASHBOARD_NOTICE_AUTO_DISMISS_MS = 6_000L
     }
 
     private val _uiState = MutableStateFlow(ExperienceUiState())
@@ -345,6 +380,19 @@ internal class WINRExperienceViewModel(
                 preferencesStorage.saveEmailSubmitted(true)
                 WINR.noteEmailConsent()
             }
+        } catch (e: WINRError.GeoBlocked) {
+            // US-only geo-fence: a dedicated, honest state — never the generic
+            // empty state (and never raw backend text).
+            logger.info("Geo-fence rejection on load — showing the geo-blocked state")
+            setScreen(ExperienceScreen.GeoBlocked)
+            return
+        } catch (e: WINRError.TokenRefreshFailed) {
+            // The refresh token is gone/rejected and local tokens were cleared:
+            // every subsequent call would fail. Surface the dedicated state with
+            // the RETRY (re-register + reload) affordance.
+            logger.info("Session expired on load — showing the session-expired state")
+            setScreen(ExperienceScreen.SessionExpired)
+            return
         } catch (e: Exception) {
             // Offline fallback: use the cached giveaway.
             if (activeGiveaway == null) activeGiveaway = cachedGiveaway
@@ -636,11 +684,7 @@ internal class WINRExperienceViewModel(
     ) {
         if (email.isEmpty()) return
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isSubmittingEmail = true)
-
-            // NOTE: we deliberately do NOT persist the raw email locally (PII-High).
-            // Registration state is the non-PII "email submitted" flag.
-            preferencesStorage.saveEmailSubmitted(true)
+            _uiState.value = _uiState.value.copy(isSubmittingEmail = true, emailSubmitError = null)
 
             try {
                 // Cross-device streak unification: if this email already belonged to
@@ -663,6 +707,13 @@ internal class WINRExperienceViewModel(
                     )
                     return@launch
                 }
+                // Persist the non-PII "email submitted" flag only AFTER the
+                // backend accepted the submit. (The raw email is deliberately
+                // never stored locally — PII-High.) Setting it before/despite
+                // a failed submit fabricated a registration that never
+                // happened: the next open skipped capture and the person was
+                // never actually entered.
+                preferencesStorage.saveEmailSubmitted(true)
                 // Refresh the SDK-level consent cache HERE, on the submit
                 // itself, rather than waiting for the next getActiveGiveaway
                 // to echo emailConsentStatus back. Today a stale `false` is
@@ -674,7 +725,21 @@ internal class WINRExperienceViewModel(
                 WINR.noteEmailConsent()
                 logger.debug("Email submitted to backend")
             } catch (e: Exception) {
-                logger.error("Email submit to backend failed (will retry later): ${e.message}", e)
+                logger.error("Email submit to backend failed: ${e.message}", e)
+                when (e) {
+                    // Geo-fenced on submitEmail (the backend blocks BEFORE any
+                    // PII is stored) — dedicated state, not an inline error.
+                    is WINRError.GeoBlocked -> setScreen(ExperienceScreen.GeoBlocked)
+                    is WINRError.TokenRefreshFailed -> setScreen(ExperienceScreen.SessionExpired)
+                    // Everything else: stay on capture with an inline error and
+                    // let the person retry — a failed submit must never proceed
+                    // as if it succeeded.
+                    else -> _uiState.value = _uiState.value.copy(
+                        emailSubmitError = V2Strings.EMAIL_SUBMIT_FAILED,
+                    )
+                }
+                _uiState.value = _uiState.value.copy(isSubmittingEmail = false)
+                return@launch
             }
 
             _uiState.value = _uiState.value.copy(isSubmittingEmail = false)
@@ -695,6 +760,9 @@ internal class WINRExperienceViewModel(
             _uiState.value = _uiState.value.copy(isVerifyingCode = true, codeError = null)
             try {
                 api.verifyAdoptionCode(code)
+                // The merge completed — the email is on file for the (now
+                // canonical) user, so the registration flag is earned here.
+                preferencesStorage.saveEmailSubmitted(true)
                 WINR.noteEmailConsent()
                 pendingVerification = null
                 _uiState.value = _uiState.value.copy(isVerifyingCode = false)
@@ -703,7 +771,7 @@ internal class WINRExperienceViewModel(
                 logger.error("Adoption code check failed: ${e.message}", e)
                 _uiState.value = _uiState.value.copy(
                     isVerifyingCode = false,
-                    codeError = "That code didn't match. Check the email and try again.",
+                    codeError = V2Strings.CODE_MISMATCH,
                 )
             }
         }
@@ -792,6 +860,9 @@ internal class WINRExperienceViewModel(
                     displayTotalEntries = response.totalEntries,
                     pendingRevealGrant = grant.copy(entries = grantEntries),
                     preClaimTotalEntries = response.totalEntries - grantEntries,
+                    // A successful claim supersedes any "couldn't record your
+                    // entry" notice (e.g. the retry just worked).
+                    dashboardNotice = null,
                 )
                 // No-op if the reveal already played; arms the celebration
                 // for the offline-cache open that staged no prediction.
@@ -822,18 +893,31 @@ internal class WINRExperienceViewModel(
         auto: Boolean,
     ) {
         // "Already claimed" means the user already got their entries today —
-        // show the dashboard claimed state silently.
+        // settle the dashboard into the claimed state. When local state did
+        // NOT already know (this open predicted/celebrated a fresh grant, but
+        // another device or an earlier open beat it), tell the user honestly
+        // instead of silently celebrating entries this claim never granted.
         if (isAlreadyClaimedError(e)) {
             logger.debug("Already claimed today — updating local state")
+            val today = LocalDate.now().toString()
+            val localAlreadyKnew = preferencesStorage.getLastClaimDate() == today
             val updated = screen.streakState.copy(
                 claimedToday = true,
-                lastClaimDate = LocalDate.now().toString(),
+                lastClaimDate = today,
             )
             saveStreakState(updated)
             _uiState.value = _uiState.value.copy(
                 screen = ExperienceScreen.Streak(updated, screen.entriesToday, screen.ladder),
                 claimedToday = true,
+                // Drop any staged celebration: it was for a grant this claim
+                // did not make. The one-shot resync below pulls server truth.
+                pendingRevealGrant = null,
+                claimRevealed = false,
+                preClaimTotalEntries = null,
             )
+            if (!localAlreadyKnew) {
+                postDashboardNotice(V2Strings.ALREADY_ENTERED_TODAY, retryable = false)
+            }
             // Another device beat us between the status fetch and the claim, so
             // our cached totals are one claim behind — re-load once to pull the
             // authoritative streak/total. One-shot: never loop if status + claim
@@ -845,10 +929,25 @@ internal class WINRExperienceViewModel(
             return
         }
 
-        // Auto-claim failures are SILENT by design: settle back to server
-        // truth quietly — drop the predicted grant (if one was staged) and
-        // rest on the pre-claim numbers in the unclaimed state. Never fake a
-        // local success for an auto-claim.
+        // Geo-fence / expired-session rejections get their dedicated states —
+        // an auto-claim that can never succeed must not fail silently.
+        if (e is WINRError.GeoBlocked) {
+            logger.info("Geo-fence rejection on claim — showing the geo-blocked state")
+            setScreen(ExperienceScreen.GeoBlocked)
+            if (!auto) onResult?.invoke(Result.failure(e))
+            return
+        }
+        if (e is WINRError.TokenRefreshFailed) {
+            logger.info("Session expired on claim — showing the session-expired state")
+            setScreen(ExperienceScreen.SessionExpired)
+            if (!auto) onResult?.invoke(Result.failure(e))
+            return
+        }
+
+        // Auto-claim transport failure: settle back to server truth — drop the
+        // predicted grant (if one was staged) and rest on the pre-claim numbers
+        // in the UNCLAIMED state (never fake a local success) — and say so with
+        // a non-blocking notice that carries a retry affordance.
         if (auto) {
             logger.debug("Auto-claim declined: ${e.message}")
             val settled = screen.streakState.copy(
@@ -865,12 +964,61 @@ internal class WINRExperienceViewModel(
                 claimRevealed = false,
                 preClaimTotalEntries = null,
             )
+            postDashboardNotice(V2Strings.ENTRY_NOT_RECORDED, retryable = true)
             return
         }
 
         logger.error("Failed to claim entries: ${e.message}", e)
         setScreen(ExperienceScreen.Error(e.message ?: "Failed to claim entries"))
         onResult?.invoke(Result.failure(e))
+    }
+
+    // ── Dashboard notices ──
+
+    /**
+     * Posts a non-blocking dashboard banner. Non-retryable notices are
+     * transient (auto-dismiss); retryable ones persist until retried/cleared.
+     */
+    private fun postDashboardNotice(message: String, retryable: Boolean) {
+        _uiState.value = _uiState.value.copy(
+            dashboardNotice = DashboardNotice(message, retryable),
+        )
+        if (!retryable) {
+            viewModelScope.launch {
+                delay(DASHBOARD_NOTICE_AUTO_DISMISS_MS)
+                if (_uiState.value.dashboardNotice?.message == message) {
+                    clearDashboardNotice()
+                }
+            }
+        }
+    }
+
+    fun clearDashboardNotice() {
+        _uiState.value = _uiState.value.copy(dashboardNotice = null)
+    }
+
+    /** TRY AGAIN on the "couldn't record today's entry" notice. */
+    fun retryDailyClaim() {
+        clearDashboardNotice()
+        claimDailyEntries(auto = true)
+    }
+
+    /**
+     * RETRY on the session-expired state: re-registers the device (the expired
+     * session's tokens are already cleared, so registration mints fresh ones
+     * for the same device fingerprint) and reloads the experience.
+     */
+    fun retryAfterSessionExpiry() {
+        if (_uiState.value.screen !is ExperienceScreen.SessionExpired) return
+        viewModelScope.launch {
+            setScreen(ExperienceScreen.Loading)
+            val reRegistered = WINR.reRegisterAfterSessionExpiry()
+            if (!reRegistered) {
+                setScreen(ExperienceScreen.SessionExpired)
+                return@launch
+            }
+            loadInternal()
+        }
     }
 
     /**
@@ -948,7 +1096,8 @@ internal class WINRExperienceViewModel(
                     giveawayId = screen.claim.giveawayId,
                     firstName = form.firstName.trim(),
                     lastName = form.lastName.trim(),
-                    phone = form.phone.trim().ifEmpty { null },
+                    // Send the bare validated 10-digit number (blank → omitted).
+                    phone = WINRFieldValidation.normalizedPhoneOrNull(form.phone),
                     street = form.street.trim(),
                     apt = form.apt.trim().ifEmpty { null },
                     city = form.city.trim(),
@@ -990,7 +1139,7 @@ internal class WINRExperienceViewModel(
                 logger.error("Prize claim submit failed: ${e.message}", e)
                 _uiState.value = _uiState.value.copy(
                     isSubmittingClaim = false,
-                    claimSubmitError = "Something went wrong. Please check your connection and try again.",
+                    claimSubmitError = V2Strings.CLAIM_SUBMIT_FAILED,
                 )
             }
         }

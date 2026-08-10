@@ -372,6 +372,24 @@ object WINR {
 
     internal fun getPublisherUserId(): String? = config?.user?.id
 
+    /**
+     * Session-expired recovery for the experience's RETRY affordance: the
+     * refresh token was rejected (or missing) and the NetworkClient cleared the
+     * local tokens, so [registerDeviceIfNeeded] takes the full registration
+     * path and mints fresh tokens for the same device fingerprint. Returns
+     * true when a usable session exists afterwards.
+     */
+    internal suspend fun reRegisterAfterSessionExpiry(): Boolean {
+        val context = config?.context ?: return false
+        return try {
+            registerDeviceIfNeeded(context)
+            secureStorage?.getToken() != null
+        } catch (e: Exception) {
+            logger?.warn("Re-registration after session expiry failed: ${e.message}")
+            false
+        }
+    }
+
     /** Host-app-provided identity — prefills the winner prize-claim form. */
     internal fun getConfiguredUser(): WINRUser? = config?.user
 
