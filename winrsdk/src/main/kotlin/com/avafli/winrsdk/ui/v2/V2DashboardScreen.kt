@@ -8,18 +8,22 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.avafli.winrsdk.R
 import com.avafli.winrsdk.domain.Giveaway
 
 // Return-user dashboard (Day 2+ drawer), ported from iOS WINRV2DashboardView.
@@ -38,6 +42,13 @@ internal fun WINRV2DashboardScreen(
     onInfo: () -> Unit,
     onClose: () -> Unit,
     onWinnerTap: (() -> Unit)? = null,
+    /**
+     * Soft email verification (2.7.0): show the persistent "Verify your email"
+     * chip while the typed email is unconfirmed. Non-blocking — it never covers
+     * the streak content and gates nothing; tapping opens the code screen.
+     */
+    showVerifyChip: Boolean = false,
+    onVerifyTap: (() -> Unit)? = null,
     /**
      * Reveal flow (Day 2+): the claim already succeeded server-side; the UI
      * mounts pinned to yesterday's numbers and the celebration (tile check +
@@ -81,6 +92,11 @@ internal fun WINRV2DashboardScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(15.dp),
         ) {
+            // Persistent, non-blocking nudge (2.7.0) — sits under the header,
+            // above the prize card, so it reads as a gentle prompt, not an error.
+            if (showVerifyChip && onVerifyTap != null) {
+                VerifyEmailChip(accent = accent, onTap = onVerifyTap)
+            }
             if (notice != null) {
                 DashboardNoticeBanner(
                     accent = accent,
@@ -142,6 +158,37 @@ internal fun WINRV2DashboardScreen(
                 WINRV2LegalLinks(rulesUrl = rulesUrl)
             }
         }
+    }
+}
+
+/**
+ * Soft email-verification chip (2.7.0). A subtle, tappable pill in the
+ * publisher's accent color with a mail icon — an accent-tinted fill and accent
+ * text/icon so it nudges without shouting like an error. Centered, compact, and
+ * horizontally inset so it never covers the streak content below it.
+ */
+@Composable
+private fun VerifyEmailChip(accent: Color, onTap: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .padding(horizontal = 22.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(accent.copy(alpha = 0.14f))
+            .clickable { onTap() }
+            .padding(horizontal = 16.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Icon(
+            painter = painterResource(R.drawable.winr_mail),
+            contentDescription = null,
+            tint = accent,
+            modifier = Modifier.size(width = 18.dp, height = 15.dp),
+        )
+        Text(
+            V2Strings.VERIFY_EMAIL_CHIP,
+            style = WINRV2Font.inter(13.sp, FontWeight.Bold, color = accent),
+        )
     }
 }
 

@@ -161,6 +161,24 @@ private fun DrawerContent(
             onClose = onDismiss,
         )
 
+        // Soft email verification (2.7.0): the reused code screen, but dismissible
+        // (onCancel) and with verify-specific copy. It gates nothing.
+        is ExperienceScreen.EmailVerify -> WINRV2CodeEntryScreen(
+            accent = accent,
+            logoUrl = logoUrl,
+            rulesUrl = rulesUrl,
+            email = "",
+            isVerifying = ui.isVerifyingCode,
+            errorText = ui.codeError,
+            onSubmit = { viewModel.submitEmailVerificationCode(it) },
+            onResend = { viewModel.resendEmailVerificationCode() },
+            onInfo = { viewModel.showHowItWorks() },
+            onClose = onDismiss,
+            title = V2Strings.VERIFY_EMAIL_TITLE,
+            subtitle = V2Strings.VERIFY_EMAIL_SUBTITLE,
+            onCancel = { viewModel.cancelEmailVerification() },
+        )
+
         is ExperienceScreen.EmailCapture -> WINRV2CaptureScreen(
             accent = accent,
             logoUrl = logoUrl,
@@ -227,6 +245,9 @@ private fun DrawerContent(
                 onInfo = { viewModel.showHowItWorks() },
                 onClose = onDismiss,
                 onWinnerTap = onWinnerTap,
+                // Soft email verification (2.7.0): persistent, non-blocking chip.
+                showVerifyChip = ui.unverified,
+                onVerifyTap = { viewModel.showEmailVerification() },
                 pendingClaimEntries = ui.pendingRevealGrant?.entries,
                 revealed = ui.claimRevealed,
                 notice = ui.dashboardNotice?.message,

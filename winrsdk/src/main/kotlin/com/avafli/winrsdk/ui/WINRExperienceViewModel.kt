@@ -51,6 +51,14 @@ internal sealed class ExperienceScreen {
     /** Verified adoption: the typed email matches an existing account; the
      *  merge waits on the 6-digit code sent to that inbox. */
     data class CodeEntry(val email: String) : ExperienceScreen()
+
+    /**
+     * Soft email verification (2.7.0): the person tapped the "Verify your email"
+     * chip. Reuses the adoption 6-digit code screen but is DISMISSIBLE — it
+     * gates nothing (daily play, auto-claim, streak all continue), only draw
+     * eligibility. Cancel returns to the dashboard.
+     */
+    object EmailVerify : ExperienceScreen()
     data class Streak(
         val streakState: StreakState,
         val entriesToday: Int,
@@ -148,6 +156,14 @@ internal data class ExperienceUiState(
     /** Current streak day for display (backend truth, falling back to local). */
     val displayStreakDay: Int = 1,
     val displayTotalEntries: Int = 0,
+
+    /**
+     * Soft email verification (2.7.0). True ONLY when the backend reported an
+     * explicit `emailVerified == false` (a brand-new, unconfirmed typed email):
+     * drives the persistent, non-blocking "Verify your email" dashboard chip.
+     * Never gates daily play/auto-claim/streak — purely the UI affordance.
+     */
+    val unverified: Boolean = false,
 
     // ── V2 reveal flow (Day 1 AND Day 2+, unified) — mirrors iOS ──
     //
@@ -410,6 +426,13 @@ internal class WINRExperienceViewModel(
             backendClaimedToday = response.claimedToday
             backendStreakDay = response.streakDay
             cachedBackendTotalEntries = response.totalEntries
+
+            // Soft email verification (2.7.0): the status response is
+            // authoritative. ONLY an explicit `false` means unverified — absent/
+            // null (verified, partner-passed, adoption-verified, no email) leaves
+            // the chip hidden. Set on _uiState now so every later copy() below
+            // preserves it into the dashboard state.
+            _uiState.value = _uiState.value.copy(unverified = response.emailVerified == false)
 
             // Backend is the source of truth for email consent. If it confirms an
             // email on file, seed the local "submitted" flag so a user whose local
@@ -761,6 +784,13 @@ internal class WINRExperienceViewModel(
                 // just registered — but correctness must not depend on that
                 // ordering.
                 WINR.noteEmailConsent()
+                // Soft email verification (2.7.0): a brand-new typed email comes
+                // back unverified (emailVerified == false, often with a
+                // verification email dispatched). Show the chip immediately; the
+                // reload below reconciles against authoritative status.
+                _uiState.value = _uiState.value.copy(
+                    unverified = result.emailVerified == false || result.emailVerificationSent,
+                )
                 logger.debug("Email submitted to backend")
             } catch (e: Exception) {
                 logger.error("Email submit to backend failed: ${e.message}", e)
@@ -859,6 +889,105 @@ internal class WINRExperienceViewModel(
                 loadInternal(claimBeforeDashboard = true)
             } catch (e: Exception) {
                 logger.error("Resend verification code failed: ${e.message}", e)
+                _uiState.value = _uiState.value.copy(codeError = V2Strings.CODE_RESEND_FAILED)
+            }
+        }
+    }
+
+    // ── Soft email verification (2.7.0) ──
+    //
+    // The "Verify your email" chip on the dashboard opens the reused 6-digit
+    // code screen. Entirely dismissible — it gates nothing (daily play,
+    // auto-claim, and streak keep running while unverified); verifying only
+    // clears the chip and, server-side, restores prize-draw eligibility.
+
+    /** Saved dashboard screen so Cancel/verify-success returns to it. */
+    private var screenBeforeEmailVerify: ExperienceScreen? = null
+
+    /** "Verify your email" chip tapped — open the reused code screen. */
+    fun showEmailVerification() {
+        if (_uiState.value.screen is ExperienceScreen.EmailVerify) return
+        screenBeforeEmailVerify = _uiState.value.screen
+        _uiState.value = _uiState.value.copy(
+            screen = ExperienceScreen.EmailVerify,
+            codeError = null,
+            isVerifyingCode = false,
+        )
+    }
+
+    /** Cancel/back on the verification screen — dismiss to the dashboard. */
+    fun cancelEmailVerification() {
+        if (_uiState.value.screen !is ExperienceScreen.EmailVerify) return
+        val previous = screenBeforeEmailVerify
+        if (previous != null) {
+            setScreen(previous)
+        } else {
+            setScreen(ExperienceScreen.Loading)
+            load()
+        }
+    }
+
+    /**
+     * Check the 6-digit soft-verification code. Approved → clear the unverified
+     * flag (chip disappears), show a brief "Email verified ✓" confirmation, and
+     * return to the dashboard. Failures map to the SAME code-error taxonomy as
+     * the adoption flow and keep the person on the code screen.
+     */
+    fun submitEmailVerificationCode(code: String) {
+        if (_uiState.value.isVerifyingCode) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isVerifyingCode = true, codeError = null)
+            try {
+                val verified = api.confirmEmailVerification(code)
+                if (!verified) {
+                    // Envelope said not-verified without throwing — treat as a
+                    // plain mismatch rather than silently succeeding.
+                    _uiState.value = _uiState.value.copy(
+                        isVerifyingCode = false,
+                        codeError = V2Strings.CODE_MISMATCH,
+                    )
+                    return@launch
+                }
+                analytics?.trackEvent("winr_email_verified")
+                val previous = screenBeforeEmailVerify ?: _uiState.value.screen
+                _uiState.value = _uiState.value.copy(
+                    isVerifyingCode = false,
+                    codeError = null,
+                    unverified = false,
+                    screen = previous,
+                )
+                // Reuse the dashboard's transient notice as the "Email verified ✓"
+                // confirmation (auto-dismisses).
+                postDashboardNotice(V2Strings.EMAIL_VERIFIED, retryable = false)
+            } catch (e: Exception) {
+                logger.error("Email verification code check failed: ${e.message}", e)
+                val message = e.message ?: ""
+                val codeError = when {
+                    message.contains("expired", ignoreCase = true) -> V2Strings.CODE_EXPIRED
+                    message.contains("attempts", ignoreCase = true) -> V2Strings.CODE_TOO_MANY_ATTEMPTS
+                    else -> V2Strings.CODE_MISMATCH
+                }
+                _uiState.value = _uiState.value.copy(
+                    isVerifyingCode = false,
+                    codeError = codeError,
+                )
+            }
+        }
+    }
+
+    /**
+     * Request a fresh soft-verification email. The code screen STAYS UP: a
+     * failed resend surfaces in the code-error slot, a successful one leaves the
+     * person ready to type. Mirrors the adoption resend's stay-on-screen fix.
+     */
+    fun resendEmailVerificationCode() {
+        if (_uiState.value.isVerifyingCode) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(codeError = null)
+            try {
+                api.resendEmailVerification()
+            } catch (e: Exception) {
+                logger.error("Resend email verification failed: ${e.message}", e)
                 _uiState.value = _uiState.value.copy(codeError = V2Strings.CODE_RESEND_FAILED)
             }
         }

@@ -3,6 +3,13 @@
 All notable changes to the WINR Android SDK will be documented in this file.
 
 
+## 2.7.0 — 2026-08-11
+
+2.7.0 — 'Verify your email' soft-verification: a persistent chip on the streak
+dashboard lets users confirm a newly-typed email (reusing the code screen);
+never blocks daily play, only prize-draw eligibility.
+
+
 ## 2.6.3 — 2026-08-11
 
 2.6.3 — firstName/lastName are now optional on WINRUser; pass only the identity

@@ -364,8 +364,12 @@ private fun ConsentCheckbox(checked: Boolean, text: String, onToggle: () -> Unit
 }
 
 /**
- * Verification code entry — shown when the typed email matches an EXISTING
- * account and the OTP gate is on. One numeric field, auto-submits at 6 digits.
+ * Verification code entry — one numeric field, auto-submits at 6 digits.
+ * Shared by two flows:
+ *  - adoption OTP (typed email matches an EXISTING account); and
+ *  - soft email verification (2.7.0), via the dashboard "Verify your email"
+ *    chip, which overrides [title]/[subtitle] and supplies [onCancel] to make
+ *    the screen dismissible (it gates nothing).
  */
 @Composable
 internal fun WINRV2CodeEntryScreen(
@@ -379,6 +383,12 @@ internal fun WINRV2CodeEntryScreen(
     onResend: () -> Unit,
     onInfo: () -> Unit,
     onClose: () -> Unit,
+    /** Header. Defaults to the adoption copy; overridden for email verification. */
+    title: String = "CHECK YOUR EMAIL",
+    /** Subtitle. When null, the adoption sentence (referencing [email]) is used. */
+    subtitle: String? = null,
+    /** When set, renders a dismiss control (soft-verification is not a gate). */
+    onCancel: (() -> Unit)? = null,
 ) {
     var code by remember { mutableStateOf("") }
 
@@ -399,13 +409,15 @@ internal fun WINRV2CodeEntryScreen(
             )
 
             Text(
-                "CHECK YOUR EMAIL",
+                title,
                 style = WINRV2Font.inter(28.sp, FontWeight.Black, color = Color.White),
                 textAlign = TextAlign.Center,
             )
             Text(
-                "This email is already part of a WINR streak. Enter the 6-digit " +
-                    "code we sent to $email to pick it up on this device.",
+                subtitle ?: (
+                    "This email is already part of a WINR streak. Enter the 6-digit " +
+                        "code we sent to $email to pick it up on this device."
+                ),
                 style = WINRV2Font.inter(14.sp, color = Color.White.copy(alpha = 0.75f)),
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(horizontal = 26.dp),
@@ -482,6 +494,19 @@ internal fun WINRV2CodeEntryScreen(
                         "Send a new code",
                         style = WINRV2Font.inter(14.sp, FontWeight.Bold, color = Color(0xFF7FB0FF))
                             .copy(textDecoration = TextDecoration.Underline),
+                    )
+                }
+
+                // Soft-verification only: a dismiss control back to the dashboard.
+                // Adoption OTP omits this — that flow completes a required merge.
+                if (onCancel != null) {
+                    Text(
+                        V2Strings.VERIFY_EMAIL_CANCEL,
+                        style = WINRV2Font.inter(14.sp, FontWeight.Bold, color = WINRV2Color.textTertiary),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .clickable { onCancel() }
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
                     )
                 }
 

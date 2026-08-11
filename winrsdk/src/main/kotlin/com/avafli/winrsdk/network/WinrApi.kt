@@ -63,6 +63,10 @@ internal class WinrApi(
             totalEntries = response["totalEntries"]?.jsonPrimitive?.intOrNull,
             optedOut = response["optedOut"]?.jsonPrimitive?.booleanOrNull,
             prizeClaim = (response["prizeClaim"] as? JsonObject)?.let { parsePrizeClaim(it) },
+            // Soft email verification (2.7.0): explicit `false` means the person
+            // typed a brand-new email that hasn't been confirmed. Absent/null for
+            // verified, partner-passed, adoption-verified, and no-email users.
+            emailVerified = response["emailVerified"]?.jsonPrimitive?.booleanOrNull,
         )
     }
 
@@ -85,6 +89,8 @@ internal class WinrApi(
             emailConsentStatus = response["emailConsentStatus"]?.jsonPrimitive?.booleanOrNull,
             optedOut = response["optedOut"]?.jsonPrimitive?.booleanOrNull,
             prizeClaim = (response["prizeClaim"] as? JsonObject)?.let { parsePrizeClaim(it) },
+            // Soft email verification (2.7.0): explicit `false` → unverified.
+            emailVerified = response["emailVerified"]?.jsonPrimitive?.booleanOrNull,
         )
     }
 
@@ -194,6 +200,11 @@ internal class WinrApi(
             uuid = response["uuid"]?.jsonPrimitive?.contentOrNull,
             token = response["token"]?.jsonPrimitive?.contentOrNull,
             refreshToken = response["refreshToken"]?.jsonPrimitive?.contentOrNull,
+            // Soft email verification (2.7.0): a brand-new typed email comes back
+            // `emailVerified: false` (and often `emailVerificationSent: true`),
+            // which drives the persistent "Verify your email" dashboard chip.
+            emailVerified = response["emailVerified"]?.jsonPrimitive?.booleanOrNull,
+            emailVerificationSent = response["emailVerificationSent"]?.jsonPrimitive?.booleanOrNull ?: false,
         )
         // Cross-device streak unification: this email already belonged to an
         // existing user under this publisher — switch to that canonical user so
@@ -226,6 +237,32 @@ internal class WinrApi(
             logger.info("Adoption verified — streak unified across devices")
         }
         return result
+    }
+
+    /**
+     * Confirms soft email verification (2.7.0) with the emailed 6-digit code.
+     * Same request/response envelope as [verifyAdoptionCode]: returns
+     * `{ verified: true }` on success and THROWS on failure with a message
+     * carrying the backend's "expired" / "attempts" / mismatch text, which the
+     * caller maps to the shared code-error taxonomy. Unlike adoption, this makes
+     * no session switch — it only clears the unverified state for prize-draw
+     * eligibility (never gates daily play).
+     */
+    suspend fun confirmEmailVerification(code: String): Boolean {
+        val response = networkClient.authenticatedPost(
+            "confirmEmailVerification",
+            mapOf("code" to JsonPrimitive(code)),
+        )
+        return response["verified"]?.jsonPrimitive?.booleanOrNull ?: false
+    }
+
+    /**
+     * Requests a fresh soft-verification email (2.7.0). No args; returns whether
+     * the backend re-sent the code. Mirrors the adoption resend flow.
+     */
+    suspend fun resendEmailVerification(): Boolean {
+        val response = networkClient.authenticatedPost("resendEmailVerification")
+        return response["sent"]?.jsonPrimitive?.booleanOrNull ?: false
     }
 
     /**
@@ -286,6 +323,13 @@ internal class WinrApi(
          * publisher's giveaways (winner prize-claim flow).
          */
         val prizeClaim: PrizeClaimBlock? = null,
+        /**
+         * Soft email verification (2.7.0). Explicit `false` → the person typed a
+         * brand-new email that hasn't been confirmed (show the chip). Absent/null
+         * for verified, partner-passed, adoption-verified, and no-email users —
+         * treat ONLY explicit `false` as unverified.
+         */
+        val emailVerified: Boolean? = null,
     )
 
     data class GetActiveGiveawayResponse(
@@ -304,6 +348,11 @@ internal class WinrApi(
          * `"submitted"` means the form was already sent (normal dashboard shows).
          */
         val prizeClaim: PrizeClaimBlock? = null,
+        /**
+         * Soft email verification (2.7.0). Explicit `false` → unverified (show the
+         * chip); absent/null otherwise. Authoritative status echoed on every open.
+         */
+        val emailVerified: Boolean? = null,
     )
 
     data class SubmitPrizeClaimResponse(
@@ -328,6 +377,14 @@ internal class WinrApi(
         val uuid: String? = null,
         val token: String? = null,
         val refreshToken: String? = null,
+        /**
+         * Soft email verification (2.7.0). `false` when the just-typed email is a
+         * brand-new, unconfirmed address → the SDK shows the persistent "Verify
+         * your email" chip. Absent/null for partner-passed or adoption paths.
+         */
+        val emailVerified: Boolean? = null,
+        /** True when the backend dispatched a verification email for this submit. */
+        val emailVerificationSent: Boolean = false,
     )
 
     data class ClaimDailyEntriesResponse(
@@ -538,6 +595,6 @@ internal class WinrApi(
     companion object {
         // Single source of truth for the wire-format sdk_version. Keep in sync
         // with the Maven publish version in winrsdk/build.gradle.kts.
-        const val SDK_VERSION = "2.6.3"
+        const val SDK_VERSION = "2.7.0"
     }
 }

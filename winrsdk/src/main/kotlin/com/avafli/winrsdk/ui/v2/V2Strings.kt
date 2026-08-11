@@ -32,6 +32,27 @@ internal object V2Strings {
      *  code-error slot; the code screen stays up. */
     const val CODE_RESEND_FAILED = "Couldn't send a new code. Check your connection and try again."
 
+    // ── Soft email verification (2.7.0) ──
+
+    /** Persistent, non-blocking dashboard chip shown while the typed email is
+     *  unverified. Tappable — opens the reused 6-digit code screen. */
+    const val VERIFY_EMAIL_CHIP = "Verify your email"
+
+    /** Header on the email-verification code screen (reuses the adoption screen). */
+    const val VERIFY_EMAIL_TITLE = "VERIFY YOUR EMAIL"
+
+    /** Subtitle on the email-verification code screen. */
+    const val VERIFY_EMAIL_SUBTITLE =
+        "Enter the 6-digit code we sent to your inbox so you're eligible to win."
+
+    /** Back/dismiss control on the email-verification code screen — this flow is
+     *  dismissible and gates nothing. */
+    const val VERIFY_EMAIL_CANCEL = "Cancel"
+
+    /** Transient dashboard confirmation after a successful verify — reuses the
+     *  dashboard notice mechanism, then the chip disappears. */
+    const val EMAIL_VERIFIED = "Email verified ✓"
+
     // ── Winner claim form ──
 
     const val INVALID_FIRST_NAME = "Please enter a valid first name."
