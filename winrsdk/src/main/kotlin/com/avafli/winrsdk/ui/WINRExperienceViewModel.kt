@@ -807,19 +807,61 @@ internal class WINRExperienceViewModel(
                 loadInternal(claimBeforeDashboard = true)
             } catch (e: Exception) {
                 logger.error("Adoption code check failed: ${e.message}", e)
+                // Three-way taxonomy off whatever the backend returned (the
+                // ServerError message carries the raw response body). NEVER
+                // render raw backend text — map to fixed copy. Mirrors web/Flutter.
+                val message = e.message ?: ""
+                val codeError = when {
+                    message.contains("expired", ignoreCase = true) -> V2Strings.CODE_EXPIRED
+                    message.contains("attempts", ignoreCase = true) -> V2Strings.CODE_TOO_MANY_ATTEMPTS
+                    else -> V2Strings.CODE_MISMATCH
+                }
                 _uiState.value = _uiState.value.copy(
                     isVerifyingCode = false,
-                    codeError = V2Strings.CODE_MISMATCH,
+                    codeError = codeError,
                 )
             }
         }
     }
 
-    /** Request a fresh code by re-submitting the ORIGINAL email + consents. */
+    /**
+     * Request a fresh code by re-submitting the ORIGINAL email + consents. The
+     * code-entry screen STAYS UP throughout: a failed resend surfaces in the
+     * code-error slot rather than dropping the user back on email capture with
+     * no explanation, and a successful resend leaves them on code entry ready to
+     * type. Mirrors the web reference (controller.resendVerificationCode).
+     *
+     * Re-submitting the original consent values is idempotent (same person, same
+     * choices) and re-triggers the OTP send; fabricating values here would
+     * overwrite the marketing choice the user actually made.
+     */
     fun resendVerificationCode() {
         val (email, age, marketing) = pendingVerification ?: return
-        _uiState.value = _uiState.value.copy(screen = ExperienceScreen.EmailCapture)
-        submitEmail(email, marketingConsent = marketing, ageConfirmed = age)
+        if (_uiState.value.isVerifyingCode) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(codeError = null)
+            try {
+                val result = api.submitEmail(
+                    email = email,
+                    marketingConsent = marketing,
+                    publisherUserId = publisherUserId,
+                    ageConfirmed = age,
+                )
+                if (result.verificationRequired) {
+                    // Fresh code sent — stay on the code screen, ready for input.
+                    pendingVerification = Triple(email, age, marketing)
+                    return@launch
+                }
+                // Verification is no longer required (e.g. the merge already
+                // completed) — proceed exactly like a plain successful submit.
+                preferencesStorage.saveEmailSubmitted(true)
+                WINR.noteEmailConsent()
+                loadInternal(claimBeforeDashboard = true)
+            } catch (e: Exception) {
+                logger.error("Resend verification code failed: ${e.message}", e)
+                _uiState.value = _uiState.value.copy(codeError = V2Strings.CODE_RESEND_FAILED)
+            }
+        }
     }
 
     // ── How It Works ──

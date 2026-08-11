@@ -173,6 +173,13 @@ private fun DrawerContent(
             // now carries the publisher-named MARKETING consent string.
             emailConsentText = ui.sdkConfig?.copy?.emailCapture?.emailConsentText
                 ?: ui.sdkConfig?.copy?.emailConsentText,
+            // Age-gate label: nested per-screen copy wins over the flat legacy
+            // field; the screen builds the sentence from ageGateMinAge (default
+            // 18) only when the server sent no verbatim text. Compliance copy —
+            // must honor the publisher's configured minimum age.
+            ageGateText = ui.sdkConfig?.copy?.emailCapture?.ageGateText
+                ?: ui.sdkConfig?.copy?.ageGateText,
+            ageGateMinAge = ui.sdkConfig?.ageGateMinAge ?: 18,
             prefilledEmail = viewModel.prefilledEmail(),
             submitError = ui.emailSubmitError,
             onSubmit = { email, ageConfirmed, marketingConsent ->

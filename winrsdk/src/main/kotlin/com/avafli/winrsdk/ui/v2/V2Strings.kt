@@ -19,8 +19,18 @@ internal object V2Strings {
     /** The submit itself failed in transport — the user stays on capture and retries. */
     const val EMAIL_SUBMIT_FAILED = "Something went wrong sending your email. Please try again."
 
-    /** OTP adoption code rejected. */
+    /** OTP adoption code rejected — the code was wrong (default of the taxonomy). */
     const val CODE_MISMATCH = "That code didn't match. Check the email and try again."
+
+    /** OTP adoption code rejected — the code had expired. */
+    const val CODE_EXPIRED = "That code expired. Tap 'Send a new code' to get a fresh one."
+
+    /** OTP adoption code rejected — too many wrong attempts. */
+    const val CODE_TOO_MANY_ATTEMPTS = "Too many attempts. Request a new code."
+
+    /** A "Send a new code" (resend) request failed in transport — shown in the
+     *  code-error slot; the code screen stays up. */
+    const val CODE_RESEND_FAILED = "Couldn't send a new code. Check your connection and try again."
 
     // ── Winner claim form ──
 

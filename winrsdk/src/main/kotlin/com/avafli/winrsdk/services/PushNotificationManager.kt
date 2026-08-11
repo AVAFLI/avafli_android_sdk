@@ -2,6 +2,7 @@ package com.avafli.winrsdk.services
 
 import android.content.Context
 import com.avafli.winrsdk.network.WinrApi
+import com.google.firebase.messaging.FirebaseMessaging
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -33,32 +34,28 @@ internal class PushNotificationManager(
     }
 
     /**
-     * Get the current FCM token.
-     * Requires firebase-messaging dependency.
+     * Resolve the current FCM token and hand it to [callback] (null on any
+     * failure). Firebase Messaging is a `compileOnly` dependency: the SDK
+     * compiles against the API, but the host app supplies it at runtime. If the
+     * host app has NOT bundled firebase-messaging, the class-load fails with a
+     * [NoClassDefFoundError] (a Throwable, not an Exception) — caught here so
+     * the SDK degrades gracefully to "no token" instead of crashing.
      */
     fun getCurrentToken(context: Context, callback: (String?) -> Unit) {
         try {
-            val firebaseMessaging = Class.forName("com.google.firebase.messaging.FirebaseMessaging")
-            val getInstance = firebaseMessaging.getMethod("getInstance")
-            val instance = getInstance.invoke(null)
-            val getToken = firebaseMessaging.getMethod("getToken")
-            val task = getToken.invoke(instance)
-
-            // Use reflection to avoid hard dependency on Firebase
-            val taskClass = Class.forName("com.google.android.gms.tasks.Task")
-            val addOnSuccessListener = taskClass.getMethod(
-                "addOnSuccessListener",
-                Class.forName("com.google.android.gms.tasks.OnSuccessListener")
-            )
-
-            // This is a simplified approach — in practice, the host app handles FCM setup
-            logger.debug("FCM token retrieval initiated via reflection")
-            callback(null) // Host app should provide token via WINR.onNewToken()
-        } catch (e: ClassNotFoundException) {
-            logger.debug("Firebase Messaging not available — host app must provide FCM token")
-            callback(null)
-        } catch (e: Exception) {
-            logger.error("Error getting FCM token: ${e.message}", e)
+            FirebaseMessaging.getInstance().token
+                .addOnSuccessListener { token ->
+                    logger.debug("FCM token retrieved")
+                    callback(token)
+                }
+                .addOnFailureListener { e ->
+                    logger.error("Failed to retrieve FCM token: ${e.message}", e)
+                    callback(null)
+                }
+        } catch (t: Throwable) {
+            // NoClassDefFoundError when the host app hasn't included
+            // firebase-messaging, or any other init failure.
+            logger.debug("Firebase Messaging not available — host app must provide FCM token (${t.message})")
             callback(null)
         }
     }

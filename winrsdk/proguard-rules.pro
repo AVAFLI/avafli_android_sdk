@@ -40,3 +40,11 @@
 
 # EncryptedSharedPreferences
 -keep class androidx.security.crypto.** { *; }
+
+# Firebase Cloud Messaging is a compileOnly dependency — the host app supplies
+# it and its transitive deps at runtime (see PushNotificationManager, which
+# calls FirebaseMessaging.getInstance().token directly). R8 minifying THIS
+# module has neither on its classpath, so silence the missing-class warnings;
+# the host app's own R8/ProGuard config keeps the real classes.
+-dontwarn com.google.firebase.messaging.**
+-dontwarn com.google.android.gms.**

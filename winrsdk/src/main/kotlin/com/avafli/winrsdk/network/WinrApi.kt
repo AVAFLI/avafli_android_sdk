@@ -409,6 +409,7 @@ internal class WinrApi(
             media = media,
             bonusEntriesEnabled = bonusEntriesEnabled,
             rulesUrl = obj["rulesUrl"]?.jsonPrimitive?.contentOrNull,
+            ageGateMinAge = obj["ageGateMinAge"]?.jsonPrimitive?.intOrNull,
             experience = experience
         )
     }
@@ -537,6 +538,6 @@ internal class WinrApi(
     companion object {
         // Single source of truth for the wire-format sdk_version. Keep in sync
         // with the Maven publish version in winrsdk/build.gradle.kts.
-        const val SDK_VERSION = "2.6.1"
+        const val SDK_VERSION = "2.6.2"
     }
 }

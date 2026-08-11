@@ -3,6 +3,39 @@
 All notable changes to the WINR Android SDK will be documented in this file.
 
 
+## 2.6.2 — 2026-08-11
+
+Age-gate text honors publisher config; push notifications functional on
+Android/web; resend keeps the code screen; error screens pick up publisher
+branding.
+
+- **Age-gate label honors server config** — the capture screen no longer
+  hardcodes "I confirm I am 18 years of age or older". It renders the
+  publisher's `ageGateText` verbatim when present (nested `emailCapture` copy
+  wins over the flat legacy field), and otherwise BUILDS the sentence from the
+  server's `ageGateMinAge` (new top-level `SdkConfig` field, default 18). 18 is
+  never asserted over a publisher-configured minimum. Matches web/Flutter.
+- **Push notifications actually register** — `PushNotificationManager`
+  resolves the FCM token through the real `FirebaseMessaging.getInstance().token`
+  API (success/failure listeners) instead of a reflection stub that always
+  returned null. Added the `POST_NOTIFICATIONS` manifest permission and an
+  Android 13+ (TIRAMISU) runtime permission request in
+  `registerForPushNotifications`. All of it stays gated on
+  `WINROptions.enablePushReminders`; a disabled host is a no-op.
+- **Resend keeps the code screen up** — "Send a new code" no longer flips back
+  to email capture before re-submitting, so a failed resend can't strand the
+  user on capture. The code-entry screen stays up throughout; a transport
+  failure surfaces in the code-error slot ("Couldn't send a new code…") and a
+  success leaves the user ready to type. Original consents are reused.
+- **Code-error taxonomy** — adoption-code failures now map three ways off the
+  backend response: contains "expired" → "That code expired…", contains
+  "attempts" → "Too many attempts. Request a new code.", otherwise → "That code
+  didn't match…". Matches web/Flutter.
+- **Impression counter no longer burned before render** — the unregistered
+  auto-open impression count is incremented only AFTER a presentable Activity is
+  confirmed, not before the check. A missing/finishing Activity no longer
+  consumes one of the (default 3) unregistered impressions. Matches web/Flutter.
+
 ## 2.6.1 — 2026-08-11
 
 In-experience privacy opt-out (delete my data); District of Columbia added to

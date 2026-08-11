@@ -1,11 +1,16 @@
 package com.avafli.winrsdk
 
+import android.Manifest
 import android.app.Activity
 import android.app.Application
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import com.avafli.winrsdk.domain.DailyEntryGrant
 import com.avafli.winrsdk.domain.Giveaway
 import com.avafli.winrsdk.domain.SdkConfig
@@ -37,6 +42,9 @@ object WINR {
 
     /** All-zeros UUID returned by the Ad ID provider when the user has opted out. */
     private const val OPT_OUT_AD_ID = "00000000-0000-0000-0000-000000000000"
+
+    /** Request code for the Android 13+ POST_NOTIFICATIONS runtime prompt. */
+    private const val REQUEST_CODE_POST_NOTIFICATIONS = 0x7717
 
     private var config: WINRConfiguration? = null
     private var secureStorage: SecureStorage? = null
@@ -212,20 +220,27 @@ object WINR {
 
         // Unregistered users (no confirmed email) see the auto-open at most N
         // times (default 3 per the MVP decision), then the SDK goes quiet until
-        // they register.
-        if (cachedEmailConsent != true) {
+        // they register. Only CHECK the cap here — the counter is incremented
+        // BELOW, once presentation is certain, so an unavailable/finishing
+        // Activity never burns an impression the user never actually saw.
+        // Mirrors web/Flutter: check first, then count.
+        val unregistered = cachedEmailConsent != true
+        if (unregistered) {
             val cap = experience?.unregisteredImpressionCap ?: 3
-            val seen = prefs.getUnregisteredImpressions()
-            if (seen >= cap) {
+            if (prefs.getUnregisteredImpressions() >= cap) {
                 logger?.debug("Auto-present skipped: unregistered impression cap ($cap) reached")
                 return
             }
-            prefs.saveUnregisteredImpressions(seen + 1)
         }
 
         val activity = currentActivity?.get() ?: return
         if (activity.isFinishing || activity.isDestroyed || activity is WINRExperienceActivity) return
 
+        // Presentation is now certain — count the impression (unregistered
+        // users only) and mark the day, then present.
+        if (unregistered) {
+            prefs.saveUnregisteredImpressions(prefs.getUnregisteredImpressions() + 1)
+        }
         prefs.saveLastAutoPresentDay(today)
         logger?.info("Auto-presenting WINR experience (first open of the day)")
         present(activity)
@@ -317,9 +332,41 @@ object WINR {
             logger?.debug("Push reminders disabled in options")
             return
         }
+        // Android 13+ (TIRAMISU) requires the runtime POST_NOTIFICATIONS grant
+        // before notifications can be posted. Request it when we have an
+        // Activity to host the system dialog and the permission isn't already
+        // granted. All of this is gated on enablePushReminders above.
+        maybeRequestNotificationPermission(context)
         pushManager?.getCurrentToken(context) { token ->
             token?.let { onNewToken(it) }
         }
+    }
+
+    /**
+     * Prompt for POST_NOTIFICATIONS on Android 13+ when not yet granted. Only
+     * an Activity context can raise the system dialog; with any other context
+     * we skip silently (the token still registers, but the host must obtain the
+     * grant itself). No-op below API 33, where the permission is install-time.
+     */
+    private fun maybeRequestNotificationPermission(context: Context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        val permission = Manifest.permission.POST_NOTIFICATIONS
+        if (ContextCompat.checkSelfPermission(context, permission) ==
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        val activity = (context as? Activity) ?: currentActivity?.get()
+        if (activity == null || activity.isFinishing || activity.isDestroyed) {
+            logger?.debug("POST_NOTIFICATIONS not granted and no Activity to request it; skipping prompt")
+            return
+        }
+        logger?.debug("Requesting POST_NOTIFICATIONS runtime permission")
+        ActivityCompat.requestPermissions(
+            activity,
+            arrayOf(permission),
+            REQUEST_CODE_POST_NOTIFICATIONS,
+        )
     }
 
     /**

@@ -12,6 +12,13 @@ data class SdkConfig(
     val bonusEntriesEnabled: Boolean = false,
     /** Publisher-level rules URL fallback (giveaway.rulesUrl wins when present). */
     val rulesUrl: String? = null,
+    /**
+     * Publisher-configured minimum age for the capture-screen age gate. Drives
+     * the fallback age-gate sentence ("I confirm I am {ageGateMinAge} years of
+     * age or older") when no verbatim [SdkCopy.ageGateText] is supplied. Absent
+     * → 18. A compliance value: the UI must never hardcode 18 over this.
+     */
+    val ageGateMinAge: Int? = null,
     /** Experience behavior (V2 auto-open flow). Absent → SDK defaults apply. */
     val experience: ExperienceConfig? = null
 )

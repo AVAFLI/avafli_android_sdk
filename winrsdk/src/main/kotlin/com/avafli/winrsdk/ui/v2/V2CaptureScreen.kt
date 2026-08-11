@@ -46,6 +46,14 @@ internal fun WINRV2CaptureScreen(
     isSubmitting: Boolean,
     emailConsentText: String? = null,
     /**
+     * Publisher-configured age-gate label. Rendered verbatim when present and
+     * non-blank; otherwise the sentence is BUILT from [ageGateMinAge]. A
+     * compliance string — 18 is never hardcoded over publisher config.
+     */
+    ageGateText: String? = null,
+    /** Minimum age for the fallback age-gate sentence (default 18). */
+    ageGateMinAge: Int = 18,
+    /**
      * Partner-authenticated email (WINRUser.email). Well-formed → rendered
      * pre-filled and READ-ONLY; malformed or null → the editable field.
      */
@@ -146,7 +154,11 @@ internal fun WINRV2CaptureScreen(
                 }
                 ConsentCheckbox(
                     checked = isAdult,
-                    text = "I confirm I am 18 years of age or older",
+                    // Server text wins verbatim; otherwise build the sentence
+                    // from the publisher's configured minimum age. Never a
+                    // hardcoded "18" over server config (compliance).
+                    text = ageGateText?.takeIf { it.isNotBlank() }
+                        ?: "I confirm I am $ageGateMinAge years of age or older",
                 ) { isAdult = !isAdult }
                 ConsentCheckbox(
                     checked = wantsMarketing,
