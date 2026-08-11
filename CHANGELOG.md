@@ -3,6 +3,11 @@
 All notable changes to the WINR Android SDK will be documented in this file.
 
 
+## 2.6.3 — 2026-08-11
+
+2.6.3 — firstName/lastName are now optional on WINRUser; pass only the identity
+data you have and the SDK captures the rest (email via the capture screen).
+
 ## 2.6.2 — 2026-08-11
 
 Age-gate text honors publisher config; push notifications functional on

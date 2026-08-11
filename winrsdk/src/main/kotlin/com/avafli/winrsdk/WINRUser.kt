@@ -3,16 +3,17 @@ package com.avafli.winrsdk
 /**
  * Represents user information for the WINR SDK.
  *
- * User ID, first name, and last name are required. Phone and email are optional.
+ * Only `id` is required; everything else is optional and the SDK captures what's
+ * missing (email via its capture screen, name via the winner prize-claim form).
  * Consent is always handled inside the SDK's capture flow — publishers never set it.
  */
 data class WINRUser(
     /** Your app's unique user ID (Firebase UID, database ID, etc.) */
     val id: String,
-    /** User's first name */
-    val firstName: String,
-    /** User's last name */
-    val lastName: String,
+    /** User's first name (optional — the SDK collects it at prize-claim if missing) */
+    val firstName: String = "",
+    /** User's last name (optional — the SDK collects it at prize-claim if missing) */
+    val lastName: String = "",
     /** Optional phone number */
     val phone: String? = null,
     /**
