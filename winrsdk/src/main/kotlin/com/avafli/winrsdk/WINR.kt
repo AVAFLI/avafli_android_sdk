@@ -283,6 +283,16 @@ object WINR {
      * PII anonymized, email suppressed) and permanently silences the experience on
      * this device. Wire this to the opt-out action in your privacy-policy flow.
      */
+    /**
+     * @internal Records the RTD flag in the in-process cache when the opt-out
+     * was performed elsewhere (the in-experience "Privacy choices" flow calls
+     * the backend and persists the preference itself) so [isServiceAvailable]
+     * and auto-present go quiet immediately, not just after restart.
+     */
+    internal fun noteOptedOut() {
+        cachedOptedOut = true
+    }
+
     suspend fun optOut(): Result<Unit> {
         val currentApi = api ?: return Result.failure(WINRError.NotInitialized())
         return try {

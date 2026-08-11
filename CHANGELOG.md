@@ -3,6 +3,21 @@
 All notable changes to the WINR Android SDK will be documented in this file.
 
 
+## 2.6.1 — 2026-08-11
+
+In-experience privacy opt-out (delete my data); District of Columbia added to
+the prize-claim form.
+
+- **Privacy choices** — the how-it-works ("?") screen gains a muted "Privacy
+  choices" link. It raises a destructive confirmation ("Delete my data & stop
+  participating"); confirming performs the existing RTD opt-out against
+  `/optOut`, persists the local silence flags, shows "Your data has been
+  deleted.", and dismisses the experience. Failure keeps the confirmation up
+  with "Something went wrong. Please check your connection and try again." —
+  never a pretended success.
+- **District of Columbia** in the prize-claim state dropdown, per the official
+  rules' "50 states and the District of Columbia".
+
 ## 2.6.0 — 2026-08-10
 
 User-facing error messaging per the Master Field List; honest failure states —

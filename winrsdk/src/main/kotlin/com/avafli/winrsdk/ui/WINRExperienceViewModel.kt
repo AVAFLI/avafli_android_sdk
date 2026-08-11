@@ -90,6 +90,36 @@ internal sealed class ExperienceScreen {
  */
 internal data class DashboardNotice(val message: String, val retryable: Boolean)
 
+/**
+ * The "Privacy choices" → "Delete my data & stop participating" flow on the
+ * how-it-works screen:
+ *
+ *     Idle → Confirming → InFlight → Done → (screen dismisses the experience)
+ *                     ↘ Failed (inline error, retryable) ↗
+ *
+ * Failure NEVER pretends success — the confirmation stays up with the error
+ * and the destructive button remains available to retry.
+ */
+internal sealed class OptOutPhase {
+    /** Nothing showing (the "Privacy choices" link is idle). */
+    object Idle : OptOutPhase()
+
+    /** The destructive confirmation is up. */
+    object Confirming : OptOutPhase()
+
+    /** DELETE MY DATA tapped; the /optOut round-trip is in flight. */
+    object InFlight : OptOutPhase()
+
+    /** The round-trip failed — confirmation stays up with this inline error. */
+    data class Failed(val message: String) : OptOutPhase()
+
+    /**
+     * Deleted. "Your data has been deleted." holds briefly, then the whole
+     * experience dismisses.
+     */
+    object Done : OptOutPhase()
+}
+
 /** Sub-screen of the winner claim flow (`screen is WinnerClaim`). */
 internal sealed class WinnerClaimStep {
     object Splash : WinnerClaimStep()
@@ -113,6 +143,8 @@ internal data class ExperienceUiState(
     val emailSubmitError: String? = null,
     /** Non-blocking dashboard banner (duplicate-entry / claim-transport notices). */
     val dashboardNotice: DashboardNotice? = null,
+    /** The "Privacy choices" → delete-my-data flow (how-it-works screen). */
+    val optOutPhase: OptOutPhase = OptOutPhase.Idle,
     /** Current streak day for display (backend truth, falling back to local). */
     val displayStreakDay: Int = 1,
     val displayTotalEntries: Int = 0,
@@ -174,6 +206,12 @@ internal class WINRExperienceViewModel(
 
         /** How long a non-retryable dashboard notice stays up before auto-dismissing. */
         internal const val DASHBOARD_NOTICE_AUTO_DISMISS_MS = 6_000L
+
+        /**
+         * How long "Your data has been deleted." holds before the experience
+         * dismisses itself (opt-out success).
+         */
+        internal const val OPT_OUT_SUCCESS_HOLD_MS = 1_400L
     }
 
     private val _uiState = MutableStateFlow(ExperienceUiState())
@@ -798,6 +836,56 @@ internal class WINRExperienceViewModel(
         } else {
             setScreen(ExperienceScreen.Loading)
             load()
+        }
+    }
+
+    // ── Privacy choices / RTD opt-out (how-it-works screen) ──
+
+    /** "Privacy choices" tapped — raise the destructive confirmation. */
+    fun showOptOutConfirmation() {
+        if (_uiState.value.optOutPhase == OptOutPhase.Idle) {
+            _uiState.value = _uiState.value.copy(optOutPhase = OptOutPhase.Confirming)
+        }
+    }
+
+    /** Cancel / tap-outside. A no-op while in flight or after the deletion. */
+    fun cancelOptOut() {
+        when (_uiState.value.optOutPhase) {
+            OptOutPhase.Confirming, is OptOutPhase.Failed ->
+                _uiState.value = _uiState.value.copy(optOutPhase = OptOutPhase.Idle)
+            else -> Unit
+        }
+    }
+
+    /**
+     * DELETE MY DATA tapped (initial attempt or retry after failure): performs
+     * the RTD opt-out against the backend, persists the local silence flags,
+     * and lands on [OptOutPhase.Done] — the screen then holds the success copy
+     * for [OPT_OUT_SUCCESS_HOLD_MS] and dismisses the whole experience.
+     * Failure keeps the confirmation up with [V2Strings.OPT_OUT_FAILED]; we
+     * never pretend the deletion succeeded.
+     */
+    fun confirmOptOut() {
+        when (_uiState.value.optOutPhase) {
+            OptOutPhase.Confirming, is OptOutPhase.Failed -> Unit
+            else -> return
+        }
+        _uiState.value = _uiState.value.copy(optOutPhase = OptOutPhase.InFlight)
+        viewModelScope.launch {
+            try {
+                val ok = api.optOut()
+                if (!ok) throw IllegalStateException("optOut returned success=false")
+                preferencesStorage.saveOptedOut(true)
+                WINR.noteOptedOut()
+                analytics?.trackEvent("winr_opted_out")
+                logger.info("User opted out of WINR (RTD) — experience permanently silenced")
+                _uiState.value = _uiState.value.copy(optOutPhase = OptOutPhase.Done)
+            } catch (e: Exception) {
+                logger.error("Opt-out failed: ${e.message}", e)
+                _uiState.value = _uiState.value.copy(
+                    optOutPhase = OptOutPhase.Failed(V2Strings.OPT_OUT_FAILED),
+                )
+            }
         }
     }
 

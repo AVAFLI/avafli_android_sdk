@@ -156,7 +156,7 @@ internal fun WINRClaimStepLockedField(
     }
 }
 
-/** The State dropdown: same box styling, menu of the 50 states, chevron down. */
+/** The State dropdown: same box styling, menu of the 50 states + DC, chevron down. */
 @Composable
 internal fun WINRClaimStepMenuField(
     label: String,

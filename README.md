@@ -89,7 +89,7 @@ In your app-level `build.gradle.kts`:
 
 ```kotlin
 dependencies {
-    implementation("com.github.AVAFLI:winr_android_sdk:v2.6.0")
+    implementation("com.github.AVAFLI:winr_android_sdk:v2.6.1")
 }
 ```
 

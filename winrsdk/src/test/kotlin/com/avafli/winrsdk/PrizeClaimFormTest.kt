@@ -150,10 +150,14 @@ class PrizeClaimFormTest {
     }
 
     @Test
-    fun `us state list covers all fifty states`() {
-        assertEquals(50, PrizeClaimForm.usStates.size)
+    fun `us state list covers all fifty states plus DC`() {
+        // The official rules promise "50 states and the District of Columbia".
+        assertEquals(51, PrizeClaimForm.usStates.size)
         assertEquals("Alabama", PrizeClaimForm.usStates.first())
         assertEquals("Wyoming", PrizeClaimForm.usStates.last())
+        assertTrue(PrizeClaimForm.usStates.contains("District of Columbia"))
+        // Alphabetical placement: between Delaware and Florida.
+        assertEquals(PrizeClaimForm.usStates.sorted(), PrizeClaimForm.usStates)
     }
 
     // ── Winner-card award line dates ──

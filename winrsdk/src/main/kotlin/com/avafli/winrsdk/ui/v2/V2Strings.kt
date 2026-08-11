@@ -59,6 +59,24 @@ internal object V2Strings {
     const val SESSION_EXPIRED = "Your session has expired. Please try again."
     const val RETRY = "RETRY"
 
+    // ── Privacy choices / RTD opt-out (how-it-works screen) ──
+
+    /** Muted entry-point link at the bottom of the how-it-works screen. */
+    const val PRIVACY_CHOICES = "Privacy choices"
+    const val OPT_OUT_TITLE = "Delete my data & stop participating"
+    const val OPT_OUT_BODY =
+        "This permanently deletes your WINR data, ends your giveaway participation, " +
+            "and cannot be undone. You can also email info@avafli.com."
+    const val OPT_OUT_CONFIRM = "DELETE MY DATA"
+    const val OPT_OUT_CANCEL = "Cancel"
+
+    /** Brief success state shown before the experience dismisses itself. */
+    const val OPT_OUT_SUCCESS = "Your data has been deleted."
+
+    /** The opt-out call failed — the confirmation stays up and can retry.
+     *  We never pretend the deletion succeeded. */
+    const val OPT_OUT_FAILED = "Something went wrong. Please check your connection and try again."
+
     // ── Quiet empty state (no giveaway / unrecognized errors) ──
 
     const val EMPTY_HEADLINE = "Nothing to see here yet"

@@ -247,6 +247,10 @@ private fun DrawerContent(
             visitMode = visitMode,
             onDone = { viewModel.hideHowItWorks() },
             onClose = onDismiss,
+            optOutPhase = ui.optOutPhase,
+            onPrivacyChoices = { viewModel.showOptOutConfirmation() },
+            onOptOutConfirm = { viewModel.confirmOptOut() },
+            onOptOutCancel = { viewModel.cancelOptOut() },
         )
     }
 }
