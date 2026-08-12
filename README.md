@@ -185,6 +185,27 @@ WINR.configure(config)
 > consent is still an explicit tick inside the flow. See the three identity
 > cases above.
 
+## Test in Development: Your Sandbox Key
+
+Your publisher dashboard shows two API keys:
+
+| Key | Use it in |
+| --- | --------- |
+| `winr_live_…` | Release builds — your real giveaway |
+| `winr_test_…` | Debug/dev builds and CI — an isolated sandbox |
+
+The sandbox key hits the **same production backend** with identical behavior —
+registration, streaks, entries, the full experience — but every user and entry
+lands in a separate sandbox tenant with its own always-active test giveaway.
+That means:
+
+- Your developers and testers **can never enter (or win) your real giveaway.**
+- Sandbox usage **never counts toward your MAU** or your bill.
+- Your registered bundle IDs work with both keys automatically.
+
+Swap keys per build configuration and nothing else about your integration
+changes.
+
 ## The Experience
 
 The V2 experience presents itself automatically once per calendar day (first app-open of the day). Entries are claimed automatically when it opens, and the celebration is the first thing the user sees: the dashboard opens with today's grant already showing — the day tile checks off with a confetti burst, the total counts up and pops, and the bar leads with a "YOU'RE ON A ROLL!" toast before settling into the come-back message. There is no button to tap to collect entries (the pill just reads GOT IT and closes) and no launch API — after `configure()`, the SDK handles everything: presentation timing, entry claiming, and celebration. Brand-new users first submit their email, then land straight on the same celebrating dashboard — the toast just reads "YOU'RE IN!" on Day 1.
