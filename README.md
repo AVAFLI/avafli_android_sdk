@@ -31,24 +31,29 @@ WINR lets you add daily-entry sweepstakes and prize experiences to your app in u
 ```kotlin
 import com.avafli.winrsdk.WINR
 import com.avafli.winrsdk.WINRConfiguration
-import com.avafli.winrsdk.WINREnvironment
+import com.avafli.winrsdk.WINROptions
 import com.avafli.winrsdk.WINRUser
 
-// 1. Configure the SDK — call once at app launch
 val config = WINRConfiguration(
     context = applicationContext,
     apiKey = "YOUR_API_KEY",  // debug builds: use your winr_test_ sandbox key
-    environment = WINREnvironment.Production,
     user = WINRUser(
-        id = "user_123",
+        id = "user_123",              // only id is required — pass whatever identity you have
         firstName = "Jane",
-        lastName = "Doe"
+        lastName = "Doe",
+        email = "jane@example.com"    // include it when you have it — pre-fills & locks the capture form (consent stays explicit)
+    ),
+    // Nobody signed in? use user = WINRUser.GUEST
+    options = WINROptions(
+        debugLogging = false,         // true while integrating
+        enablePushReminders = true    // streak reminders via YOUR Firebase project (upload the key in your dashboard)
     )
 )
 WINR.configure(config)
 
-// 2. That's it — one call, and the experience opens itself
-//    on the first app-open of each day.
+// Done — the experience auto-opens once per day. No further calls needed.
+// Push reminders: forward your FCM token from your FirebaseMessagingService:
+//   WINR.onNewToken(token)
 ```
 
 > **Auto-open:** After `configure()`, the SDK presents the experience automatically once per calendar day (after registration and on activity resumes — a new day re-opens it even if the app stayed in memory). It can be disabled remotely via the dashboard's `experience.autoOpenEnabled` kill switch; unregistered users see at most 3 auto-opens until they submit an email, and RTD opted-out users never see it.
