@@ -37,7 +37,7 @@ import com.avafli.winrsdk.WINRUser
 // 1. Configure the SDK — call once at app launch
 val config = WINRConfiguration(
     context = applicationContext,
-    apiKey = "YOUR_API_KEY",
+    apiKey = "YOUR_API_KEY",  // debug builds: use your winr_test_ sandbox key
     environment = WINREnvironment.Production,
     user = WINRUser(
         id = "user_123",
