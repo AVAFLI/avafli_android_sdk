@@ -3,6 +3,10 @@
 All notable changes to the WINR Android SDK will be documented in this file.
 
 
+
+## 2.8.0 — 2026-08-13
+
+- Version alignment with the 2.8.0 platform release. No functional changes; `environment` already defaulted to `Production`, and sandbox API keys (`winr_test_…`) are the supported way to test.
 ## 2.7.0 — 2026-08-11
 
 2.7.0 — 'Verify your email' soft-verification: a persistent chip on the streak
