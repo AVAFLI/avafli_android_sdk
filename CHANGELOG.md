@@ -4,6 +4,14 @@ All notable changes to the WINR Android SDK will be documented in this file.
 
 
 
+## 2.9.1 — 2026-08-14
+
+- **Official brand share icons** — the winner claim "Share on Social Media:"
+  row (X / Facebook / Instagram / Snapchat / TikTok) now renders the official
+  WINR brand glyph set from Figma instead of the hand-drawn approximations.
+  White vector fills on the same dark button chrome; sizing and share behavior
+  unchanged.
+
 ## 2.9.0 — 2026-08-14
 
 The 14 Aug team decisions.
