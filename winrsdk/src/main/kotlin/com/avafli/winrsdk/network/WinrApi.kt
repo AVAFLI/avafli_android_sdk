@@ -292,6 +292,21 @@ internal class WinrApi(
     }
 
     /**
+     * Post-submit story attach (2.9): the share screen moved AFTER submit, so
+     * a story typed there can no longer ride the submitPrizeClaim payload —
+     * this attaches it to the already-submitted claim instead. Request
+     * `{ story }`, response `{ saved }`; same auth/network pattern as
+     * [restageAdoption]. Callers treat it as fire-and-forget.
+     */
+    suspend fun attachClaimStory(story: String): Boolean {
+        val response = networkClient.authenticatedPost(
+            "attachClaimStory",
+            mapOf("story" to JsonPrimitive(story)),
+        )
+        return response["saved"]?.jsonPrimitive?.booleanOrNull ?: false
+    }
+
+    /**
      * Submit user profile data.
      */
     suspend fun submitUserProfile(

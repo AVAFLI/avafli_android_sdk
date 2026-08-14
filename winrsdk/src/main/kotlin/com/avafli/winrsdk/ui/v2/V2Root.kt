@@ -272,7 +272,16 @@ private fun DrawerContent(
             claimFormPrefill = viewModel.claimFormPrefill(),
             onContinue = { viewModel.winnerClaimContinue() },
             onSubmit = { form -> viewModel.submitPrizeClaim(form) },
-            onShareDone = { viewModel.winnerShareDone() },
+            // Post-submit story attach (2.9): fire-and-forget on BOTH exits —
+            // a typed story is never lost to a swipe-away.
+            onShareDone = { story ->
+                viewModel.attachClaimStory(story)
+                viewModel.winnerShareDone()
+            },
+            onShareClosed = { story ->
+                viewModel.attachClaimStory(story)
+                onDismiss()
+            },
             onClose = onDismiss,
         )
 

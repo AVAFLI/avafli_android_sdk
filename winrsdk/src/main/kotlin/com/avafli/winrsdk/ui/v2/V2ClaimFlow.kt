@@ -27,7 +27,11 @@ internal fun WINRV2WinnerClaimFlow(
     claimFormPrefill: PrizeClaimForm,
     onContinue: () -> Unit,
     onSubmit: (PrizeClaimForm) -> Unit,
-    onShareDone: () -> Unit,
+    /** DONE on the share screen — carries the typed story (attach + advance). */
+    onShareDone: (String) -> Unit,
+    /** Close/back FROM the share screen — carries the typed story so the
+     *  attach still happens before the drawer dismisses. */
+    onShareClosed: (String) -> Unit,
     onClose: () -> Unit,
 ) {
     Crossfade(
@@ -60,14 +64,15 @@ internal fun WINRV2WinnerClaimFlow(
             )
 
             // 2.9: the claim is already submitted — this screen is optional
-            // flourish, and closing it loses nothing.
+            // flourish, and closing it loses nothing (a typed story is still
+            // posted via attachClaimStory on BOTH exits).
             is WinnerClaimStep.Share -> WINRV2ClaimShareScreen(
                 accent = accent,
                 logoUrl = logoUrl,
                 claim = claim,
                 shareUrl = shareUrl,
                 onDone = onShareDone,
-                onClose = onClose,
+                onClose = onShareClosed,
             )
 
             is WinnerClaimStep.Confirmation -> WINRV2ClaimConfirmationScreen(

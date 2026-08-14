@@ -682,8 +682,12 @@ private const val STORY_PLACEHOLDER =
 /**
  * The "PLEASE SHARE A LITTLE" screen, shown AFTER a successful submit (14 Aug
  * team decision) — the claim is already safely in, so closing this screen (or
- * the drawer) loses nothing. Story + social actions are optional flourish;
- * DONE advances to the confirmation card.
+ * the drawer) loses nothing. Story + social actions are optional flourish.
+ *
+ * Both exits hand the CURRENT story text back ([onDone] advances to the
+ * confirmation card; [onClose] dismisses) so a typed story is posted to the
+ * claim via `attachClaimStory` no matter how the person leaves — including
+ * the system back gesture, which is intercepted below.
  */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
@@ -692,11 +696,15 @@ internal fun WINRV2ClaimShareScreen(
     logoUrl: String?,
     claim: PrizeClaimBlock,
     shareUrl: String?,
-    onDone: () -> Unit,
-    onClose: () -> Unit,
+    onDone: (String) -> Unit,
+    onClose: (String) -> Unit,
 ) {
     val context = LocalContext.current
     var story by remember { mutableStateOf("") }
+
+    // System back must not lose a typed story: route it through the same
+    // story-carrying close as the X button.
+    androidx.activity.compose.BackHandler { onClose(story) }
 
     /** "I just won {prize} in {app}!" — the social share line. */
     val shareLine = remember(claim) {
@@ -745,7 +753,7 @@ internal fun WINRV2ClaimShareScreen(
         Column(Modifier.fillMaxSize()) {
             WINRClaimHeader(
                 logoUrl = logoUrl,
-                onClose = onClose,
+                onClose = { onClose(story) },
                 modifier = Modifier.padding(top = 18.dp),
             )
 
@@ -754,7 +762,7 @@ internal fun WINRV2ClaimShareScreen(
                 title = "PLEASE SHARE A LITTLE",
                 subtitle = "This helps us show real people like you win!",
                 ctaTitle = "DONE",
-                onCTA = onDone,
+                onCTA = { onDone(story) },
             ) {
                 // Multiline text area in the Figma field styling, with the
                 // frame's placeholder while empty.

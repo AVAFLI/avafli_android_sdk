@@ -223,4 +223,28 @@ class PrizeClaimApiTest {
         // reach the backend as an explicit false, never an absence.
         assertEquals("false", body["promoConsentGranted"]?.jsonPrimitive?.content)
     }
+
+    // ── attachClaimStory contract (2.9: post-submit story attach) ──
+
+    @Test
+    fun `attachClaimStory sends the story and parses saved`() = runTest {
+        val bodySlot = slot<Map<String, JsonElement>>()
+        coEvery {
+            networkClient.authenticatedPost("attachClaimStory", capture(bodySlot))
+        } returns jsonObj("""{"saved": true}""")
+
+        assertTrue(api.attachClaimStory("Buying my mom dinner."))
+        assertEquals(
+            "Buying my mom dinner.",
+            bodySlot.captured["story"]?.jsonPrimitive?.content,
+        )
+    }
+
+    @Test
+    fun `attachClaimStory treats a missing saved flag as not saved`() = runTest {
+        coEvery {
+            networkClient.authenticatedPost("attachClaimStory", any())
+        } returns jsonObj("""{}""")
+        assertFalse(api.attachClaimStory("story"))
+    }
 }

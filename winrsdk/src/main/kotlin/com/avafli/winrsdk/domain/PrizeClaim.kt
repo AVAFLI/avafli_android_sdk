@@ -52,8 +52,10 @@ internal data class PrizeClaimForm(
     val photoBase64: String? = null,
     /**
      * Optional "please share a little" story. Since 2.9 the share screen is
-     * POST-submit, so this rides the payload only when populated before
-     * submit (kept for wire compatibility; sent trimmed, omitted when empty).
+     * POST-submit: a story typed there is posted via the `attachClaimStory`
+     * callable instead of this field, which rides the submit payload only
+     * when populated beforehand (kept for wire compatibility; sent trimmed,
+     * omitted when empty).
      */
     val story: String = "",
     /**

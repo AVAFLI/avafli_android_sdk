@@ -22,7 +22,11 @@ The 14 Aug team decisions.
   by default — SUBMIT never gates on it. Its state rides the payload as the
   new `promoConsentGranted: Boolean` on `submitPrizeClaim`.
 - **Share step last** — "PLEASE SHARE A LITTLE" now shows AFTER a successful
-  submit (form is 3 steps + review); closing it loses nothing.
+  submit (form is 3 steps + review); closing it loses nothing. A story typed
+  there posts after submit via the new `attachClaimStory` callable
+  (`{ story }` → `{ saved }`), fired on DONE and on any dismiss/close/back so
+  a swipe-away never loses it — fire-and-forget with one retry, never blocking
+  the flow.
 - **Real share actions** — X opens `twitter.com/intent/tweet?text=` prefilled
   with "I just won {prize} in {appName}!" plus the publisher's new OPTIONAL
   `sdkConfig.shareUrl`; Facebook opens `sharer.php` with the shareUrl only

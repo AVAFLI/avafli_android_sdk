@@ -19,11 +19,14 @@ import com.avafli.winrsdk.services.analytics.AnalyticsAdapter
 import com.avafli.winrsdk.storage.PreferencesStorage
 import com.avafli.winrsdk.ui.v2.V2Strings
 import com.avafli.winrsdk.ui.v2.WINRV2ImageWarmer
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
@@ -1437,6 +1440,41 @@ internal class WINRExperienceViewModel(
                 submittedAt = share.submittedAt,
             ),
         )
+    }
+
+    /** One-shot guard so DONE-then-close (or double taps) never double-posts. */
+    private var claimStoryPosted = false
+
+    /**
+     * Post-submit story attach (2.9): the share screen shows AFTER submit, so
+     * a typed story rides the new `attachClaimStory` callable instead of the
+     * claim payload. Called on DONE and on any share-screen dismiss/close —
+     * the claim must never lose the story because the person swiped away.
+     *
+     * Fire-and-forget with ONE retry: failures are logged, never block the
+     * flow, and never surface an error (the claim itself is already in).
+     * ATOMIC start + NonCancellable so the post survives the drawer (and the
+     * ViewModel) being torn down right after a dismiss-triggered call.
+     */
+    fun attachClaimStory(story: String) {
+        val trimmed = story.trim()
+        if (trimmed.isEmpty() || claimStoryPosted) return
+        claimStoryPosted = true
+        viewModelScope.launch(start = CoroutineStart.ATOMIC) {
+            withContext(NonCancellable) {
+                repeat(2) { attempt ->
+                    try {
+                        if (api.attachClaimStory(trimmed)) {
+                            logger.debug("Claim story attached")
+                            return@withContext
+                        }
+                        logger.debug("attachClaimStory returned saved=false (attempt ${attempt + 1})")
+                    } catch (e: Exception) {
+                        logger.debug("attachClaimStory failed (attempt ${attempt + 1}): ${e.message}")
+                    }
+                }
+            }
+        }
     }
 
     /**
