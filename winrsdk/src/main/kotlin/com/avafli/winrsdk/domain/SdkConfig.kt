@@ -26,6 +26,14 @@ data class SdkConfig(
      * absent on older backends; platform actions degrade gracefully without it.
      */
     val shareUrl: String? = null,
+    /**
+     * Publisher-configured Google Places API key (Places API New, 2.9).
+     * Present → the winner claim address step's street field gains address
+     * autocomplete (suggestions + tap-to-fill street/city/state/zip). OPTIONAL
+     * — absent on older backends and for publishers without a key, in which
+     * case the street field is a plain text field exactly as before.
+     */
+    val placesApiKey: String? = null,
     /** Experience behavior (V2 auto-open flow). Absent → SDK defaults apply. */
     val experience: ExperienceConfig? = null
 )

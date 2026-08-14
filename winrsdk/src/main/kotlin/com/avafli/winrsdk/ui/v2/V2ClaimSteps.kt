@@ -73,6 +73,7 @@ import com.avafli.winrsdk.R
 import com.avafli.winrsdk.domain.PrizeClaimBlock
 import com.avafli.winrsdk.domain.PrizeClaimForm
 import com.avafli.winrsdk.domain.WINRFieldValidation
+import com.avafli.winrsdk.network.WINRPlacesClient
 import com.avafli.winrsdk.ui.v2.WINRClaimStepTheme.fieldBackground
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -103,6 +104,8 @@ internal fun WINRV2ClaimStepsFlow(
     accent: Color,
     logoUrl: String?,
     rulesUrl: String?,
+    /** Google Places key (sdkConfig.placesApiKey) — null → no autocomplete. */
+    placesApiKey: String?,
     claim: PrizeClaimBlock,
     prefill: PrizeClaimForm,
     isSubmitting: Boolean,
@@ -115,6 +118,13 @@ internal fun WINRV2ClaimStepsFlow(
     var form by remember { mutableStateOf(prefill) }
     var photo by remember { mutableStateOf<ImageBitmap?>(null) }
     var step by remember { mutableStateOf(WINRClaimFlowStep.One) }
+
+    // Street-field address autocomplete (2.9): present only when the
+    // publisher configured a Places key — otherwise the address step is
+    // exactly the plain-typing form.
+    val placesClient = remember(placesApiKey) {
+        placesApiKey?.takeIf { it.isNotBlank() }?.let { WINRPlacesClient(it) }
+    }
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -226,6 +236,7 @@ internal fun WINRV2ClaimStepsFlow(
                         accent = accent,
                         form = form,
                         onForm = { form = it },
+                        placesClient = placesClient,
                         onContinue = { step = WINRClaimFlowStep.Three },
                     )
 
@@ -438,6 +449,7 @@ private fun WINRClaimStep2(
     accent: Color,
     form: PrizeClaimForm,
     onForm: (PrizeClaimForm) -> Unit,
+    placesClient: WINRPlacesClient?,
     onContinue: () -> Unit,
 ) {
     WINRClaimStepPage(
@@ -452,7 +464,31 @@ private fun WINRClaimStep2(
                 .padding(horizontal = 12.dp),
             verticalArrangement = Arrangement.spacedBy(21.dp),
         ) {
-            WINRClaimStepField("Street Address", form.street) { onForm(form.copy(street = it)) }
+            // With a Places key the street field suggests addresses and a tap
+            // fills the whole step; without one it's the plain field. Every
+            // filled value stays hand-editable.
+            WINRClaimStepStreetField(
+                label = "Street Address",
+                value = form.street,
+                placesClient = placesClient,
+                onValueChange = { onForm(form.copy(street = it)) },
+                onAddressResolved = { address ->
+                    onForm(
+                        form.copy(
+                            street = address.street,
+                            // A missing component keeps whatever is already
+                            // typed rather than blanking the field.
+                            city = address.city.ifBlank { form.city },
+                            state = if (address.state.isBlank()) {
+                                form.state
+                            } else {
+                                WINRPlacesClient.usStateFullName(address.state)
+                            },
+                            zip = address.zip.ifBlank { form.zip },
+                        )
+                    )
+                },
+            )
             WINRClaimStepField("Apartment, Suite, etc. (optional)", form.apt) {
                 onForm(form.copy(apt = it))
             }

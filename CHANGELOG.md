@@ -32,6 +32,14 @@ The 14 Aug team decisions.
   `sdkConfig.shareUrl`; Facebook opens `sharer.php` with the shareUrl only
   (platform rule: no prefilled text); Instagram/Snapchat/TikTok use the system
   share sheet with text + link.
+- **Address autocomplete on the claim form** — when the new OPTIONAL
+  `sdkConfig.placesApiKey` is present, the claim address step's street field
+  suggests US street addresses as you type (Google Places API New over the
+  SDK's existing HTTP stack — no Places SDK dependency; debounced ~300ms,
+  min 3 chars, up to 5 suggestions with a "powered by Google" attribution
+  row). Tapping a suggestion fills street/city/state/zip; everything stays
+  hand-editable, any Places failure degrades silently to plain typing, and
+  an absent key keeps the previous behavior exactly.
 - **Zip field no longer clipped** — the State/Zip row now splits by weight
   instead of a fixed zip width.
 - **Privacy choices surface** — "Delete my data" is no longer direct from

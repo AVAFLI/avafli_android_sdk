@@ -24,6 +24,8 @@ internal fun WINRV2WinnerClaimFlow(
     logoUrl: String?,
     rulesUrl: String?,
     shareUrl: String?,
+    /** Google Places key (2.9) — street-field autocomplete; null → off. */
+    placesApiKey: String?,
     claimFormPrefill: PrizeClaimForm,
     onContinue: () -> Unit,
     onSubmit: (PrizeClaimForm) -> Unit,
@@ -55,6 +57,7 @@ internal fun WINRV2WinnerClaimFlow(
                 accent = accent,
                 logoUrl = logoUrl,
                 rulesUrl = rulesUrl,
+                placesApiKey = placesApiKey,
                 claim = claim,
                 prefill = claimFormPrefill,
                 isSubmitting = ui.isSubmittingClaim,

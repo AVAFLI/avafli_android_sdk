@@ -269,6 +269,7 @@ private fun DrawerContent(
             logoUrl = logoUrl,
             rulesUrl = rulesUrl,
             shareUrl = ui.sdkConfig?.shareUrl,
+            placesApiKey = ui.sdkConfig?.placesApiKey,
             claimFormPrefill = viewModel.claimFormPrefill(),
             onContinue = { viewModel.winnerClaimContinue() },
             onSubmit = { form -> viewModel.submitPrizeClaim(form) },

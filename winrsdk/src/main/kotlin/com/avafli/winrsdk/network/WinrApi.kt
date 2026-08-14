@@ -519,6 +519,7 @@ internal class WinrApi(
             rulesUrl = obj["rulesUrl"]?.jsonPrimitive?.contentOrNull,
             ageGateMinAge = obj["ageGateMinAge"]?.jsonPrimitive?.intOrNull,
             shareUrl = obj["shareUrl"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+            placesApiKey = obj["placesApiKey"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
             experience = experience
         )
     }
