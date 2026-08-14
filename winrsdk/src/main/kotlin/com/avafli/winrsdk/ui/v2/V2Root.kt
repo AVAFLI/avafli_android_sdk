@@ -159,6 +159,11 @@ private fun DrawerContent(
             onResend = { viewModel.resendVerificationCode() },
             onInfo = { viewModel.showHowItWorks() },
             onClose = onDismiss,
+            // Adoption re-entry (2.9): a parked adoption resumes here on a
+            // later open — the raw email is unknown, so the default subtitle
+            // (which names it) is replaced with the pick-up-where-you-left-off
+            // copy.
+            subtitle = if (screen.restaged) V2Strings.ADOPTION_RESTAGE_SUBTITLE else null,
         )
 
         // Soft email verification (2.7.0): the reused code screen, but dismissible
@@ -262,21 +267,28 @@ private fun DrawerContent(
             claim = screen.claim,
             accent = accent,
             logoUrl = logoUrl,
+            rulesUrl = rulesUrl,
+            shareUrl = ui.sdkConfig?.shareUrl,
             claimFormPrefill = viewModel.claimFormPrefill(),
             onContinue = { viewModel.winnerClaimContinue() },
             onSubmit = { form -> viewModel.submitPrizeClaim(form) },
+            onShareDone = { viewModel.winnerShareDone() },
             onClose = onDismiss,
         )
 
         is ExperienceScreen.HowItWorks -> WINRV2HowItWorksScreen(
             accent = accent,
             logoUrl = logoUrl,
+            rulesUrl = rulesUrl,
             day1Entries = ui.giveaway?.streakLadder?.firstOrNull() ?: 10,
             visitMode = visitMode,
             onDone = { viewModel.hideHowItWorks() },
             onClose = onDismiss,
             optOutPhase = ui.optOutPhase,
-            onPrivacyChoices = { viewModel.showOptOutConfirmation() },
+            // 2.9: "Privacy choices" opens the choices surface (policy link +
+            // delete action); delete is no longer direct from How it works.
+            onPrivacyChoices = { viewModel.showPrivacyChoices() },
+            onDeleteRequested = { viewModel.showOptOutConfirmation() },
             onOptOutConfirm = { viewModel.confirmOptOut() },
             onOptOutCancel = { viewModel.cancelOptOut() },
         )

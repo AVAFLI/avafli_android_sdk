@@ -17,9 +17,6 @@ class PrizeClaimFormTest {
         city = "Brooklyn",
         state = "New York",
         zip = "11201",
-        confirmsAccuracy = true,
-        authorizesLikeness = true,
-        agreesToRules = true,
     )
 
     // ── Validation ──
@@ -30,28 +27,17 @@ class PrizeClaimFormTest {
     }
 
     @Test
-    fun `all three consents are required`() {
-        assertFalse(validForm.copy(confirmsAccuracy = false).isValid)
-        assertFalse(validForm.copy(authorizesLikeness = false).isValid)
-        assertFalse(validForm.copy(agreesToRules = false).isValid)
-        assertFalse(
-            validForm.copy(
-                confirmsAccuracy = false,
-                authorizesLikeness = false,
-                agreesToRules = false,
-            ).isValid
-        )
+    fun `likeness promo consent is optional and never gates submit`() {
+        // 2.9 (14 Aug): the single remaining review checkbox is OPTIONAL —
+        // submit is valid with it on OR off.
+        assertTrue(validForm.copy(authorizesLikeness = false).isValid)
+        assertTrue(validForm.copy(authorizesLikeness = true).isValid)
     }
 
     @Test
-    fun `consents default to on - pre-checked per CTO decision`() {
-        // Aug 2026 CTO decision: the review screen shows the three consents
-        // PRE-CHECKED (defaults true); unticking any of them disables SUBMIT.
-        val fresh = PrizeClaimForm()
-        assertTrue(fresh.confirmsAccuracy)
-        assertTrue(fresh.authorizesLikeness)
-        assertTrue(fresh.agreesToRules)
-        assertTrue(fresh.hasAllConsents)
+    fun `likeness promo consent defaults to unchecked`() {
+        // Consent must be an affirmative act — no pre-ticked boxes (2.9).
+        assertFalse(PrizeClaimForm().authorizesLikeness)
     }
 
     @Test

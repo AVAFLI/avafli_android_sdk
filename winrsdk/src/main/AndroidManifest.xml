@@ -8,9 +8,12 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application>
+        <!-- adjustResize: keyboard must never block text fields (2.9) — the
+             Compose screens pair this with imePadding() + scroll. -->
         <activity
             android:name=".ui.WINRExperienceActivity"
             android:exported="false"
+            android:windowSoftInputMode="adjustResize"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
     </application>
 

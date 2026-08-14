@@ -32,12 +32,14 @@ import kotlinx.coroutines.delay
 internal fun WINRV2HowItWorksScreen(
     accent: Color,
     logoUrl: String?,
+    rulesUrl: String? = null,
     day1Entries: Int,
     visitMode: Boolean = false,
     onDone: () -> Unit,
     onClose: () -> Unit,
     optOutPhase: OptOutPhase = OptOutPhase.Idle,
     onPrivacyChoices: () -> Unit = {},
+    onDeleteRequested: () -> Unit = {},
     onOptOutConfirm: () -> Unit = {},
     onOptOutCancel: () -> Unit = {},
 ) {
@@ -60,11 +62,108 @@ internal fun WINRV2HowItWorksScreen(
             onClose = onClose,
             onPrivacyChoices = onPrivacyChoices,
         )
-        if (optOutPhase != OptOutPhase.Idle) {
-            OptOutConfirmDialog(
+        when (optOutPhase) {
+            OptOutPhase.Idle -> Unit
+            // 2.9: the "Privacy choices" surface — policy link + delete
+            // action. Delete-my-data moved here from "How it works" proper.
+            OptOutPhase.Choices -> PrivacyChoicesDialog(
+                rulesUrl = rulesUrl,
+                onDelete = onDeleteRequested,
+                onCancel = onOptOutCancel,
+            )
+            else -> OptOutConfirmDialog(
                 phase = optOutPhase,
                 onConfirm = onOptOutConfirm,
                 onCancel = onOptOutCancel,
+            )
+        }
+    }
+}
+
+/**
+ * The "Privacy choices" surface (2.9): a privacy-policy link plus the
+ * "Delete my data & stop participating" action, in the same scrim-plus-card
+ * treatment as the delete confirmation it leads to.
+ */
+@Composable
+private fun PrivacyChoicesDialog(
+    rulesUrl: String?,
+    onDelete: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val openPolicy: () -> Unit = {
+        rulesUrl?.let { url ->
+            try {
+                context.startActivity(
+                    android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                )
+            } catch (_: Exception) {
+                // No browser available — silently ignore.
+            }
+        }
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.55f))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onCancel,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(horizontal = 24.dp)
+                .widthIn(max = 340.dp)
+                .clip(RoundedCornerShape(20.dp))
+                .background(WINRV2Color.deepCharcoal)
+                .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(20.dp))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = {},   // swallow taps inside the card
+                )
+                .padding(22.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Text(
+                V2Strings.PRIVACY_CHOICES_TITLE,
+                style = WINRV2Font.inter(
+                    18.sp, FontWeight.Black,
+                    color = Color.White,
+                    textAlign = TextAlign.Center,
+                ),
+            )
+            Text(
+                V2Strings.PRIVACY_POLICY_LINK,
+                style = WINRV2Font.inter(15.sp, FontWeight.Bold, color = Color(0xFF7FB0FF))
+                    .copy(textDecoration = TextDecoration.Underline),
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .clickable(onClick = openPolicy)
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+            )
+            Text(
+                V2Strings.OPT_OUT_TITLE,
+                style = WINRV2Font.inter(15.sp, FontWeight.Bold, color = WINRClaimStepTheme.errorRed)
+                    .copy(textDecoration = TextDecoration.Underline),
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .clickable(onClick = onDelete)
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+            )
+            Text(
+                V2Strings.OPT_OUT_CANCEL,
+                style = WINRV2Font.inter(14.sp, color = WINRV2Color.textTertiary)
+                    .copy(textDecoration = TextDecoration.Underline),
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .clickable(onClick = onCancel)
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
             )
         }
     }

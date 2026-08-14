@@ -19,6 +19,13 @@ data class SdkConfig(
      * → 18. A compliance value: the UI must never hardcode 18 over this.
      */
     val ageGateMinAge: Int? = null,
+    /**
+     * Publisher-configured link shared from the winner claim flow's social
+     * actions (2.9): appended to the X intent text, the sole payload of the
+     * Facebook sharer, and included in the system share sheet text. OPTIONAL —
+     * absent on older backends; platform actions degrade gracefully without it.
+     */
+    val shareUrl: String? = null,
     /** Experience behavior (V2 auto-open flow). Absent → SDK defaults apply. */
     val experience: ExperienceConfig? = null
 )

@@ -11,9 +11,9 @@ import com.avafli.winrsdk.ui.WinnerClaimStep
 
 //
 // Winner prize-claim flow (Joe's stepped Figma design), ported from iOS
-// WINRV2Claim.swift: winner splash → 4 form steps + review (V2ClaimSteps.kt)
-// → confirmation with the OFFICIAL WINNER card. Shown when the giveaway
-// payload carries prizeClaim.status == "pending".
+// WINRV2Claim.swift: winner splash → 3 form steps + review (V2ClaimSteps.kt)
+// → post-submit share screen (2.9) → confirmation with the OFFICIAL WINNER
+// card. Shown when the giveaway payload carries prizeClaim.status == "pending".
 //
 
 @Composable
@@ -22,9 +22,12 @@ internal fun WINRV2WinnerClaimFlow(
     claim: PrizeClaimBlock,
     accent: Color,
     logoUrl: String?,
+    rulesUrl: String?,
+    shareUrl: String?,
     claimFormPrefill: PrizeClaimForm,
     onContinue: () -> Unit,
     onSubmit: (PrizeClaimForm) -> Unit,
+    onShareDone: () -> Unit,
     onClose: () -> Unit,
 ) {
     Crossfade(
@@ -47,11 +50,23 @@ internal fun WINRV2WinnerClaimFlow(
             is WinnerClaimStep.Form -> WINRV2ClaimStepsFlow(
                 accent = accent,
                 logoUrl = logoUrl,
+                rulesUrl = rulesUrl,
                 claim = claim,
                 prefill = claimFormPrefill,
                 isSubmitting = ui.isSubmittingClaim,
                 submitError = ui.claimSubmitError,
                 onSubmit = onSubmit,
+                onClose = onClose,
+            )
+
+            // 2.9: the claim is already submitted — this screen is optional
+            // flourish, and closing it loses nothing.
+            is WinnerClaimStep.Share -> WINRV2ClaimShareScreen(
+                accent = accent,
+                logoUrl = logoUrl,
+                claim = claim,
+                shareUrl = shareUrl,
+                onDone = onShareDone,
                 onClose = onClose,
             )
 

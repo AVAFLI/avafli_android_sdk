@@ -26,10 +26,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -47,6 +49,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusEvent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
@@ -78,22 +81,28 @@ import kotlinx.coroutines.withContext
 //
 // Root of the stepped prize-claim form (Joe's Figma design), ported from iOS
 // WINRV2ClaimStepsFlow.swift: a persistent gold-sparkle backdrop + header +
-// animated step indicator, with the four form steps and the review screen
-// sliding horizontally beneath them (push left on advance, push right on back).
+// animated step indicator, with the form steps and the review screen sliding
+// horizontally beneath them (push left on advance, push right on back).
+//
+// 2.9 (14 Aug team decision): the "PLEASE SHARE A LITTLE" screen moved OUT of
+// the pre-submit steps — it now shows AFTER a successful submit (see
+// WINRV2ClaimShareScreen), so closing it loses nothing. The form is 3 steps +
+// review.
 //
 
 /**
- * The five screens of the stepped form. [indicatorStep] is the 1-based step
- * number (review has no "STEP N OF 4" row, matching the SUBMIT frame).
+ * The screens of the stepped form. [indicatorStep] is the 1-based step
+ * number (review has no "STEP N OF 3" row, matching the SUBMIT frame).
  */
 internal enum class WINRClaimFlowStep(val indicatorStep: Int?) {
-    One(1), Two(2), Three(3), Four(4), Review(null)
+    One(1), Two(2), Three(3), Review(null)
 }
 
 @Composable
 internal fun WINRV2ClaimStepsFlow(
     accent: Color,
     logoUrl: String?,
+    rulesUrl: String?,
     claim: PrizeClaimBlock,
     prefill: PrizeClaimForm,
     isSubmitting: Boolean,
@@ -135,20 +144,6 @@ internal fun WINRV2ClaimStepsFlow(
         photoLauncher.launch(
             PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
         )
-    }
-
-    /** "I just won {prize} in {app}!" — the step-4 social share line. */
-    val shareLine = remember(claim) {
-        val prize = WINRV2PrizeText.stripHeadline(
-            description = claim.prizeDescription,
-            value = claim.prizeValue.toInt(),
-        )
-        val app = try {
-            context.applicationInfo.loadLabel(context.packageManager).toString()
-        } catch (_: Exception) {
-            ""
-        }
-        if (app.isNotBlank()) "I just won $prize in $app!" else "I just won $prize!"
     }
 
     Box(Modifier.fillMaxSize().background(WINRV2Color.deepCharcoal)) {
@@ -195,7 +190,7 @@ internal fun WINRV2ClaimStepsFlow(
             ) {
                 WINRClaimStepIndicator(
                     accent = accent,
-                    current = step.indicatorStep ?: 4,
+                    current = step.indicatorStep ?: 3,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 8.dp),
@@ -238,20 +233,13 @@ internal fun WINRV2ClaimStepsFlow(
                         accent = accent,
                         photo = photo,
                         onPickPhoto = pickPhoto,
-                        onContinue = { step = WINRClaimFlowStep.Four },
-                    )
-
-                    WINRClaimFlowStep.Four -> WINRClaimStep4(
-                        accent = accent,
-                        form = form,
-                        onForm = { form = it },
-                        shareLine = shareLine,
                         onContinue = { step = WINRClaimFlowStep.Review },
                     )
 
                     WINRClaimFlowStep.Review -> WINRClaimReview(
                         accent = accent,
                         form = form,
+                        rulesUrl = rulesUrl,
                         onForm = { form = it },
                         isSubmitting = isSubmitting,
                         submitError = submitError,
@@ -266,8 +254,9 @@ internal fun WINRV2ClaimStepsFlow(
 // ── "STEP N OF 4" + progress dots ──
 
 /**
- * "STEP N OF 4" + the row of 4 dots connected by accent lines: filled with
- * the accent up to the current step, outlined after it.
+ * "STEP N OF 3" + the row of 3 dots connected by accent lines: filled with
+ * the accent up to the current step, outlined after it. (The share step left
+ * the pre-submit flow in 2.9, so the form is 3 steps.)
  */
 @Composable
 internal fun WINRClaimStepIndicator(
@@ -276,18 +265,18 @@ internal fun WINRClaimStepIndicator(
     modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier.semantics { contentDescription = "Step $current of 4" },
+        modifier = modifier.semantics { contentDescription = "Step $current of 3" },
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
-            "STEP $current OF 4",
+            "STEP $current OF 3",
             style = WINRV2Font.inter(17.sp, FontWeight.SemiBold, tracking = (-0.85).sp, color = Color.White),
         )
         Row(verticalAlignment = Alignment.CenterVertically) {
-            for (index in 1..4) {
+            for (index in 1..3) {
                 StepDot(accent = accent, filled = index <= current)
-                if (index < 4) {
+                if (index < 3) {
                     Box(
                         Modifier
                             .width(29.dp)
@@ -337,6 +326,9 @@ private fun WINRClaimStepPage(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
+            // IME never blocks fields (2.9): the open keyboard becomes bottom
+            // padding, so every field and the CTA stay reachable by scrolling.
+            .imePadding()
             .padding(horizontal = 28.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -465,15 +457,20 @@ private fun WINRClaimStep2(
                 onForm(form.copy(apt = it))
             }
             WINRClaimStepField("City", form.city) { onForm(form.copy(city = it)) }
-            Row(horizontalArrangement = Arrangement.spacedBy(13.dp)) {
-                Box(Modifier.weight(1f)) {
+            // Weighted split (2.9 fix): the fixed-width zip box clipped on
+            // narrow screens — both columns now share the row by weight.
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(13.dp),
+            ) {
+                Box(Modifier.weight(1.7f)) {
                     WINRClaimStepMenuField(
                         label = "State",
                         options = PrizeClaimForm.usStates,
                         selection = form.state,
                     ) { onForm(form.copy(state = it)) }
                 }
-                Box(Modifier.width(101.dp)) {
+                Box(Modifier.weight(1f)) {
                     WINRClaimStepField(
                         "Zip Code", form.zip,
                         keyboardType = KeyboardType.Number,
@@ -677,75 +674,150 @@ private fun UploadGlyph() {
     }
 }
 
-// ── Step 4: PLEASE SHARE A LITTLE ──
+// ── Post-submit share screen: PLEASE SHARE A LITTLE (2.9) ──
 
 private const val STORY_PLACEHOLDER =
     "Please share anything. What you’re going to do with the prize, why you love our app, your favorite food, etc."
 
+/**
+ * The "PLEASE SHARE A LITTLE" screen, shown AFTER a successful submit (14 Aug
+ * team decision) — the claim is already safely in, so closing this screen (or
+ * the drawer) loses nothing. Story + social actions are optional flourish;
+ * DONE advances to the confirmation card.
+ */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun WINRClaimStep4(
+internal fun WINRV2ClaimShareScreen(
     accent: Color,
-    form: PrizeClaimForm,
-    onForm: (PrizeClaimForm) -> Unit,
-    shareLine: String,
-    onContinue: () -> Unit,
+    logoUrl: String?,
+    claim: PrizeClaimBlock,
+    shareUrl: String?,
+    onDone: () -> Unit,
+    onClose: () -> Unit,
 ) {
     val context = LocalContext.current
-    WINRClaimStepPage(
-        accent = accent,
-        title = "PLEASE SHARE A LITTLE",
-        subtitle = "This helps us show real people like you win!",
-        onCTA = onContinue,
-    ) {
-        // 199dp multiline text area in the Figma field styling, with the
-        // frame's placeholder while empty.
-        with(WINRClaimStepTheme) {
-            Box(
-                modifier = Modifier
-                    .padding(top = 29.dp)
-                    .padding(horizontal = 12.dp)
-                    .fillMaxWidth()
-                    .height(215.dp)
-                    .fieldBackground(),
-            ) {
-                BasicTextField(
-                    value = form.story,
-                    onValueChange = { onForm(form.copy(story = it)) },
-                    textStyle = WINRV2Font.inter(20.sp, color = Color.White),
-                    cursorBrush = SolidColor(Color.White),
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 20.dp, vertical = 14.dp),
-                )
-                if (form.story.isEmpty()) {
-                    Text(
-                        STORY_PLACEHOLDER,
-                        style = WINRV2Font.inter(20.sp, color = Color.White.copy(alpha = 0.6f)),
-                        modifier = Modifier.padding(horizontal = 25.dp, vertical = 16.dp),
-                    )
-                }
-            }
-        }
+    var story by remember { mutableStateOf("") }
 
-        Column(
-            modifier = Modifier.padding(top = 38.dp, bottom = 17.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(15.dp),
-        ) {
-            Text(
-                "Share on Social Media:",
-                style = WINRV2Font.inter(18.sp, FontWeight.Medium, tracking = (-0.54).sp, color = Color.White),
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(26.dp)) {
-                WINRSocialGlyphKind.entries.forEach { kind ->
-                    WINRSocialGlyph(
-                        kind = kind,
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .clickable { WINRShareSheet.present(context, shareLine) }
-                            .semantics { contentDescription = "Share on ${kind.displayName}" },
+    /** "I just won {prize} in {app}!" — the social share line. */
+    val shareLine = remember(claim) {
+        val prize = WINRV2PrizeText.stripHeadline(
+            description = claim.prizeDescription,
+            value = claim.prizeValue.toInt(),
+        )
+        val app = try {
+            context.applicationInfo.loadLabel(context.packageManager).toString()
+        } catch (_: Exception) {
+            ""
+        }
+        if (app.isNotBlank()) "I just won $prize in $app!" else "I just won $prize!"
+    }
+
+    val storyBringIntoView = remember {
+        androidx.compose.foundation.relocation.BringIntoViewRequester()
+    }
+    val storyFocusScope = rememberCoroutineScope()
+
+    Box(Modifier.fillMaxSize().background(WINRV2Color.deepCharcoal)) {
+        // Same gold-sparkle backdrop as the stepped form.
+        Image(
+            painter = painterResource(R.drawable.winr_winner_modal_bg),
+            contentDescription = null,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(406.dp)
+                .align(Alignment.TopCenter),
+            contentScale = ContentScale.Crop,
+        )
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(406.dp)
+                .align(Alignment.TopCenter)
+                .background(
+                    Brush.verticalGradient(
+                        0.05f to WINRV2Color.deepCharcoal.copy(alpha = 0.1f),
+                        0.6f to WINRV2Color.deepCharcoal.copy(alpha = 0.6f),
+                        1f to WINRV2Color.deepCharcoal,
                     )
+                )
+        )
+
+        Column(Modifier.fillMaxSize()) {
+            WINRClaimHeader(
+                logoUrl = logoUrl,
+                onClose = onClose,
+                modifier = Modifier.padding(top = 18.dp),
+            )
+
+            WINRClaimStepPage(
+                accent = accent,
+                title = "PLEASE SHARE A LITTLE",
+                subtitle = "This helps us show real people like you win!",
+                ctaTitle = "DONE",
+                onCTA = onDone,
+            ) {
+                // Multiline text area in the Figma field styling, with the
+                // frame's placeholder while empty.
+                with(WINRClaimStepTheme) {
+                    Box(
+                        modifier = Modifier
+                            .padding(top = 29.dp)
+                            .padding(horizontal = 12.dp)
+                            .fillMaxWidth()
+                            .height(215.dp)
+                            .fieldBackground()
+                            .bringIntoViewRequester(storyBringIntoView),
+                    ) {
+                        BasicTextField(
+                            value = story,
+                            onValueChange = { story = it },
+                            textStyle = WINRV2Font.inter(20.sp, color = Color.White),
+                            cursorBrush = SolidColor(Color.White),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 20.dp, vertical = 14.dp)
+                                .onFocusEvent { state ->
+                                    if (state.isFocused) {
+                                        storyFocusScope.launch {
+                                            kotlinx.coroutines.delay(WINR_IME_SETTLE_MS)
+                                            storyBringIntoView.bringIntoView()
+                                        }
+                                    }
+                                },
+                        )
+                        if (story.isEmpty()) {
+                            Text(
+                                STORY_PLACEHOLDER,
+                                style = WINRV2Font.inter(20.sp, color = Color.White.copy(alpha = 0.6f)),
+                                modifier = Modifier.padding(horizontal = 25.dp, vertical = 16.dp),
+                            )
+                        }
+                    }
+                }
+
+                Column(
+                    modifier = Modifier.padding(top = 38.dp, bottom = 17.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(15.dp),
+                ) {
+                    Text(
+                        "Share on Social Media:",
+                        style = WINRV2Font.inter(18.sp, FontWeight.Medium, tracking = (-0.54).sp, color = Color.White),
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(26.dp)) {
+                        WINRSocialGlyphKind.entries.forEach { kind ->
+                            WINRSocialGlyph(
+                                kind = kind,
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clip(CircleShape)
+                                    .clickable {
+                                        WINRShareSheet.share(context, kind, shareLine, shareUrl)
+                                    }
+                                    .semantics { contentDescription = "Share on ${kind.displayName}" },
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -758,6 +830,7 @@ private fun WINRClaimStep4(
 private fun WINRClaimReview(
     accent: Color,
     form: PrizeClaimForm,
+    rulesUrl: String?,
     onForm: (PrizeClaimForm) -> Unit,
     isSubmitting: Boolean,
     submitError: String?,
@@ -766,8 +839,10 @@ private fun WINRClaimReview(
     WINRClaimStepPage(
         accent = accent,
         title = "ALMOST DONE!",
-        subtitle = "Please review and agree to claim your prize.",
+        subtitle = "Please review to claim your prize.",
         ctaTitle = "SUBMIT PRIZE CLAIM",
+        // 2.9: the single likeness/promo checkbox is OPTIONAL — submit is
+        // always enabled (field validity was enforced by the steps).
         ctaEnabled = form.isValid,
         ctaLoading = isSubmitting,
         onCTA = { onSubmit(form) },
@@ -804,6 +879,7 @@ private fun WINRClaimReview(
             WINRClaimConsentSection(
                 accent = accent,
                 form = form,
+                rulesUrl = rulesUrl,
                 onChange = onForm,
             )
         }

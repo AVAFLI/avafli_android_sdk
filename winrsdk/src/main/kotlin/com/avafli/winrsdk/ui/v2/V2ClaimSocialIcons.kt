@@ -161,13 +161,26 @@ private fun TikTokGlyph() {
     }
 }
 
-// ── Share sheet ──
+// ── Share actions ──
 
 /**
- * Presents the system share sheet with the generic winner line — best-effort,
- * same sheet for every platform (mirrors iOS WINRShareSheet).
+ * Per-platform share actions for the winner share row (2.9, 14 Aug decisions):
+ *
+ *  - X: web intent (`twitter.com/intent/tweet?text=`) via ACTION_VIEW,
+ *    prefilled with the winner line + the publisher's optional `shareUrl` —
+ *    the X app intercepts the URL when installed, the browser handles it
+ *    otherwise.
+ *  - Facebook: `sharer.php` with the shareUrl ONLY (the platform strips
+ *    prefilled text — quotes/text params are ignored by policy). Without a
+ *    shareUrl there is nothing sharer.php can carry → system share sheet.
+ *  - Instagram / Snapchat / TikTok: no text-prefill APIs exist → the system
+ *    share sheet (ACTION_SEND chooser) with text + link.
+ *
+ * All best-effort: a missing handler is silently ignored (mirrors iOS).
  */
 internal object WINRShareSheet {
+
+    /** System share sheet (ACTION_SEND chooser) with [text]. */
     fun present(context: Context, text: String) {
         try {
             val send = Intent(Intent.ACTION_SEND).apply {
@@ -177,6 +190,43 @@ internal object WINRShareSheet {
             context.startActivity(Intent.createChooser(send, null))
         } catch (_: Exception) {
             // No activity to handle the share — silently ignore.
+        }
+    }
+
+    /** Routes a tap on [kind] to the platform-appropriate share action. */
+    fun share(context: Context, kind: WINRSocialGlyphKind, text: String, shareUrl: String?) {
+        val textWithLink = listOfNotNull(
+            text.takeIf { it.isNotBlank() },
+            shareUrl?.takeIf { it.isNotBlank() },
+        ).joinToString(" ")
+        when (kind) {
+            WINRSocialGlyphKind.X -> {
+                val encoded = java.net.URLEncoder.encode(textWithLink, "UTF-8")
+                openUrl(context, "https://twitter.com/intent/tweet?text=$encoded")
+            }
+
+            WINRSocialGlyphKind.Facebook -> {
+                val url = shareUrl?.takeIf { it.isNotBlank() }
+                if (url != null) {
+                    val encoded = java.net.URLEncoder.encode(url, "UTF-8")
+                    openUrl(context, "https://www.facebook.com/sharer/sharer.php?u=$encoded")
+                } else {
+                    // Nothing sharer.php can carry — degrade to the chooser.
+                    present(context, textWithLink)
+                }
+            }
+
+            WINRSocialGlyphKind.Instagram,
+            WINRSocialGlyphKind.Snapchat,
+            WINRSocialGlyphKind.TikTok -> present(context, textWithLink)
+        }
+    }
+
+    private fun openUrl(context: Context, url: String) {
+        try {
+            context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)))
+        } catch (_: Exception) {
+            // No browser/app to handle it — silently ignore.
         }
     }
 }

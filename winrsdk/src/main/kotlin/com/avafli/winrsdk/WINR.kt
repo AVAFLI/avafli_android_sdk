@@ -79,6 +79,15 @@ object WINR {
     @Volatile
     private var cachedEmailConsent: Boolean? = null
 
+    /**
+     * Adoption re-entry (2.9): the register/status response reported a parked
+     * verification-gated adoption (`adoptionPending: true`, OPTIONAL field).
+     * The experience resumes at the code screen (via `restageAdoption`)
+     * instead of email capture. Cleared when the adoption completes.
+     */
+    @Volatile
+    private var cachedAdoptionPending: Boolean = false
+
     /** Registration finished (success or failure) — auto-present waits for it. */
     @Volatile
     private var registrationComplete: Boolean = false
@@ -421,6 +430,14 @@ object WINR {
         cachedEmailConsent = true
     }
 
+    /** Adoption re-entry (2.9): whether a parked adoption awaits its code. */
+    internal fun isAdoptionPending(): Boolean = cachedAdoptionPending
+
+    /** The parked adoption completed (code verified) — stop restaging. */
+    internal fun clearAdoptionPending() {
+        cachedAdoptionPending = false
+    }
+
     internal fun consumePendingCallback(): ((Result<DailyEntryGrant>) -> Unit)? {
         val cb = pendingCallback
         pendingCallback = null
@@ -462,6 +479,7 @@ object WINR {
                 cachedGiveaway = response?.giveaway
                 cachedSdkConfig = response?.sdkConfig ?: cachedSdkConfig
                 cachedEmailConsent = response?.emailConsentStatus
+                response?.adoptionPending?.let { cachedAdoptionPending = it }
                 if (response?.optedOut == true) {
                     cachedOptedOut = true
                     preferencesStorage?.saveOptedOut(true)
@@ -506,6 +524,8 @@ object WINR {
 
         cachedGiveaway = response.giveaway
         cachedSdkConfig = response.sdkConfig
+        // Adoption re-entry (2.9): OPTIONAL flag — absent on older backends.
+        response.adoptionPending?.let { cachedAdoptionPending = it }
         if (response.optedOut == true) {
             cachedOptedOut = true
             preferencesStorage?.saveOptedOut(true)

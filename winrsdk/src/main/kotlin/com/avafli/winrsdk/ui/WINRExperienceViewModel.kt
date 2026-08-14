@@ -49,8 +49,11 @@ internal sealed class ExperienceScreen {
     object EmailCapture : ExperienceScreen()
 
     /** Verified adoption: the typed email matches an existing account; the
-     *  merge waits on the 6-digit code sent to that inbox. */
-    data class CodeEntry(val email: String) : ExperienceScreen()
+     *  merge waits on the 6-digit code sent to that inbox. [restaged] marks the
+     *  2.9 adoption re-entry path (a previous open started this adoption and
+     *  never finished): the raw email is unknown on this open, so the screen
+     *  shows the "pick up where you left off" subtitle instead. */
+    data class CodeEntry(val email: String, val restaged: Boolean = false) : ExperienceScreen()
 
     /**
      * Soft email verification (2.7.0): the person tapped the "Verify your email"
@@ -112,6 +115,14 @@ internal sealed class OptOutPhase {
     /** Nothing showing (the "Privacy choices" link is idle). */
     object Idle : OptOutPhase()
 
+    /**
+     * The "Privacy choices" surface is up (2.9): a privacy-policy link plus
+     * the "Delete my data & stop participating" action. The delete action is
+     * no longer reachable directly from "How it works" — it lives here, and
+     * advances to [Confirming] (the existing destructive confirmation).
+     */
+    object Choices : OptOutPhase()
+
     /** The destructive confirmation is up. */
     object Confirming : OptOutPhase()
 
@@ -132,6 +143,13 @@ internal sealed class OptOutPhase {
 internal sealed class WinnerClaimStep {
     object Splash : WinnerClaimStep()
     object Form : WinnerClaimStep()
+
+    /**
+     * 2.9: "PLEASE SHARE A LITTLE" shows AFTER a successful submit — the claim
+     * is already in, so abandoning this screen loses nothing. DONE advances to
+     * [Confirmation] with the same receipt values.
+     */
+    data class Share(val claimNumber: String, val submittedAt: String) : WinnerClaimStep()
     data class Confirmation(val claimNumber: String, val submittedAt: String) : WinnerClaimStep()
 }
 
@@ -257,6 +275,19 @@ internal class WINRExperienceViewModel(
     /** Consents from the ORIGINAL submit — resend must reuse them (fabricating
      *  values would overwrite the person's real marketing choice). Memory only. */
     private var pendingVerification: Triple<String, Boolean, Boolean>? = null
+
+    /**
+     * Adoption re-entry (2.9): the register/status response reported a parked
+     * verification-gated adoption (`adoptionPending: true`). The next load
+     * calls `restageAdoption` (fresh code to the inbox on file) and shows the
+     * code screen with the "pick up where you left off" subtitle instead of
+     * email capture.
+     */
+    private var adoptionPendingFlag = false
+
+    fun setAdoptionPending(pending: Boolean) {
+        adoptionPendingFlag = pending
+    }
 
     /** Host-app-provided identity used to prefill the claim form. */
     private var prefillUser: WINRUser? = null
@@ -427,6 +458,10 @@ internal class WINRExperienceViewModel(
             backendStreakDay = response.streakDay
             cachedBackendTotalEntries = response.totalEntries
 
+            // Adoption re-entry (2.9): the status response may echo the parked
+            // adoption. Only an explicit value updates the flag.
+            response.adoptionPending?.let { adoptionPendingFlag = it }
+
             // Soft email verification (2.7.0): the status response is
             // authoritative. ONLY an explicit `false` means unverified — absent/
             // null (verified, partner-passed, adoption-verified, no email) leaves
@@ -486,6 +521,28 @@ internal class WINRExperienceViewModel(
 
         // Email-capture gate: shown until the user completes the consent flow.
         if (!preferencesStorage.isEmailSubmitted()) {
+            // Adoption re-entry (2.9): a parked verification-gated adoption
+            // resumes at the code screen, not email capture. Ask the backend
+            // to re-send a fresh code first; a failed restage degrades to the
+            // normal capture flow (retyping the email re-triggers the OTP).
+            if (adoptionPendingFlag) {
+                val sent = try {
+                    api.restageAdoption()
+                } catch (e: Exception) {
+                    logger.warn("restageAdoption failed — falling back to email capture: ${e.message}")
+                    false
+                }
+                if (sent) {
+                    _uiState.value = _uiState.value.copy(
+                        screen = ExperienceScreen.CodeEntry(email = "", restaged = true),
+                        codeError = null,
+                        giveaway = activeGiveaway,
+                        sdkConfig = sdkConfig,
+                    )
+                    analytics?.trackEvent("winr_adoption_restaged")
+                    return
+                }
+            }
             _uiState.value = _uiState.value.copy(
                 screen = ExperienceScreen.EmailCapture,
                 giveaway = activeGiveaway,
@@ -833,6 +890,9 @@ internal class WINRExperienceViewModel(
                 preferencesStorage.saveEmailSubmitted(true)
                 WINR.noteEmailConsent()
                 pendingVerification = null
+                // Adoption re-entry (2.9): the parked adoption is resolved.
+                adoptionPendingFlag = false
+                WINR.clearAdoptionPending()
                 _uiState.value = _uiState.value.copy(isVerifyingCode = false)
                 loadInternal(claimBeforeDashboard = true)
             } catch (e: Exception) {
@@ -866,6 +926,23 @@ internal class WINRExperienceViewModel(
      * overwrite the marketing choice the user actually made.
      */
     fun resendVerificationCode() {
+        // Adoption re-entry (2.9): on the RESTAGED code screen the original
+        // email/consents are unknown (memory-only, and this is a later open) —
+        // resend goes through restageAdoption instead of re-submitting.
+        if (pendingVerification == null) {
+            val screen = _uiState.value.screen as? ExperienceScreen.CodeEntry ?: return
+            if (!screen.restaged || _uiState.value.isVerifyingCode) return
+            viewModelScope.launch {
+                _uiState.value = _uiState.value.copy(codeError = null)
+                try {
+                    api.restageAdoption()
+                } catch (e: Exception) {
+                    logger.error("Restage resend failed: ${e.message}", e)
+                    _uiState.value = _uiState.value.copy(codeError = V2Strings.CODE_RESEND_FAILED)
+                }
+            }
+            return
+        }
         val (email, age, marketing) = pendingVerification ?: return
         if (_uiState.value.isVerifyingCode) return
         viewModelScope.launch {
@@ -1012,17 +1089,30 @@ internal class WINRExperienceViewModel(
 
     // ── Privacy choices / RTD opt-out (how-it-works screen) ──
 
-    /** "Privacy choices" tapped — raise the destructive confirmation. */
-    fun showOptOutConfirmation() {
+    /**
+     * "Privacy choices" tapped (2.9): raise the Privacy choices surface —
+     * policy link + the delete action. Delete itself is one more tap away
+     * ([showOptOutConfirmation]), no longer direct from "How it works".
+     */
+    fun showPrivacyChoices() {
         if (_uiState.value.optOutPhase == OptOutPhase.Idle) {
-            _uiState.value = _uiState.value.copy(optOutPhase = OptOutPhase.Confirming)
+            _uiState.value = _uiState.value.copy(optOutPhase = OptOutPhase.Choices)
+        }
+    }
+
+    /** Raise the destructive delete confirmation (from the Choices surface). */
+    fun showOptOutConfirmation() {
+        when (_uiState.value.optOutPhase) {
+            OptOutPhase.Idle, OptOutPhase.Choices ->
+                _uiState.value = _uiState.value.copy(optOutPhase = OptOutPhase.Confirming)
+            else -> Unit
         }
     }
 
     /** Cancel / tap-outside. A no-op while in flight or after the deletion. */
     fun cancelOptOut() {
         when (_uiState.value.optOutPhase) {
-            OptOutPhase.Confirming, is OptOutPhase.Failed ->
+            OptOutPhase.Choices, OptOutPhase.Confirming, is OptOutPhase.Failed ->
                 _uiState.value = _uiState.value.copy(optOutPhase = OptOutPhase.Idle)
             else -> Unit
         }
@@ -1338,6 +1428,17 @@ internal class WINRExperienceViewModel(
         _uiState.value = _uiState.value.copy(winnerClaimStep = WinnerClaimStep.Form)
     }
 
+    /** DONE on the post-submit share screen → the confirmation card (2.9). */
+    fun winnerShareDone() {
+        val share = _uiState.value.winnerClaimStep as? WinnerClaimStep.Share ?: return
+        _uiState.value = _uiState.value.copy(
+            winnerClaimStep = WinnerClaimStep.Confirmation(
+                claimNumber = share.claimNumber,
+                submittedAt = share.submittedAt,
+            ),
+        )
+    }
+
     /**
      * SUBMIT on the claim form. Success → confirmation screen. A backend
      * "Not the winner"/"Already submitted" rejection falls back to the normal
@@ -1365,11 +1466,15 @@ internal class WINRExperienceViewModel(
                     country = form.country,
                     photoBase64 = form.photoBase64,
                     story = form.story.trim().ifEmpty { null },
+                    // 2.9: the single OPTIONAL likeness/promo checkbox state.
+                    promoConsentGranted = form.authorizesLikeness,
                 )
+                // 2.9: the share step comes AFTER submit — the claim is safely
+                // in, so abandoning the share screen loses nothing.
                 _uiState.value = _uiState.value.copy(
                     isSubmittingClaim = false,
                     submittedClaimForm = form,
-                    winnerClaimStep = WinnerClaimStep.Confirmation(
+                    winnerClaimStep = WinnerClaimStep.Share(
                         claimNumber = response.claimNumber,
                         submittedAt = response.submittedAt,
                     ),

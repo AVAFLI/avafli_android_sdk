@@ -1,5 +1,6 @@
 package com.avafli.winrsdk.ui.v2
 
+import android.content.Intent
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -24,6 +25,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -32,49 +34,66 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.net.toUri
 import com.avafli.winrsdk.domain.PrizeClaimForm
 
-// Joe's "review and agree" consents (ported from iOS WINRClaimConsentRow) —
-// all three required before SUBMIT PRIZE CLAIM. Shown on the review screen
-// ("ALMOST DONE!") pre-checked; unticking any of them disables SUBMIT.
+// Review-screen consent (2.9, 14 Aug team decision): the "information is
+// accurate" and "agree to Official Rules" checkboxes are GONE. Only the
+// likeness/promo checkbox remains, OPTIONAL — submit is never gated on it —
+// and its state rides the payload as `promoConsentGranted`. The Official
+// Rules / Privacy Policy links stay tappable below it.
 
 @Composable
 internal fun WINRClaimConsentSection(
     accent: Color,
     form: PrizeClaimForm,
+    rulesUrl: String?,
     onChange: (PrizeClaimForm) -> Unit,
 ) {
+    val context = LocalContext.current
+    val openRules: () -> Unit = {
+        rulesUrl?.let { url ->
+            try {
+                context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
+            } catch (_: Exception) {
+                // No browser available — silently ignore, like iOS UIApplication.open.
+            }
+        }
+    }
     Column(
         modifier = Modifier.padding(top = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(32.dp),
+        verticalArrangement = Arrangement.spacedBy(24.dp),
     ) {
-        WINRClaimConsentRow(
-            accent = accent,
-            isOn = form.confirmsAccuracy,
-            text = AnnotatedString("I confirm my information is accurate."),
-        ) { onChange(form.copy(confirmsAccuracy = !form.confirmsAccuracy)) }
         WINRClaimConsentRow(
             accent = accent,
             isOn = form.authorizesLikeness,
             text = AnnotatedString(
-                "I authorize this app's publisher and its promotional partners to use my name, city, profile photo, and likeness for winner announcements and promotional purposes."
+                "I authorize this app's publisher and its promotional partners to use my name, city, profile photo, and likeness for winner announcements and promotional purposes. (Optional)"
             ),
         ) { onChange(form.copy(authorizesLikeness = !form.authorizesLikeness)) }
-        WINRClaimConsentRow(
-            accent = accent,
-            isOn = form.agreesToRules,
-            text = buildAnnotatedString {
+
+        // Tappable rules/privacy line (no checkbox — informational, per 2.9).
+        Text(
+            buildAnnotatedString {
                 val emphasis = SpanStyle(
                     fontWeight = FontWeight.Bold,
                     textDecoration = TextDecoration.Underline,
                 )
-                append("I agree to the ")
+                append("By submitting you agree to the ")
                 withStyle(emphasis) { append("Official Rules") }
                 append(" and ")
                 withStyle(emphasis) { append("Privacy Policy") }
                 append(".")
             },
-        ) { onChange(form.copy(agreesToRules = !form.agreesToRules)) }
+            style = WINRV2Font.inter(14.sp, color = Color.White.copy(alpha = 0.8f)),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = openRules,
+                ),
+        )
     }
 }
 

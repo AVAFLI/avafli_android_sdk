@@ -169,6 +169,7 @@ class PrizeClaimApiTest {
             country = "United States",
             photoBase64 = "aGVsbG8=",
             story = "Buying my mom dinner.",
+            promoConsentGranted = true,
         )
 
         val body = bodySlot.captured
@@ -185,6 +186,8 @@ class PrizeClaimApiTest {
         assertEquals("United States", body["country"]?.jsonPrimitive?.content)
         assertEquals("aGVsbG8=", body["photoBase64"]?.jsonPrimitive?.content)
         assertEquals("Buying my mom dinner.", body["story"]?.jsonPrimitive?.content)
+        // 2.9: the OPTIONAL likeness/promo checkbox state, transmitted verbatim.
+        assertEquals("true", body["promoConsentGranted"]?.jsonPrimitive?.content)
 
         assertEquals("9876543210", response.claimNumber)
         assertEquals("2026-08-04T19:00:00.000Z", response.submittedAt)
@@ -216,5 +219,8 @@ class PrizeClaimApiTest {
         assertNull(body["apt"])
         assertNull(body["photoBase64"])
         assertNull(body["story"])
+        // promoConsentGranted is ALWAYS sent (2.9) — declined consent must
+        // reach the backend as an explicit false, never an absence.
+        assertEquals("false", body["promoConsentGranted"]?.jsonPrimitive?.content)
     }
 }

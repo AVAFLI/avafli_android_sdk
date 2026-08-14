@@ -4,6 +4,43 @@ All notable changes to the WINR Android SDK will be documented in this file.
 
 
 
+## 2.9.0 — 2026-08-14
+
+The 14 Aug team decisions.
+
+- **Keyboard never blocks fields** — every text-input screen (email capture,
+  6-digit code entry, winner claim names/address/story) stays fully scrollable
+  with the IME open: `imePadding()` on the scrolling form columns, focused
+  fields scroll themselves above the keyboard (`BringIntoViewRequester`), and
+  `WINRExperienceActivity` pins `adjustResize` (manifest + window).
+- **Capture screen background** — the blue radial gradient is gone; the email
+  capture screen now uses the same flat gunmetal the streak dashboard drawer
+  uses.
+- **Claim review ("ALMOST DONE!")** — the "information is accurate" and "agree
+  to Official Rules" checkboxes are removed (the rules/privacy links stay
+  tappable). Only the likeness/promo checkbox remains, OPTIONAL and unchecked
+  by default — SUBMIT never gates on it. Its state rides the payload as the
+  new `promoConsentGranted: Boolean` on `submitPrizeClaim`.
+- **Share step last** — "PLEASE SHARE A LITTLE" now shows AFTER a successful
+  submit (form is 3 steps + review); closing it loses nothing.
+- **Real share actions** — X opens `twitter.com/intent/tweet?text=` prefilled
+  with "I just won {prize} in {appName}!" plus the publisher's new OPTIONAL
+  `sdkConfig.shareUrl`; Facebook opens `sharer.php` with the shareUrl only
+  (platform rule: no prefilled text); Instagram/Snapchat/TikTok use the system
+  share sheet with text + link.
+- **Zip field no longer clipped** — the State/Zip row now splits by weight
+  instead of a fixed zip width.
+- **Privacy choices surface** — "Delete my data" is no longer direct from
+  "How it works"; the Privacy choices surface hosts the policy link and the
+  delete action (existing destructive confirmation unchanged).
+- **Adoption re-entry** — when the register/status response carries the new
+  OPTIONAL `adoptionPending: true`, the next open calls the new
+  `restageAdoption` callable (response `{ sent }`) and resumes at the code
+  screen with a "pick up where you left off" subtitle; "Send a new code"
+  restages again.
+
+All new response fields are optional/nullable against current production.
+
 ## 2.8.0 — 2026-08-13
 
 - Version alignment with the 2.8.0 platform release. No functional changes; `environment` already defaulted to `Production`, and sandbox API keys (`winr_test_…`) are the supported way to test.

@@ -15,6 +15,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
@@ -22,9 +25,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusEvent
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -39,6 +46,12 @@ import androidx.compose.ui.unit.sp
 // The stepped claim form's inputs, ported from iOS WINRV2ClaimStepPage.swift:
 // labeled text field, locked field (winning email / Country), and the State
 // dropdown, all in the Figma claim-step styling.
+
+/**
+ * Beat between a field gaining focus and the bring-into-view request, so the
+ * IME inset has landed and the request targets the post-resize viewport.
+ */
+internal const val WINR_IME_SETTLE_MS = 180L
 
 /** Field styling from the claim-step frames: #212832 fill, #3D424B border, r10. */
 internal object WINRClaimStepTheme {
@@ -71,6 +84,7 @@ internal fun WINRClaimStepFieldLabel(text: String) {
  * [errorText], when non-null, turns the border error-red and renders the
  * message inline under the box (Master Field List "User Message (UI)").
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun WINRClaimStepField(
     label: String,
@@ -79,8 +93,14 @@ internal fun WINRClaimStepField(
     errorText: String? = null,
     onValueChange: (String) -> Unit,
 ) {
+    // IME never blocks fields (2.9): when this field gains focus, ask the
+    // enclosing scrollable (which carries imePadding) to scroll it into the
+    // visible area above the keyboard. The short delay lets the IME inset
+    // land first so the request targets the post-resize viewport.
+    val bringIntoView = remember { BringIntoViewRequester() }
+    val focusScope = rememberCoroutineScope()
     with(WINRClaimStepTheme) {
-        Column {
+        Column(modifier = Modifier.bringIntoViewRequester(bringIntoView)) {
             WINRClaimStepFieldLabel(label)
             Box(
                 modifier = Modifier
@@ -101,7 +121,16 @@ internal fun WINRClaimStepField(
                         keyboardType = keyboardType,
                         autoCorrectEnabled = false,
                     ),
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onFocusEvent { state ->
+                            if (state.isFocused) {
+                                focusScope.launch {
+                                    delay(WINR_IME_SETTLE_MS)
+                                    bringIntoView.bringIntoView()
+                                }
+                            }
+                        },
                 )
             }
             if (errorText != null) {

@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -31,6 +32,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.focus.onFocusChanged
+import kotlinx.coroutines.launch
 import com.avafli.winrsdk.R
 import com.avafli.winrsdk.domain.Giveaway
 import com.avafli.winrsdk.domain.WINRFieldValidation
@@ -91,12 +93,17 @@ internal fun WINRV2CaptureScreen(
     val canSubmit = isAdult && emailValid
     val showEmailError = lockedEmail == null && !emailValid && (emailTouched || submitAttempted)
 
-    Box(Modifier.fillMaxSize()) {
-        WINRV2TopGlow(accent, Modifier.matchParentSize())
+    // 2.9: flat dark background — the same gunmetal the streak dashboard's
+    // drawer uses — replacing the blue radial gradient (WINRV2TopGlow).
+    Box(Modifier.fillMaxSize().background(WINRV2Color.gunmetal)) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState()),
+                .verticalScroll(rememberScrollState())
+                // IME never blocks fields (2.9): the keyboard becomes bottom
+                // padding so the email field, checkboxes, and CTA all stay
+                // reachable by scrolling while typing.
+                .imePadding(),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
@@ -242,6 +249,7 @@ private fun PrizeStrip(giveaway: Giveaway?) {
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun EmailField(
     value: String,
@@ -249,10 +257,17 @@ private fun EmailField(
     locked: Boolean = false,
     onFocusChanged: (Boolean) -> Unit = {},
 ) {
+    // IME never blocks fields (2.9): scroll this row above the keyboard when
+    // it gains focus (the short delay lets the IME inset land first).
+    val bringIntoView = remember {
+        androidx.compose.foundation.relocation.BringIntoViewRequester()
+    }
+    val focusScope = androidx.compose.runtime.rememberCoroutineScope()
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .height(54.dp)
+            .bringIntoViewRequester(bringIntoView)
             .clip(RoundedCornerShape(10.dp))
             .background(Color.White)
             .padding(horizontal = 20.dp),
@@ -294,7 +309,15 @@ private fun EmailField(
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .onFocusChanged { onFocusChanged(it.isFocused) },
+                        .onFocusChanged { state ->
+                            onFocusChanged(state.isFocused)
+                            if (state.isFocused) {
+                                focusScope.launch {
+                                    kotlinx.coroutines.delay(WINR_IME_SETTLE_MS)
+                                    bringIntoView.bringIntoView()
+                                }
+                            }
+                        },
                 )
             }
         }
@@ -371,6 +394,7 @@ private fun ConsentCheckbox(checked: Boolean, text: String, onToggle: () -> Unit
  *    chip, which overrides [title]/[subtitle] and supplies [onCancel] to make
  *    the screen dismissible (it gates nothing).
  */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 internal fun WINRV2CodeEntryScreen(
     accent: Color,
@@ -391,13 +415,21 @@ internal fun WINRV2CodeEntryScreen(
     onCancel: (() -> Unit)? = null,
 ) {
     var code by remember { mutableStateOf("") }
+    // IME never blocks fields (2.9): scroll the code box above the keyboard
+    // when it gains focus.
+    val bringIntoView = remember {
+        androidx.compose.foundation.relocation.BringIntoViewRequester()
+    }
+    val focusScope = androidx.compose.runtime.rememberCoroutineScope()
 
     Box(Modifier.fillMaxSize()) {
         WINRV2TopGlow(accent, Modifier.matchParentSize())
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState()),
+                .verticalScroll(rememberScrollState())
+                // IME never blocks fields (2.9).
+                .imePadding(),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
@@ -432,6 +464,7 @@ internal fun WINRV2CodeEntryScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(54.dp)
+                        .bringIntoViewRequester(bringIntoView)
                         .clip(RoundedCornerShape(10.dp))
                         .background(Color.White)
                         .padding(horizontal = 20.dp),
@@ -457,7 +490,16 @@ internal fun WINRV2CodeEntryScreen(
                             singleLine = true,
                             cursorBrush = SolidColor(WINRV2Color.gunmetal),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .onFocusChanged { state ->
+                                    if (state.isFocused) {
+                                        focusScope.launch {
+                                            kotlinx.coroutines.delay(WINR_IME_SETTLE_MS)
+                                            bringIntoView.bringIntoView()
+                                        }
+                                    }
+                                },
                         )
                     }
                 }

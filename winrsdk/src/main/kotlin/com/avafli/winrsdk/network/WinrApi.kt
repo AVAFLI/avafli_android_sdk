@@ -67,6 +67,10 @@ internal class WinrApi(
             // typed a brand-new email that hasn't been confirmed. Absent/null for
             // verified, partner-passed, adoption-verified, and no-email users.
             emailVerified = response["emailVerified"]?.jsonPrimitive?.booleanOrNull,
+            // Adoption re-entry (2.9): true when this device started a
+            // verification-gated adoption and never entered the code. OPTIONAL
+            // — absent on older backends.
+            adoptionPending = response["adoptionPending"]?.jsonPrimitive?.booleanOrNull,
         )
     }
 
@@ -91,6 +95,8 @@ internal class WinrApi(
             prizeClaim = (response["prizeClaim"] as? JsonObject)?.let { parsePrizeClaim(it) },
             // Soft email verification (2.7.0): explicit `false` → unverified.
             emailVerified = response["emailVerified"]?.jsonPrimitive?.booleanOrNull,
+            // Adoption re-entry (2.9): optional echo of the parked adoption.
+            adoptionPending = response["adoptionPending"]?.jsonPrimitive?.booleanOrNull,
         )
     }
 
@@ -112,6 +118,12 @@ internal class WinrApi(
         country: String,
         photoBase64: String? = null,
         story: String? = null,
+        /**
+         * 2.9: the review screen's single OPTIONAL likeness/promo checkbox
+         * state — the person's actual choice, transmitted verbatim. Never
+         * gates submit.
+         */
+        promoConsentGranted: Boolean = false,
     ): SubmitPrizeClaimResponse {
         val body = buildMap<String, JsonElement> {
             put("giveawayId", JsonPrimitive(giveawayId))
@@ -122,6 +134,7 @@ internal class WinrApi(
             put("state", JsonPrimitive(state))
             put("zip", JsonPrimitive(zip))
             put("country", JsonPrimitive(country))
+            put("promoConsentGranted", JsonPrimitive(promoConsentGranted))
             phone?.takeIf { it.isNotEmpty() }?.let { put("phone", JsonPrimitive(it)) }
             apt?.takeIf { it.isNotEmpty() }?.let { put("apt", JsonPrimitive(it)) }
             photoBase64?.let { put("photoBase64", JsonPrimitive(it)) }
@@ -266,6 +279,19 @@ internal class WinrApi(
     }
 
     /**
+     * Adoption re-entry (2.9): the register/status response carried
+     * `adoptionPending: true` (the person typed an existing account's email,
+     * the OTP gate opened, and they left before entering the code). This asks
+     * the backend to re-send a fresh 6-digit adoption code to that inbox so
+     * the code screen can be shown again — same network pattern as
+     * [verifyAdoptionCode] / [resendEmailVerification]. Response: `{ sent }`.
+     */
+    suspend fun restageAdoption(): Boolean {
+        val response = networkClient.authenticatedPost("restageAdoption")
+        return response["sent"]?.jsonPrimitive?.booleanOrNull ?: false
+    }
+
+    /**
      * Submit user profile data.
      */
     suspend fun submitUserProfile(
@@ -330,6 +356,14 @@ internal class WinrApi(
          * treat ONLY explicit `false` as unverified.
          */
         val emailVerified: Boolean? = null,
+        /**
+         * Adoption re-entry (2.9). True when a verification-gated adoption was
+         * started on this device and the code was never entered — the next
+         * experience open should call [restageAdoption] and show the code
+         * screen ("pick up where you left off"). OPTIONAL — absent on older
+         * backends.
+         */
+        val adoptionPending: Boolean? = null,
     )
 
     data class GetActiveGiveawayResponse(
@@ -353,6 +387,8 @@ internal class WinrApi(
          * chip); absent/null otherwise. Authoritative status echoed on every open.
          */
         val emailVerified: Boolean? = null,
+        /** Adoption re-entry (2.9): optional echo of the parked adoption. */
+        val adoptionPending: Boolean? = null,
     )
 
     data class SubmitPrizeClaimResponse(
@@ -467,6 +503,7 @@ internal class WinrApi(
             bonusEntriesEnabled = bonusEntriesEnabled,
             rulesUrl = obj["rulesUrl"]?.jsonPrimitive?.contentOrNull,
             ageGateMinAge = obj["ageGateMinAge"]?.jsonPrimitive?.intOrNull,
+            shareUrl = obj["shareUrl"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
             experience = experience
         )
     }
@@ -595,6 +632,6 @@ internal class WinrApi(
     companion object {
         // Single source of truth for the wire-format sdk_version. Keep in sync
         // with the Maven publish version in winrsdk/build.gradle.kts.
-        const val SDK_VERSION = "2.8.0"
+        const val SDK_VERSION = "2.9.0"
     }
 }

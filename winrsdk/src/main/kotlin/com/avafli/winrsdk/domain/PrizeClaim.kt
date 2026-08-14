@@ -50,17 +50,22 @@ internal data class PrizeClaimForm(
     val zip: String = "",
     /** JPEG base64 of the optional attached photo (already downscaled/capped). */
     val photoBase64: String? = null,
-    /** Optional "please share a little" story (step 4). Sent trimmed; omitted when empty. */
+    /**
+     * Optional "please share a little" story. Since 2.9 the share screen is
+     * POST-submit, so this rides the payload only when populated before
+     * submit (kept for wire compatibility; sent trimmed, omitted when empty).
+     */
     val story: String = "",
     /**
-     * Explicit consents (Joe's "review and agree" checkboxes). All three are
-     * REQUIRED for submit, and PRE-CHECKED by default (CTO decision, Aug 2026)
-     * — the user can still untick any of them on the review screen, which
-     * disables SUBMIT until re-affirmed.
+     * The single review-screen consent (2.9 — the 14 Aug team decision): the
+     * likeness/promo checkbox. OPTIONAL — it never gates submit — and
+     * UNCHECKED by default (consent must be an affirmative act; pre-ticked
+     * boxes are invalid under GDPR and disfavored by US state regulators).
+     * Transmitted verbatim as `promoConsentGranted` on submitPrizeClaim.
+     * The former "information is accurate" and "agree to Official Rules"
+     * checkboxes are gone; the rules/privacy links stay tappable on review.
      */
-    val confirmsAccuracy: Boolean = true,
-    val authorizesLikeness: Boolean = true,
-    val agreesToRules: Boolean = true,
+    val authorizesLikeness: Boolean = false,
 ) {
     /** Fixed — US-only sweepstakes. */
     val country: String get() = "United States"
@@ -86,19 +91,15 @@ internal data class PrizeClaimForm(
             state.trim().isNotEmpty() &&
             isValidZip(zip)
 
-    // Steps 3 (photo) and 4 (story) are fully optional — always advanceable.
-
-    /** All three review-screen consents affirmed. */
-    val hasAllConsents: Boolean
-        get() = confirmsAccuracy && authorizesLikeness && agreesToRules
+    // Step 3 (photo) and the post-submit share screen are fully optional.
 
     /**
-     * SUBMIT enables when every required field across the steps is present,
-     * the zip is a 5-digit US code, and all three consents are affirmed.
-     * Phone, apartment, photo, and story are optional.
+     * SUBMIT enables when every required field across the steps is present and
+     * the zip is a 5-digit US code. Phone, apartment, photo, story, and the
+     * likeness/promo checkbox are optional — no consent gates submit (2.9).
      */
     val isValid: Boolean
-        get() = isStep1Valid && isStep2Valid && hasAllConsents
+        get() = isStep1Valid && isStep2Valid
 
     /** "First L." — the public display name on the winner card. */
     val displayName: String

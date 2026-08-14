@@ -32,6 +32,12 @@ internal object V2Strings {
      *  code-error slot; the code screen stays up. */
     const val CODE_RESEND_FAILED = "Couldn't send a new code. Check your connection and try again."
 
+    /** Adoption re-entry (2.9): subtitle on the code screen when a parked
+     *  adoption resumes on a later open (the raw email is unknown here). */
+    const val ADOPTION_RESTAGE_SUBTITLE =
+        "Pick up where you left off! We just sent a fresh 6-digit code to your " +
+            "email — enter it to finish connecting your streak."
+
     // ── Soft email verification (2.7.0) ──
 
     /** Persistent, non-blocking dashboard chip shown while the typed email is
@@ -94,6 +100,12 @@ internal object V2Strings {
 
     /** Muted entry-point link at the bottom of the how-it-works screen. */
     const val PRIVACY_CHOICES = "Privacy choices"
+
+    /** Title of the 2.9 "Privacy choices" surface (policy link + delete action). */
+    const val PRIVACY_CHOICES_TITLE = "Privacy choices"
+
+    /** Policy link on the "Privacy choices" surface. */
+    const val PRIVACY_POLICY_LINK = "Official Rules & Privacy Policy"
     const val OPT_OUT_TITLE = "Delete my data & stop participating"
     const val OPT_OUT_BODY =
         "This permanently deletes your WINR data, ends your giveaway participation, " +
