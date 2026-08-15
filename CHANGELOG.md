@@ -4,6 +4,19 @@ All notable changes to the WINR Android SDK will be documented in this file.
 
 
 
+## 2.9.2 — 2026-08-14
+
+- **Capture screen: one legal text, anchored to the bottom** — the email
+  capture screen no longer shows its legal text twice. "Official Rules" and
+  "Privacy Policy" inside the consent sentence are now underlined tappable
+  links (opening the same rules URL in the browser, exactly as the removed
+  row did), and the separate "OFFICIAL RULES • PRIVACY POLICY" links row is
+  gone from this screen only — the code-entry and claim screens keep theirs.
+  The legal block (sentence + "Powered by © WINR Media") is anchored to the
+  bottom of the drawer via a weighted spacer instead of sitting congested
+  under the CTA; with the keyboard open or on short screens it degrades to
+  the normal scrolling behavior and never overlaps the button.
+
 ## 2.9.1 — 2026-08-14
 
 - **Official brand share icons** — the winner claim "Share on Social Media:"

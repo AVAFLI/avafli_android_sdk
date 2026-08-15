@@ -648,6 +648,6 @@ internal class WinrApi(
     companion object {
         // Single source of truth for the wire-format sdk_version. Keep in sync
         // with the Maven publish version in winrsdk/build.gradle.kts.
-        const val SDK_VERSION = "2.9.1"
+        const val SDK_VERSION = "2.9.2"
     }
 }

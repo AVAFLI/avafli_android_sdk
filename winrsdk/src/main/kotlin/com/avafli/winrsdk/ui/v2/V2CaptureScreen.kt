@@ -1,5 +1,6 @@
 package com.avafli.winrsdk.ui.v2
 
+import android.content.Intent
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -24,14 +25,21 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.core.net.toUri
 import kotlinx.coroutines.launch
 import com.avafli.winrsdk.R
 import com.avafli.winrsdk.domain.Giveaway
@@ -196,17 +204,64 @@ internal fun WINRV2CaptureScreen(
                 }
             }
 
+            // Anchor the legal block to the drawer's bottom (Ryan): the weighted
+            // spacer absorbs any free height between the CTA and the footer, so
+            // the legal text sits at the bottom padding instead of congested
+            // under the button. On short screens or with the IME open the
+            // content exceeds the viewport, the spacer collapses to zero, and
+            // the column's 18dp spacing remains the minimum gap — everything
+            // scrolls via the existing verticalScroll + imePadding behavior,
+            // never overlapping the button. Same pattern as the code-entry
+            // screen's footer.
+            Spacer(Modifier.weight(1f, fill = true))
+
             Column(
                 modifier = Modifier.padding(bottom = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(3.dp),
             ) {
+                // ONE instance of the legal text (Ryan's call): the sentence itself
+                // carries underlined tappable "Official Rules" / "Privacy Policy"
+                // spans, replacing the separate OFFICIAL RULES • PRIVACY POLICY
+                // links row this screen used to stack beneath it. Both spans open
+                // rulesUrl exactly as the row did (ACTION_VIEW → browser; no
+                // separate privacy URL exists in config). Other screens keep
+                // their WINRV2LegalLinks row.
+                val context = LocalContext.current
+                val openRules = {
+                    rulesUrl?.let { url ->
+                        try {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
+                        } catch (_: Exception) {
+                            // No browser available — silently ignore, like iOS UIApplication.open.
+                        }
+                    }
+                    Unit
+                }
+                val linkStyles = TextLinkStyles(
+                    style = SpanStyle(
+                        color = WINRV2Color.textTertiary,
+                        textDecoration = TextDecoration.Underline,
+                    ),
+                )
                 Text(
-                    "Your email lets us contact you if you win. By entering you agree to the Official Rules & Privacy Policy",
+                    buildAnnotatedString {
+                        append("Your email lets us contact you if you win. By entering you agree to the ")
+                        withLink(LinkAnnotation.Clickable("rules", linkStyles) { openRules() }) {
+                            append("Official Rules")
+                        }
+                        append(" & ")
+                        withLink(LinkAnnotation.Clickable("privacy", linkStyles) { openRules() }) {
+                            append("Privacy Policy")
+                        }
+                    },
                     style = WINRV2Font.inter(12.sp, color = WINRV2Color.textTertiary, textAlign = TextAlign.Center),
                     modifier = Modifier.padding(horizontal = 30.dp),
                 )
-                WINRV2LegalLinks(rulesUrl = rulesUrl, showPoweredBy = true)
+                Text(
+                    "Powered by © WINR Media",
+                    style = WINRV2Font.inter(12.sp, color = WINRV2Color.textTertiary),
+                )
             }
         }
     }
