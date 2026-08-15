@@ -27,14 +27,17 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
+import com.avafli.winrsdk.WINRConstants
 import com.avafli.winrsdk.domain.PrizeClaimForm
 
 // Review-screen consent (2.9, 14 Aug team decision): the "information is
@@ -51,14 +54,17 @@ internal fun WINRClaimConsentSection(
     onChange: (PrizeClaimForm) -> Unit,
 ) {
     val context = LocalContext.current
-    val openRules: () -> Unit = {
-        rulesUrl?.let { url ->
+    // Official Rules → rulesUrl; Privacy Policy → WINRConstants.PRIVACY_URL.
+    // (Pre-2.9.2 both opened rulesUrl — a latent bug fixed on all platforms.)
+    val openUrl = { url: String? ->
+        url?.let {
             try {
-                context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
+                context.startActivity(Intent(Intent.ACTION_VIEW, it.toUri()))
             } catch (_: Exception) {
                 // No browser available — silently ignore, like iOS UIApplication.open.
             }
         }
+        Unit
     }
     Column(
         modifier = Modifier.padding(top = 8.dp),
@@ -73,26 +79,33 @@ internal fun WINRClaimConsentSection(
         ) { onChange(form.copy(authorizesLikeness = !form.authorizesLikeness)) }
 
         // Tappable rules/privacy line (no checkbox — informational, per 2.9).
+        // Each phrase is its own link span so the two documents open their own
+        // URLs (pre-2.9.2 the whole line opened rulesUrl).
         Text(
             buildAnnotatedString {
-                val emphasis = SpanStyle(
-                    fontWeight = FontWeight.Bold,
-                    textDecoration = TextDecoration.Underline,
+                val emphasis = TextLinkStyles(
+                    style = SpanStyle(
+                        color = Color.White.copy(alpha = 0.8f),
+                        fontWeight = FontWeight.Bold,
+                        textDecoration = TextDecoration.Underline,
+                    ),
                 )
                 append("By submitting you agree to the ")
-                withStyle(emphasis) { append("Official Rules") }
+                withLink(LinkAnnotation.Clickable("rules", emphasis) { openUrl(rulesUrl) }) {
+                    append("Official Rules")
+                }
                 append(" and ")
-                withStyle(emphasis) { append("Privacy Policy") }
+                withLink(
+                    LinkAnnotation.Clickable("privacy", emphasis) {
+                        openUrl(WINRConstants.PRIVACY_URL)
+                    },
+                ) {
+                    append("Privacy Policy")
+                }
                 append(".")
             },
             style = WINRV2Font.inter(14.sp, color = Color.White.copy(alpha = 0.8f)),
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = openRules,
-                ),
+            modifier = Modifier.fillMaxWidth(),
         )
     }
 }

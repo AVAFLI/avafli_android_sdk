@@ -9,13 +9,20 @@ All notable changes to the WINR Android SDK will be documented in this file.
 - **Capture screen: one legal text, anchored to the bottom** — the email
   capture screen no longer shows its legal text twice. "Official Rules" and
   "Privacy Policy" inside the consent sentence are now underlined tappable
-  links (opening the same rules URL in the browser, exactly as the removed
-  row did), and the separate "OFFICIAL RULES • PRIVACY POLICY" links row is
+  links, and the separate "OFFICIAL RULES • PRIVACY POLICY" links row is
   gone from this screen only — the code-entry and claim screens keep theirs.
   The legal block (sentence + "Powered by © WINR Media") is anchored to the
   bottom of the drawer via a weighted spacer instead of sitting congested
   under the CTA; with the keyboard open or on short screens it degrades to
   the normal scrolling behavior and never overlaps the button.
+- **Privacy Policy links open the Privacy Policy** — every "Privacy Policy"
+  affordance (capture sentence span, the OFFICIAL RULES • PRIVACY POLICY rows
+  on code entry and the dashboard, and the claim-review consent sentence)
+  previously opened the rules URL — a latent cross-platform bug. They now open
+  `WINRConstants.PRIVACY_URL` (`https://winrmedia.com/sdk/privacy`, mirroring
+  iOS `WINRConstants.privacyURL`); "Official Rules" keeps the configured
+  rules URL. The claim-review sentence's two phrases are now independent
+  link spans instead of one whole-line tap target.
 
 ## 2.9.1 — 2026-08-14
 

@@ -42,6 +42,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.core.net.toUri
 import kotlinx.coroutines.launch
 import com.avafli.winrsdk.R
+import com.avafli.winrsdk.WINRConstants
 import com.avafli.winrsdk.domain.Giveaway
 import com.avafli.winrsdk.domain.WINRFieldValidation
 
@@ -223,15 +224,15 @@ internal fun WINRV2CaptureScreen(
                 // ONE instance of the legal text (Ryan's call): the sentence itself
                 // carries underlined tappable "Official Rules" / "Privacy Policy"
                 // spans, replacing the separate OFFICIAL RULES • PRIVACY POLICY
-                // links row this screen used to stack beneath it. Both spans open
-                // rulesUrl exactly as the row did (ACTION_VIEW → browser; no
-                // separate privacy URL exists in config). Other screens keep
-                // their WINRV2LegalLinks row.
+                // links row this screen used to stack beneath it. Official Rules
+                // opens rulesUrl; Privacy Policy opens WINRConstants.PRIVACY_URL
+                // (ACTION_VIEW → browser). Other screens keep their
+                // WINRV2LegalLinks row.
                 val context = LocalContext.current
-                val openRules = {
-                    rulesUrl?.let { url ->
+                val openUrl = { url: String? ->
+                    url?.let {
                         try {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
+                            context.startActivity(Intent(Intent.ACTION_VIEW, it.toUri()))
                         } catch (_: Exception) {
                             // No browser available — silently ignore, like iOS UIApplication.open.
                         }
@@ -247,11 +248,15 @@ internal fun WINRV2CaptureScreen(
                 Text(
                     buildAnnotatedString {
                         append("Your email lets us contact you if you win. By entering you agree to the ")
-                        withLink(LinkAnnotation.Clickable("rules", linkStyles) { openRules() }) {
+                        withLink(LinkAnnotation.Clickable("rules", linkStyles) { openUrl(rulesUrl) }) {
                             append("Official Rules")
                         }
                         append(" & ")
-                        withLink(LinkAnnotation.Clickable("privacy", linkStyles) { openRules() }) {
+                        withLink(
+                            LinkAnnotation.Clickable("privacy", linkStyles) {
+                                openUrl(WINRConstants.PRIVACY_URL)
+                            },
+                        ) {
                             append("Privacy Policy")
                         }
                     },
