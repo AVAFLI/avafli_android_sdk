@@ -17,7 +17,9 @@ All notable changes to the WINR Android SDK will be documented in this file.
   the normal scrolling behavior and never overlaps the button.
 - **Privacy Policy links open the Privacy Policy** — every "Privacy Policy"
   affordance (capture sentence span, the OFFICIAL RULES • PRIVACY POLICY rows
-  on code entry and the dashboard, and the claim-review consent sentence)
+  on code entry and the dashboard, the claim-review consent sentence, and the
+  "Privacy choices" dialog — whose combined "Official Rules & Privacy Policy"
+  link is now two independent links, matching iOS)
   previously opened the rules URL — a latent cross-platform bug. They now open
   `WINRConstants.PRIVACY_URL` (`https://winrmedia.com/sdk/privacy`, mirroring
   iOS `WINRConstants.privacyURL`); "Official Rules" keeps the configured

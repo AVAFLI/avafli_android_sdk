@@ -21,6 +21,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.avafli.winrsdk.WINRConstants
 import com.avafli.winrsdk.ui.OptOutPhase
 import com.avafli.winrsdk.ui.WINRExperienceViewModel
 import kotlinx.coroutines.delay
@@ -92,16 +93,20 @@ private fun PrivacyChoicesDialog(
     onCancel: () -> Unit,
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    val openPolicy: () -> Unit = {
-        rulesUrl?.let { url ->
+    // 2.9.2 (matching iOS): the combined "Official Rules & Privacy Policy"
+    // link is split — Official Rules → rulesUrl, Privacy Policy →
+    // WINRConstants.PRIVACY_URL.
+    val openUrl = { url: String? ->
+        url?.let {
             try {
                 context.startActivity(
-                    android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                    android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(it))
                 )
             } catch (_: Exception) {
                 // No browser available — silently ignore.
             }
         }
+        Unit
     }
     Box(
         modifier = Modifier
@@ -139,12 +144,21 @@ private fun PrivacyChoicesDialog(
                 ),
             )
             Text(
+                V2Strings.OFFICIAL_RULES_LINK,
+                style = WINRV2Font.inter(15.sp, FontWeight.Bold, color = Color(0xFF7FB0FF))
+                    .copy(textDecoration = TextDecoration.Underline),
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .clickable(onClick = { openUrl(rulesUrl) })
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+            )
+            Text(
                 V2Strings.PRIVACY_POLICY_LINK,
                 style = WINRV2Font.inter(15.sp, FontWeight.Bold, color = Color(0xFF7FB0FF))
                     .copy(textDecoration = TextDecoration.Underline),
                 modifier = Modifier
                     .clip(RoundedCornerShape(6.dp))
-                    .clickable(onClick = openPolicy)
+                    .clickable(onClick = { openUrl(WINRConstants.PRIVACY_URL) })
                     .padding(horizontal = 10.dp, vertical = 6.dp),
             )
             Text(

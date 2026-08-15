@@ -104,8 +104,13 @@ internal object V2Strings {
     /** Title of the 2.9 "Privacy choices" surface (policy link + delete action). */
     const val PRIVACY_CHOICES_TITLE = "Privacy choices"
 
+    /** Rules link on the "Privacy choices" surface (2.9.2: split from the
+     *  combined "Official Rules & Privacy Policy" label so each document
+     *  opens its own URL, matching iOS). */
+    const val OFFICIAL_RULES_LINK = "Official Rules"
+
     /** Policy link on the "Privacy choices" surface. */
-    const val PRIVACY_POLICY_LINK = "Official Rules & Privacy Policy"
+    const val PRIVACY_POLICY_LINK = "Privacy Policy"
     const val OPT_OUT_TITLE = "Delete my data & stop participating"
     const val OPT_OUT_BODY =
         "This permanently deletes your WINR data, ends your giveaway participation, " +
