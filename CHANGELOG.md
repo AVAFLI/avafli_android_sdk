@@ -17,12 +17,16 @@ All notable changes to the WINR Android SDK will be documented in this file.
   server-fed `sdkConfig.appName` (new field) when present, else the host
   app's launcher label (the same source as the share line), else the previous
   generic "this app's publisher" wording.
-- **Winner splash confetti + attribution** — the CONGRATULATIONS! splash
-  gains a confetti animation layer per Joe's frame: the winner-modal gold
-  drift behind the content plus a one-shot celebration burst (Joe's Figma
-  GIF, same machinery as the Day 2+ tile reveal) over the trophy on
-  appearance — both non-blocking. A thin white "WINR MEDIA PRIZE CLAIM"
-  attribution strip is pinned to the very bottom of the splash.
+- **Winner splash confetti** — the CONGRATULATIONS! splash gains a confetti
+  animation layer per Joe's frame: the winner-modal gold drift behind the
+  content plus a one-shot celebration burst (Joe's Figma GIF, same machinery
+  as the Day 2+ tile reveal) over the trophy on appearance — both
+  non-blocking.
+- **Capture screen brand accents** — in the "VISIT. EARN. WIN." title the
+  word "EARN." now renders in the publisher's primary brand color, and the
+  two consent checkboxes (18+ age gate and marketing consent) are tinted the
+  same primary: checked is a primary fill with a contrasting check, unchecked
+  a primary-tinted border.
 
 ## 2.9.2 — 2026-08-14
 

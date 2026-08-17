@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.LinkAnnotation
@@ -33,6 +34,7 @@ import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withLink
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
@@ -128,8 +130,15 @@ internal fun WINRV2CaptureScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
+                // 2.9.3: "EARN." (with its period) renders in the publisher's
+                // primary brand color — the same accent the CTAs use; "VISIT."
+                // and "WIN." stay white.
                 WINRAutoSizeText(
-                    "VISIT. EARN. WIN.",
+                    buildAnnotatedString {
+                        append("VISIT. ")
+                        withStyle(SpanStyle(color = accent)) { append("EARN.") }
+                        append(" WIN.")
+                    },
                     style = WINRV2Font.inter(40.sp, FontWeight.Black, tracking = (-1.2).sp, color = Color.White),
                     minScale = 0.7f,
                 )
@@ -169,6 +178,7 @@ internal fun WINRV2CaptureScreen(
                     }
                 }
                 ConsentCheckbox(
+                    accent = accent,
                     checked = isAdult,
                     // Server text wins verbatim; otherwise build the sentence
                     // from the publisher's configured minimum age. Never a
@@ -177,6 +187,7 @@ internal fun WINRV2CaptureScreen(
                         ?: "I confirm I am $ageGateMinAge years of age or older",
                 ) { isAdult = !isAdult }
                 ConsentCheckbox(
+                    accent = accent,
                     checked = wantsMarketing,
                     text = emailConsentText ?: DEFAULT_MARKETING_CONSENT_TEXT,
                 ) { wantsMarketing = !wantsMarketing }
@@ -403,10 +414,12 @@ private const val DEFAULT_MARKETING_CONSENT_TEXT = "I agree to receive marketing
 /**
  * The capture screen's checkbox row — shared verbatim by the 18+ age gate and
  * the marketing consent so both have identical box, check, spacing, and text
- * treatment.
+ * treatment. 2.9.3: tinted the publisher's primary [accent] — checked is an
+ * accent fill with a contrasting check (white, or gunmetal over light
+ * accents), unchecked an accent-tinted border.
  */
 @Composable
-private fun ConsentCheckbox(checked: Boolean, text: String, onToggle: () -> Unit) {
+private fun ConsentCheckbox(accent: Color, checked: Boolean, text: String, onToggle: () -> Unit) {
     Row(
         modifier = Modifier.clickable(
             interactionSource = remember { MutableInteractionSource() },
@@ -420,7 +433,7 @@ private fun ConsentCheckbox(checked: Boolean, text: String, onToggle: () -> Unit
         Canvas(Modifier.size(20.dp)) {
             val corner = androidx.compose.ui.geometry.CornerRadius(3.dp.toPx())
             if (checked) {
-                drawRoundRect(Color.White, cornerRadius = corner)
+                drawRoundRect(accent, cornerRadius = corner)
                 val check = Path().apply {
                     moveTo(size.width * 0.24f, size.height * 0.52f)
                     lineTo(size.width * 0.43f, size.height * 0.71f)
@@ -428,12 +441,14 @@ private fun ConsentCheckbox(checked: Boolean, text: String, onToggle: () -> Unit
                 }
                 drawPath(
                     check,
-                    WINRV2Color.gunmetal,
+                    // Contrast against the publisher's fill: dark check over
+                    // light accents, white otherwise.
+                    if (accent.luminance() > 0.55f) WINRV2Color.gunmetal else Color.White,
                     style = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round),
                 )
             } else {
                 drawRoundRect(
-                    Color.White,
+                    accent,
                     cornerRadius = corner,
                     style = Stroke(1.5.dp.toPx()),
                 )

@@ -35,8 +35,7 @@ import com.avafli.winrsdk.R
 
 // Winner splash ("CONGRATULATIONS!"), ported from iOS WINRV2WinnerSplashView.
 // 2.9.3 (Joe's updated frame): a confetti animation layer — the winner-modal
-// gold drift plus a one-shot celebration burst on appearance — and the thin
-// "WINR MEDIA PRIZE CLAIM" attribution strip pinned to the very bottom.
+// gold drift plus a one-shot celebration burst on appearance.
 
 @Composable
 internal fun WINRV2WinnerSplashScreen(
@@ -137,32 +136,9 @@ internal fun WINRV2WinnerSplashScreen(
                 accent = accent,
                 title = "CONTINUE",
                 modifier = Modifier
-                    // Extra bottom room so the pinned attribution strip never
-                    // covers the CTA at full scroll.
-                    .padding(top = 20.dp, bottom = 68.dp)
+                    .padding(top = 20.dp, bottom = 30.dp)
                     .padding(horizontal = 30.dp),
             ) { onContinue() }
-        }
-
-        // Thin bottom attribution strip, pinned to the very bottom (Joe's
-        // frame: white strip, centered dark caption).
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .background(Color.White),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                "WINR MEDIA PRIZE CLAIM",
-                style = WINRV2Font.inter(
-                    12.sp, FontWeight.SemiBold,
-                    tracking = 1.2.sp,
-                    color = WINRV2Color.gunmetal,
-                    textAlign = TextAlign.Center,
-                ),
-                modifier = Modifier.padding(vertical = 10.dp),
-            )
         }
     }
 }

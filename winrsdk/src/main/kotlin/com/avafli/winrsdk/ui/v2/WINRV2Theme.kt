@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
@@ -348,6 +349,20 @@ internal object WINRV2ImageWarmer {
 @Composable
 internal fun WINRAutoSizeText(
     text: String,
+    style: TextStyle,
+    modifier: Modifier = Modifier,
+    maxLines: Int = 1,
+    minScale: Float = 0.5f,
+    textAlign: TextAlign? = null,
+) = WINRAutoSizeText(AnnotatedString(text), style, modifier, maxLines, minScale, textAlign)
+
+/**
+ * [AnnotatedString] variant — used where a span carries its own color (the
+ * capture title's brand-colored "EARN.", 2.9.3). Same shrink behavior.
+ */
+@Composable
+internal fun WINRAutoSizeText(
+    text: AnnotatedString,
     style: TextStyle,
     modifier: Modifier = Modifier,
     maxLines: Int = 1,
