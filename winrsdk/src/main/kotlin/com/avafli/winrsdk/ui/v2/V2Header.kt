@@ -20,9 +20,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -48,23 +45,8 @@ internal fun WINRV2TabGrabber(modifier: Modifier = Modifier) {
     )
 }
 
-/** The radial primary-color glow that bleeds from the top of the drawer into gunmetal. */
-@Composable
-internal fun WINRV2TopGlow(accent: Color, modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier.drawBehind {
-            val brush = Brush.radialGradient(
-                0f to accent,
-                0.35f to accent.copy(alpha = 0.55f),
-                0.8f to WINRV2Color.gunmetal.copy(alpha = 0.9f),
-                1f to WINRV2Color.gunmetal,
-                center = Offset(size.width / 2f, 0f),
-                radius = 440.dp.toPx(),
-            )
-            drawRect(brush, alpha = 0.9f)
-        }
-    )
-}
+// The radial primary-color top glow (WINRV2TopGlow) is GONE (2.9.3): every
+// screen now uses the flat gunmetal drawer background.
 
 @Composable
 internal fun WINRV2CircleButton(

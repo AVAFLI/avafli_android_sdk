@@ -27,6 +27,11 @@ All notable changes to the WINR Android SDK will be documented in this file.
   two consent checkboxes (18+ age gate and marketing consent) are tinted the
   same primary: checked is a primary fill with a contrasting check, unchecked
   a primary-tinted border.
+- **Top glow removed everywhere** — the blue radial top gradient
+  (`WINRV2TopGlow`) is gone from every screen, not just capture: the
+  code-entry screen (the last holdout, kept in 2.9) now uses the same flat
+  gunmetal drawer background, and the unused glow component is deleted. The
+  gold sparkle prize art on the winner-flow screens is untouched.
 
 ## 2.9.2 — 2026-08-14
 

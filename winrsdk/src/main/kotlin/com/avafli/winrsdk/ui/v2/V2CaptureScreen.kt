@@ -497,8 +497,9 @@ internal fun WINRV2CodeEntryScreen(
     }
     val focusScope = androidx.compose.runtime.rememberCoroutineScope()
 
-    Box(Modifier.fillMaxSize()) {
-        WINRV2TopGlow(accent, Modifier.matchParentSize())
+    // Flat gunmetal drawer background (2.9.3) — the blue top glow is gone from
+    // every screen, matching the capture screen's 2.9 treatment.
+    Box(Modifier.fillMaxSize().background(WINRV2Color.gunmetal)) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
