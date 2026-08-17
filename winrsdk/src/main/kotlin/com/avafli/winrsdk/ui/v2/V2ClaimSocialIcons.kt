@@ -13,18 +13,19 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.unit.dp
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 // Official WINR brand glyphs for the step-4 "Share on Social Media:" row
 // (Instagram / Facebook / X / Snapchat / TikTok). White fills on the dark
 // button chrome, built as ImageVectors from the Figma-exported SVG path data
 // (48×48 viewBox) so the SDK ships no drawable resources.
 
-internal enum class WINRSocialGlyphKind(val displayName: String) {
-    Instagram("Instagram"),
-    Facebook("Facebook"),
-    X("X"),
-    Snapchat("Snapchat"),
-    TikTok("TikTok"),
+internal enum class WINRSocialGlyphKind(val displayName: String, val utmSource: String) {
+    Instagram("Instagram", "instagram"),
+    Facebook("Facebook", "facebook"),
+    X("X", "x"),
+    Snapchat("Snapchat", "snapchat"),
+    TikTok("TikTok", "tiktok"),
 }
 
 @Composable
@@ -134,11 +135,32 @@ internal object WINRShareSheet {
         }
     }
 
+    /**
+     * Appends `utm_source={network}&utm_medium=winr_share` to the publisher's
+     * shareUrl (via okhttp's HttpUrl builder, so URLs with an existing query
+     * string extend correctly). A URL already carrying a `utm_source` param is
+     * returned untouched — the publisher's own tagging wins. Unparseable URLs
+     * pass through unchanged.
+     */
+    fun taggedShareUrl(shareUrl: String?, network: String): String? {
+        if (shareUrl.isNullOrBlank()) return shareUrl
+        val url = shareUrl.toHttpUrlOrNull() ?: return shareUrl
+        if (url.queryParameter("utm_source") != null) return shareUrl
+        return url.newBuilder()
+            .addQueryParameter("utm_source", network)
+            .addQueryParameter("utm_medium", "winr_share")
+            .build()
+            .toString()
+    }
+
     /** Routes a tap on [kind] to the platform-appropriate share action. */
     fun share(context: Context, kind: WINRSocialGlyphKind, text: String, shareUrl: String?) {
+        // UTM-tag the publisher link with the tapped network so publishers can
+        // attribute installs per network (system-share-sheet paths included).
+        val taggedUrl = taggedShareUrl(shareUrl, kind.utmSource)
         val textWithLink = listOfNotNull(
             text.takeIf { it.isNotBlank() },
-            shareUrl?.takeIf { it.isNotBlank() },
+            taggedUrl?.takeIf { it.isNotBlank() },
         ).joinToString(" ")
         when (kind) {
             WINRSocialGlyphKind.X -> {
@@ -147,7 +169,7 @@ internal object WINRShareSheet {
             }
 
             WINRSocialGlyphKind.Facebook -> {
-                val url = shareUrl?.takeIf { it.isNotBlank() }
+                val url = taggedUrl?.takeIf { it.isNotBlank() }
                 if (url != null) {
                     val encoded = java.net.URLEncoder.encode(url, "UTF-8")
                     openUrl(context, "https://www.facebook.com/sharer/sharer.php?u=$encoded")
