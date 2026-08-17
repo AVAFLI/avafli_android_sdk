@@ -5,6 +5,13 @@ package com.avafli.winrsdk.domain
  * Contains branding overrides and copy text that the backend controls.
  */
 data class SdkConfig(
+    /**
+     * Publisher's app/brand name (server-fed, 2.9.3). Used wherever the UI
+     * names the publisher — e.g. the claim-review likeness consent. OPTIONAL —
+     * absent on older backends; the UI falls back to the host app's launcher
+     * label, then to generic wording.
+     */
+    val appName: String? = null,
     val branding: SdkBranding? = null,
     val copy: SdkCopy? = null,
     val media: SdkMedia? = null,

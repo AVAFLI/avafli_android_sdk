@@ -103,7 +103,8 @@ internal enum class WINRClaimFlowStep(val indicatorStep: Int?) {
 internal fun WINRV2ClaimStepsFlow(
     accent: Color,
     logoUrl: String?,
-    rulesUrl: String?,
+    /** Publisher's app/brand name (sdkConfig.appName) — likeness consent copy. */
+    appName: String?,
     /** Google Places key (sdkConfig.placesApiKey) — null → no autocomplete. */
     placesApiKey: String?,
     claim: PrizeClaimBlock,
@@ -250,7 +251,7 @@ internal fun WINRV2ClaimStepsFlow(
                     WINRClaimFlowStep.Review -> WINRClaimReview(
                         accent = accent,
                         form = form,
-                        rulesUrl = rulesUrl,
+                        appName = appName,
                         onForm = { form = it },
                         isSubmitting = isSubmitting,
                         submitError = submitError,
@@ -874,7 +875,7 @@ internal fun WINRV2ClaimShareScreen(
 private fun WINRClaimReview(
     accent: Color,
     form: PrizeClaimForm,
-    rulesUrl: String?,
+    appName: String?,
     onForm: (PrizeClaimForm) -> Unit,
     isSubmitting: Boolean,
     submitError: String?,
@@ -923,7 +924,7 @@ private fun WINRClaimReview(
             WINRClaimConsentSection(
                 accent = accent,
                 form = form,
-                rulesUrl = rulesUrl,
+                appName = appName,
                 onChange = onForm,
             )
         }

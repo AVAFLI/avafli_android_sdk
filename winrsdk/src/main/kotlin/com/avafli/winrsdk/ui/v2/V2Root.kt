@@ -267,7 +267,7 @@ private fun DrawerContent(
             claim = screen.claim,
             accent = accent,
             logoUrl = logoUrl,
-            rulesUrl = rulesUrl,
+            appName = ui.sdkConfig?.appName,
             shareUrl = ui.sdkConfig?.shareUrl,
             placesApiKey = ui.sdkConfig?.placesApiKey,
             claimFormPrefill = viewModel.claimFormPrefill(),

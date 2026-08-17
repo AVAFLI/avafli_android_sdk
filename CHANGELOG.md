@@ -4,6 +4,26 @@ All notable changes to the WINR Android SDK will be documented in this file.
 
 
 
+## 2.9.3 — 2026-08-17
+
+- **Claim review: legal sentence removed** — the "By submitting you agree to
+  the Official Rules / Privacy Policy" sentence (and its links) is gone from
+  the "ALMOST DONE" review screen entirely (Ryan's direction, Joe's updated
+  Figma). The screen keeps only the optional likeness checkbox, the submit
+  CTA, and the secure-and-encrypted note; the legal linking lives on the
+  capture screen.
+- **Likeness consent names the publisher** — the optional checkbox now reads
+  "I authorize {name} and its promotional partners…" where {name} is the
+  server-fed `sdkConfig.appName` (new field) when present, else the host
+  app's launcher label (the same source as the share line), else the previous
+  generic "this app's publisher" wording.
+- **Winner splash confetti + attribution** — the CONGRATULATIONS! splash
+  gains a confetti animation layer per Joe's frame: the winner-modal gold
+  drift behind the content plus a one-shot celebration burst (Joe's Figma
+  GIF, same machinery as the Day 2+ tile reveal) over the trophy on
+  appearance — both non-blocking. A thin white "WINR MEDIA PRIZE CLAIM"
+  attribution strip is pinned to the very bottom of the splash.
+
 ## 2.9.2 — 2026-08-14
 
 - **Capture screen: one legal text, anchored to the bottom** — the email

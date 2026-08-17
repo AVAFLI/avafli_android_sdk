@@ -22,7 +22,8 @@ internal fun WINRV2WinnerClaimFlow(
     claim: PrizeClaimBlock,
     accent: Color,
     logoUrl: String?,
-    rulesUrl: String?,
+    /** Publisher's app/brand name (sdkConfig.appName) — likeness consent copy. */
+    appName: String?,
     shareUrl: String?,
     /** Google Places key (2.9) — street-field autocomplete; null → off. */
     placesApiKey: String?,
@@ -56,7 +57,7 @@ internal fun WINRV2WinnerClaimFlow(
             is WinnerClaimStep.Form -> WINRV2ClaimStepsFlow(
                 accent = accent,
                 logoUrl = logoUrl,
-                rulesUrl = rulesUrl,
+                appName = appName,
                 placesApiKey = placesApiKey,
                 claim = claim,
                 prefill = claimFormPrefill,

@@ -1,6 +1,5 @@
 package com.avafli.winrsdk.ui.v2
 
-import android.content.Intent
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -27,44 +26,36 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.LinkAnnotation
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextLinkStyles
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.net.toUri
-import com.avafli.winrsdk.WINRConstants
 import com.avafli.winrsdk.domain.PrizeClaimForm
 
-// Review-screen consent (2.9, 14 Aug team decision): the "information is
-// accurate" and "agree to Official Rules" checkboxes are GONE. Only the
-// likeness/promo checkbox remains, OPTIONAL — submit is never gated on it —
-// and its state rides the payload as `promoConsentGranted`. The Official
-// Rules / Privacy Policy links stay tappable below it.
+// Review-screen consent (2.9.3, Ryan's direction / Joe's updated Figma): the
+// "By submitting you agree to the Official Rules / Privacy Policy" sentence is
+// GONE from the review screen entirely — the legal linking lives on the
+// capture screen. Only the likeness/promo checkbox remains, OPTIONAL — submit
+// is never gated on it — and its state rides the payload as
+// `promoConsentGranted`. The checkbox names the actual publisher:
+// [appName] (server-fed sdkConfig.appName) when present, else the host app's
+// launcher label (same source as the share line), else generic wording.
 
 @Composable
 internal fun WINRClaimConsentSection(
     accent: Color,
     form: PrizeClaimForm,
-    rulesUrl: String?,
+    /** Publisher's app/brand name (sdkConfig.appName); null → host label. */
+    appName: String?,
     onChange: (PrizeClaimForm) -> Unit,
 ) {
     val context = LocalContext.current
-    // Official Rules → rulesUrl; Privacy Policy → WINRConstants.PRIVACY_URL.
-    // (Pre-2.9.2 both opened rulesUrl — a latent bug fixed on all platforms.)
-    val openUrl = { url: String? ->
-        url?.let {
-            try {
-                context.startActivity(Intent(Intent.ACTION_VIEW, it.toUri()))
+    val publisherName = remember(appName) {
+        appName?.takeIf { it.isNotBlank() }
+            ?: try {
+                context.applicationInfo.loadLabel(context.packageManager)
+                    .toString().takeIf { it.isNotBlank() }
             } catch (_: Exception) {
-                // No browser available — silently ignore, like iOS UIApplication.open.
+                null
             }
-        }
-        Unit
     }
     Column(
         modifier = Modifier.padding(top = 8.dp),
@@ -74,39 +65,9 @@ internal fun WINRClaimConsentSection(
             accent = accent,
             isOn = form.authorizesLikeness,
             text = AnnotatedString(
-                "I authorize this app's publisher and its promotional partners to use my name, city, profile photo, and likeness for winner announcements and promotional purposes. (Optional)"
+                "I authorize ${publisherName ?: "this app's publisher"} and its promotional partners to use my name, city, profile photo, and likeness for winner announcements and promotional purposes. (Optional)"
             ),
         ) { onChange(form.copy(authorizesLikeness = !form.authorizesLikeness)) }
-
-        // Tappable rules/privacy line (no checkbox — informational, per 2.9).
-        // Each phrase is its own link span so the two documents open their own
-        // URLs (pre-2.9.2 the whole line opened rulesUrl).
-        Text(
-            buildAnnotatedString {
-                val emphasis = TextLinkStyles(
-                    style = SpanStyle(
-                        color = Color.White.copy(alpha = 0.8f),
-                        fontWeight = FontWeight.Bold,
-                        textDecoration = TextDecoration.Underline,
-                    ),
-                )
-                append("By submitting you agree to the ")
-                withLink(LinkAnnotation.Clickable("rules", emphasis) { openUrl(rulesUrl) }) {
-                    append("Official Rules")
-                }
-                append(" and ")
-                withLink(
-                    LinkAnnotation.Clickable("privacy", emphasis) {
-                        openUrl(WINRConstants.PRIVACY_URL)
-                    },
-                ) {
-                    append("Privacy Policy")
-                }
-                append(".")
-            },
-            style = WINRV2Font.inter(14.sp, color = Color.White.copy(alpha = 0.8f)),
-            modifier = Modifier.fillMaxWidth(),
-        )
     }
 }
 
