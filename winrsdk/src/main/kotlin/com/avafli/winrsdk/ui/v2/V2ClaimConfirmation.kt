@@ -12,13 +12,19 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,6 +44,10 @@ import com.avafli.winrsdk.domain.WINRClaimDates
 
 // Confirmation ("YOUR PRIZE CLAIM HAS BEEN SUBMITTED"), ported from iOS
 // WINRV2ClaimConfirmationView, with the gold OFFICIAL WINNER keepsake card.
+// 2.9.3 (Joe's frame 5386:5807): confetti celebration on appearance (the same
+// gold drift + one-shot burst the winner splash got), the business-days card
+// as a solid gunmetal card with an accent-stroked envelope circle, and the
+// OFFICIAL/WINNER labels in the publisher's primary accent.
 
 private object ClaimGold {
     val text = Color(0.72f, 0.55f, 0.16f)
@@ -56,7 +66,17 @@ internal fun WINRV2ClaimConfirmationScreen(
     submittedAt: String,
     onDone: () -> Unit,
 ) {
+    // One-shot celebratory burst on appearance — same beat as the splash.
+    var burstFinished by remember { mutableStateOf(false) }
     Box(Modifier.fillMaxSize().background(WINRV2Color.deepCharcoal)) {
+        // Confetti layer (same machinery/parameters as the winner splash):
+        // gold drift behind the content. Canvas-drawn — never consumes touch.
+        WINRV2ConfettiField(
+            modifier = Modifier.matchParentSize(),
+            style = WINRConfettiStyle.Gold,
+            count = 26,
+            speed = 0.7,
+        )
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -91,13 +111,27 @@ internal fun WINRV2ClaimConfirmationScreen(
 
             WINRClaimInfoCard(
                 modifier = Modifier.padding(top = 22.dp),
+                // Joe's frame: solid gunmetal-family card with a subtle border
+                // (not the translucent splash treatment).
+                background = WINRV2Color.gunmetal,
+                borderColor = Color.White.copy(alpha = 0.12f),
                 icon = {
-                    Icon(
-                        painter = painterResource(R.drawable.winr_mail),
-                        contentDescription = null,
-                        tint = accent,
-                        modifier = Modifier.size(width = 28.dp, height = 22.dp),
-                    )
+                    // Envelope in a circle with the publisher-accent stroke.
+                    Box(
+                        modifier = Modifier
+                            .size(46.dp)
+                            .clip(CircleShape)
+                            .background(WINRV2Color.deepCharcoal)
+                            .border(2.dp, accent, CircleShape),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.winr_mail),
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(width = 24.dp, height = 19.dp),
+                        )
+                    }
                 },
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
@@ -113,6 +147,7 @@ internal fun WINRV2ClaimConfirmationScreen(
             }
 
             WinnerCard(
+                accent = accent,
                 form = form,
                 claimNumber = claimNumber,
                 submittedAt = submittedAt,
@@ -127,6 +162,18 @@ internal fun WINRV2ClaimConfirmationScreen(
                     .padding(horizontal = 30.dp),
             ) { onDone() }
         }
+
+        // One-shot burst (Joe's Figma GIF) centered on appearance, removed
+        // when finished — non-blocking, no layout impact.
+        if (!burstFinished) {
+            WINRV2GifBurst(
+                resId = R.raw.winr_confetti_burst,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .requiredSize(320.dp),
+                onFinished = { burstFinished = true },
+            )
+        }
     }
 }
 
@@ -136,6 +183,7 @@ internal fun WINRV2ClaimConfirmationScreen(
  */
 @Composable
 private fun WinnerCard(
+    accent: Color,
     form: PrizeClaimForm?,
     claimNumber: String,
     submittedAt: String,
@@ -163,13 +211,15 @@ private fun WinnerCard(
                     .padding(horizontal = 26.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
+                // 2.9.3: the OFFICIAL / WINNER labels take the publisher's
+                // primary accent (the card body/typography stays gold-family).
                 Text(
                     "OFFICIAL",
-                    style = WINRV2Font.inter(16.sp, FontWeight.Black, tracking = 0.5.sp, color = ClaimGold.text),
+                    style = WINRV2Font.inter(16.sp, FontWeight.Black, tracking = 0.5.sp, color = accent),
                 )
                 Text(
                     "WINNER",
-                    style = WINRV2Font.inter(16.sp, FontWeight.Black, tracking = 0.5.sp, color = ClaimGold.text),
+                    style = WINRV2Font.inter(16.sp, FontWeight.Black, tracking = 0.5.sp, color = accent),
                 )
             }
 

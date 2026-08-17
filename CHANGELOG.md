@@ -27,6 +27,14 @@ All notable changes to the WINR Android SDK will be documented in this file.
   two consent checkboxes (18+ age gate and marketing consent) are tinted the
   same primary: checked is a primary fill with a contrasting check, unchecked
   a primary-tinted border.
+- **Claim confirmation matches Joe's frame (5386:5807)** — the "YOUR PRIZE
+  CLAIM HAS BEEN SUBMITTED" screen gains the same confetti celebration as the
+  winner splash (gold drift layer + one-shot burst on appearance,
+  non-blocking); the "3-5 Business Days" card is now a solid gunmetal card
+  with a subtle border and the envelope icon inside a publisher-accent-stroked
+  circle (the business-days text already used the accent); and the gold
+  winner card's OFFICIAL / WINNER labels render in the publisher's primary
+  accent while the card body and typography stay gold-family.
 - **Top glow removed everywhere** — the blue radial top gradient
   (`WINRV2TopGlow`) is gone from every screen, not just capture: the
   code-entry screen (the last holdout, kept in 2.9) now uses the same flat

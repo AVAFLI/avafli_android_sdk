@@ -2,6 +2,7 @@ package com.avafli.winrsdk.ui.v2
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -91,6 +92,10 @@ internal fun WINRClaimHeader(
 @Composable
 internal fun WINRClaimInfoCard(
     modifier: Modifier = Modifier,
+    /** Card fill. Default: the translucent treatment (splash secure-note). */
+    background: Color = Color.White.copy(alpha = 0.08f),
+    /** Optional subtle hairline border; null → borderless (default). */
+    borderColor: Color? = null,
     icon: @Composable () -> Unit,
     content: @Composable () -> Unit,
 ) {
@@ -98,7 +103,11 @@ internal fun WINRClaimInfoCard(
         modifier = modifier
             .padding(horizontal = 22.dp)
             .fillMaxWidth()
-            .background(Color.White.copy(alpha = 0.08f), RoundedCornerShape(12.dp))
+            .background(background, RoundedCornerShape(12.dp))
+            .then(
+                borderColor?.let { Modifier.border(1.dp, it, RoundedCornerShape(12.dp)) }
+                    ?: Modifier
+            )
             .padding(horizontal = 18.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
