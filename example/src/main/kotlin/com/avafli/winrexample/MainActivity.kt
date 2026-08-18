@@ -3,11 +3,13 @@ package com.avafli.winrexample
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.avafli.winrsdk.WINR
@@ -81,6 +83,14 @@ class MainActivity : ComponentActivity() {
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
+                    Image(
+                        painter = painterResource(id = R.drawable.winrmedia_logo_dark),
+                        contentDescription = "WINR MEDIA",
+                        modifier = Modifier.height(40.dp)
+                    )
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
                     Text(
                         text = "🏆 WINR SDK Demo",
                         style = MaterialTheme.typography.headlineMedium,
@@ -95,6 +105,14 @@ class MainActivity : ComponentActivity() {
                             "To see the auto-open again, clear the app's data and relaunch.",
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+
+                    Spacer(modifier = Modifier.height(32.dp))
+
+                    Text(
+                        text = "© 2026 WINR MEDIA • All rights reserved.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                     )
                 }
             }
