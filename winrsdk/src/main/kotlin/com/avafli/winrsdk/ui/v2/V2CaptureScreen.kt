@@ -1,6 +1,5 @@
 package com.avafli.winrsdk.ui.v2
 
-import android.content.Intent
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -26,7 +25,6 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
@@ -41,10 +39,8 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.core.net.toUri
 import kotlinx.coroutines.launch
 import com.avafli.winrsdk.R
-import com.avafli.winrsdk.WINRConstants
 import com.avafli.winrsdk.domain.Giveaway
 import com.avafli.winrsdk.domain.WINRFieldValidation
 
@@ -237,19 +233,9 @@ internal fun WINRV2CaptureScreen(
                 // spans, replacing the separate OFFICIAL RULES • PRIVACY POLICY
                 // links row this screen used to stack beneath it. Official Rules
                 // opens rulesUrl; Privacy Policy opens WINRConstants.PRIVACY_URL
-                // (ACTION_VIEW → browser). Other screens keep their
-                // WINRV2LegalLinks row.
-                val context = LocalContext.current
-                val openUrl = { url: String? ->
-                    url?.let {
-                        try {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, it.toUri()))
-                        } catch (_: Exception) {
-                            // No browser available — silently ignore, like iOS UIApplication.open.
-                        }
-                    }
-                    Unit
-                }
+                // with ?app=1 — both INSIDE the experience via the legal
+                // webview (2.9.4). Other screens keep their WINRV2LegalLinks row.
+                val openLegal = rememberWinrLegalOpener()
                 val linkStyles = TextLinkStyles(
                     style = SpanStyle(
                         color = WINRV2Color.textTertiary,
@@ -259,13 +245,20 @@ internal fun WINRV2CaptureScreen(
                 Text(
                     buildAnnotatedString {
                         append("Your email lets us contact you if you win. By entering you agree to the ")
-                        withLink(LinkAnnotation.Clickable("rules", linkStyles) { openUrl(rulesUrl) }) {
+                        withLink(
+                            LinkAnnotation.Clickable("rules", linkStyles) {
+                                openLegal(V2Strings.OFFICIAL_RULES_LINK, rulesUrl)
+                            },
+                        ) {
                             append("Official Rules")
                         }
                         append(" & ")
                         withLink(
                             LinkAnnotation.Clickable("privacy", linkStyles) {
-                                openUrl(WINRConstants.PRIVACY_URL)
+                                openLegal(
+                                    V2Strings.PRIVACY_POLICY_LINK,
+                                    WINRLegalWebPolicy.privacyUrlForApp(),
+                                )
                             },
                         ) {
                             append("Privacy Policy")

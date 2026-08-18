@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -36,7 +37,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.avafli.winrsdk.ui.ExperienceScreen
+import com.avafli.winrsdk.ui.OptOutPhase
 import com.avafli.winrsdk.ui.WINRExperienceViewModel
+import kotlinx.coroutines.delay
 
 // Root router for the V2 experience, ported from iOS WINRV2ExperienceRoot:
 // dimmed host app behind a dark drawer flush to the screen bottom + sides,
@@ -55,6 +58,9 @@ internal fun WINRV2ExperienceRoot(
 
     var drawerAppeared by remember { mutableStateOf(false) }
     var showWinnerModal by remember { mutableStateOf(false) }
+    // In-experience legal webview (2.9.4): non-null while Official Rules or
+    // the Privacy Policy is presented inside the drawer.
+    var legalPage by remember { mutableStateOf<WinrLegalPage?>(null) }
     val context = LocalContext.current
     LaunchedEffect(Unit) {
         drawerAppeared = true
@@ -99,16 +105,49 @@ internal fun WINRV2ExperienceRoot(
                 .clip(RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp))
                 .background(WINRV2Color.gunmetal),
         ) {
-            DrawerContent(
-                ui = ui,
-                accent = accent,
-                logoUrl = logoUrl,
-                rulesUrl = rulesUrl,
-                visitMode = visitMode,
-                viewModel = viewModel,
-                onDismiss = onDismiss,
-                onWinnerTap = { showWinnerModal = true },
-            )
+            CompositionLocalProvider(LocalWinrLegalOpener provides { legalPage = it }) {
+                DrawerContent(
+                    ui = ui,
+                    accent = accent,
+                    logoUrl = logoUrl,
+                    rulesUrl = rulesUrl,
+                    visitMode = visitMode,
+                    viewModel = viewModel,
+                    onDismiss = onDismiss,
+                    onWinnerTap = { showWinnerModal = true },
+                )
+            }
+
+            // Legal webview overlay, inside the drawer chrome. The privacy
+            // page's winr://delete bridge routes into the EXISTING opt-out
+            // confirmation below; the webview stays up behind it so Cancel
+            // returns to the page.
+            legalPage?.let { page ->
+                WINRV2LegalWebViewScreen(
+                    accent = accent,
+                    page = page,
+                    onDeleteBridge = { viewModel.showOptOutConfirmation() },
+                    onClose = { legalPage = null },
+                )
+            }
+
+            // Destructive delete confirmation (+ in-flight/failed/deleted
+            // states) — root-level since 2.9.4 so the webview bridge can raise
+            // it over any screen. Done holds the success copy a beat, then
+            // dismisses the WHOLE experience.
+            if (ui.optOutPhase != OptOutPhase.Idle) {
+                WINRV2OptOutConfirmDialog(
+                    phase = ui.optOutPhase,
+                    onConfirm = { viewModel.confirmOptOut() },
+                    onCancel = { viewModel.cancelOptOut() },
+                )
+            }
+            LaunchedEffect(ui.optOutPhase) {
+                if (ui.optOutPhase == OptOutPhase.Done) {
+                    delay(WINRExperienceViewModel.OPT_OUT_SUCCESS_HOLD_MS)
+                    onDismiss()
+                }
+            }
         }
 
         if (showWinnerModal) {
@@ -286,21 +325,16 @@ private fun DrawerContent(
             onClose = onDismiss,
         )
 
+        // 2.9.4: the screen's "Privacy choices" fine print opens the in-app
+        // privacy webview directly (via LocalWinrLegalOpener); the delete
+        // confirmation renders at the root, so no opt-out plumbing here.
         is ExperienceScreen.HowItWorks -> WINRV2HowItWorksScreen(
             accent = accent,
             logoUrl = logoUrl,
-            rulesUrl = rulesUrl,
             day1Entries = ui.giveaway?.streakLadder?.firstOrNull() ?: 10,
             visitMode = visitMode,
             onDone = { viewModel.hideHowItWorks() },
             onClose = onDismiss,
-            optOutPhase = ui.optOutPhase,
-            // 2.9: "Privacy choices" opens the choices surface (policy link +
-            // delete action); delete is no longer direct from How it works.
-            onPrivacyChoices = { viewModel.showPrivacyChoices() },
-            onDeleteRequested = { viewModel.showOptOutConfirmation() },
-            onOptOutConfirm = { viewModel.confirmOptOut() },
-            onOptOutCancel = { viewModel.cancelOptOut() },
         )
     }
 }

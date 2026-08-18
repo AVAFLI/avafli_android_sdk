@@ -1,6 +1,5 @@
 package com.avafli.winrsdk.ui.v2
 
-import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -19,12 +18,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.net.toUri
-import com.avafli.winrsdk.WINRConstants
 
 // CTA pill + legal links, ported from iOS WINRV2PillButton / WINRV2LegalLinks.
 
@@ -68,18 +64,10 @@ internal fun WINRV2LegalLinks(
     showPoweredBy: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
-    // OFFICIAL RULES → rulesUrl; PRIVACY POLICY → WINRConstants.PRIVACY_URL.
-    // (Pre-2.9.2 both opened rulesUrl — a latent bug fixed on all platforms.)
-    val open: (String?) -> Unit = { target ->
-        target?.let { url ->
-            try {
-                context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
-            } catch (_: Exception) {
-                // No browser available — silently ignore, like iOS UIApplication.open.
-            }
-        }
-    }
+    // OFFICIAL RULES → rulesUrl; PRIVACY POLICY → WINRConstants.PRIVACY_URL
+    // with ?app=1 (the in-app build). Both open INSIDE the experience via the
+    // legal webview (2.9.4) instead of bouncing out to a browser.
+    val openLegal = rememberWinrLegalOpener()
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -92,7 +80,9 @@ internal fun WINRV2LegalLinks(
             Text(
                 "OFFICIAL RULES",
                 style = WINRV2Font.inter(12.sp, color = WINRV2Color.textSecondary),
-                modifier = Modifier.clickable(onClick = { open(rulesUrl) }),
+                modifier = Modifier.clickable(onClick = {
+                    openLegal(V2Strings.OFFICIAL_RULES_LINK, rulesUrl)
+                }),
             )
             Box(
                 Modifier
@@ -103,7 +93,9 @@ internal fun WINRV2LegalLinks(
             Text(
                 "PRIVACY POLICY",
                 style = WINRV2Font.inter(12.sp, color = WINRV2Color.textSecondary),
-                modifier = Modifier.clickable(onClick = { open(WINRConstants.PRIVACY_URL) }),
+                modifier = Modifier.clickable(onClick = {
+                    openLegal(V2Strings.PRIVACY_POLICY_LINK, WINRLegalWebPolicy.privacyUrlForApp())
+                }),
             )
         }
         if (showPoweredBy) {

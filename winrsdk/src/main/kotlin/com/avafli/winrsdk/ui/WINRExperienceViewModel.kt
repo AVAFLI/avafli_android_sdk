@@ -105,26 +105,22 @@ internal sealed class ExperienceScreen {
 internal data class DashboardNotice(val message: String, val retryable: Boolean)
 
 /**
- * The "Privacy choices" → "Delete my data & stop participating" flow on the
- * how-it-works screen:
+ * The "Delete my data & stop participating" flow:
  *
- *     Idle → Confirming → InFlight → Done → (screen dismisses the experience)
+ *     Idle → Confirming → InFlight → Done → (root dismisses the experience)
  *                     ↘ Failed (inline error, retryable) ↗
+ *
+ * 2.9.4: [Confirming] is raised by the in-app privacy webview — the ?app=1
+ * build of the policy page carries the "Delete my data" section and hands
+ * control back via a `winr://delete` navigation the webview intercepts. The
+ * native "Privacy choices" dialog that used to sit in front is gone.
  *
  * Failure NEVER pretends success — the confirmation stays up with the error
  * and the destructive button remains available to retry.
  */
 internal sealed class OptOutPhase {
-    /** Nothing showing (the "Privacy choices" link is idle). */
+    /** Nothing showing. */
     object Idle : OptOutPhase()
-
-    /**
-     * The "Privacy choices" surface is up (2.9): a privacy-policy link plus
-     * the "Delete my data & stop participating" action. The delete action is
-     * no longer reachable directly from "How it works" — it lives here, and
-     * advances to [Confirming] (the existing destructive confirmation).
-     */
-    object Choices : OptOutPhase()
 
     /** The destructive confirmation is up. */
     object Confirming : OptOutPhase()
@@ -172,7 +168,7 @@ internal data class ExperienceUiState(
     val emailSubmitError: String? = null,
     /** Non-blocking dashboard banner (duplicate-entry / claim-transport notices). */
     val dashboardNotice: DashboardNotice? = null,
-    /** The "Privacy choices" → delete-my-data flow (how-it-works screen). */
+    /** The delete-my-data flow (raised by the privacy webview's delete bridge). */
     val optOutPhase: OptOutPhase = OptOutPhase.Idle,
     /** Current streak day for display (backend truth, falling back to local). */
     val displayStreakDay: Int = 1,
@@ -1090,32 +1086,23 @@ internal class WINRExperienceViewModel(
         }
     }
 
-    // ── Privacy choices / RTD opt-out (how-it-works screen) ──
+    // ── RTD opt-out (raised by the privacy webview's winr://delete bridge) ──
 
     /**
-     * "Privacy choices" tapped (2.9): raise the Privacy choices surface —
-     * policy link + the delete action. Delete itself is one more tap away
-     * ([showOptOutConfirmation]), no longer direct from "How it works".
+     * Raise the destructive delete confirmation. Since 2.9.4 the caller is
+     * the in-app privacy webview intercepting the page's `winr://delete`
+     * navigation ("Delete my data" section of the ?app=1 build).
      */
-    fun showPrivacyChoices() {
-        if (_uiState.value.optOutPhase == OptOutPhase.Idle) {
-            _uiState.value = _uiState.value.copy(optOutPhase = OptOutPhase.Choices)
-        }
-    }
-
-    /** Raise the destructive delete confirmation (from the Choices surface). */
     fun showOptOutConfirmation() {
-        when (_uiState.value.optOutPhase) {
-            OptOutPhase.Idle, OptOutPhase.Choices ->
-                _uiState.value = _uiState.value.copy(optOutPhase = OptOutPhase.Confirming)
-            else -> Unit
+        if (_uiState.value.optOutPhase == OptOutPhase.Idle) {
+            _uiState.value = _uiState.value.copy(optOutPhase = OptOutPhase.Confirming)
         }
     }
 
     /** Cancel / tap-outside. A no-op while in flight or after the deletion. */
     fun cancelOptOut() {
         when (_uiState.value.optOutPhase) {
-            OptOutPhase.Choices, OptOutPhase.Confirming, is OptOutPhase.Failed ->
+            OptOutPhase.Confirming, is OptOutPhase.Failed ->
                 _uiState.value = _uiState.value.copy(optOutPhase = OptOutPhase.Idle)
             else -> Unit
         }
@@ -1124,7 +1111,7 @@ internal class WINRExperienceViewModel(
     /**
      * DELETE MY DATA tapped (initial attempt or retry after failure): performs
      * the RTD opt-out against the backend, persists the local silence flags,
-     * and lands on [OptOutPhase.Done] — the screen then holds the success copy
+     * and lands on [OptOutPhase.Done] — the V2 root then holds the success copy
      * for [OPT_OUT_SUCCESS_HOLD_MS] and dismisses the whole experience.
      * Failure keeps the confirmation up with [V2Strings.OPT_OUT_FAILED]; we
      * never pretend the deletion succeeded.

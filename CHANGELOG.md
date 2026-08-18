@@ -3,8 +3,27 @@
 All notable changes to the WINR Android SDK will be documented in this file.
 
 
-## Unreleased
+## 2.9.4 — 2026-08-18
 
+- **Legal documents open inside the experience** — Official Rules and the
+  Privacy Policy now present in an in-drawer WebView screen (slim header with
+  the document title + X, gunmetal chrome, loading indicator, simple error +
+  retry) instead of bouncing the user out to a browser (`ACTION_VIEW`). Every
+  legal affordance routes there: the capture screen's inline consent-sentence
+  links, the OFFICIAL RULES • PRIVACY POLICY rows (dashboard and code-entry
+  screens), and the how-it-works fine print. Rules load the configured
+  `rulesUrl`; Privacy loads `WINRConstants.PRIVACY_URL` with `?app=1`
+  appended (okhttp HttpUrl building, so existing query strings extend
+  correctly) — the parallel in-app build of the page.
+- **"Delete my data" moved into the privacy webview** — the native "Privacy
+  choices" dialog is gone. The how-it-works "Privacy choices" fine print now
+  opens the privacy webview directly, whose `?app=1` build renders the
+  delete-my-data section; choosing delete there navigates `winr://delete`,
+  which the WebView intercepts (no manifest change, no exported component, no
+  scheme registration — and no JavaScript interface objects; JS is enabled
+  for the page but the bridge is navigation-only) and raises the EXISTING
+  destructive confirmation + authenticated erasure flow, now rendered at the
+  V2 root over whatever screen is up.
 - **Share-link UTM tagging** — when the publisher's `shareUrl` is included
   in a share action, the SDK appends `utm_source={network}&utm_medium=winr_share`
   ({network} = x | facebook | instagram | snapchat | tiktok, per the tapped

@@ -96,21 +96,24 @@ internal object V2Strings {
     const val SESSION_EXPIRED = "Your session has expired. Please try again."
     const val RETRY = "RETRY"
 
-    // ── Privacy choices / RTD opt-out (how-it-works screen) ──
+    // ── Legal webview (2.9.4) ──
 
-    /** Muted entry-point link at the bottom of the how-it-works screen. */
-    const val PRIVACY_CHOICES = "Privacy choices"
-
-    /** Title of the 2.9 "Privacy choices" surface (policy link + delete action). */
-    const val PRIVACY_CHOICES_TITLE = "Privacy choices"
-
-    /** Rules link on the "Privacy choices" surface (2.9.2: split from the
-     *  combined "Official Rules & Privacy Policy" label so each document
-     *  opens its own URL, matching iOS). */
+    /** Official Rules link label — also the in-app legal webview's title. */
     const val OFFICIAL_RULES_LINK = "Official Rules"
 
-    /** Policy link on the "Privacy choices" surface. */
+    /** Privacy Policy link label — also the in-app legal webview's title. */
     const val PRIVACY_POLICY_LINK = "Privacy Policy"
+
+    /** The legal webview's main frame failed to load — shown with a RETRY pill. */
+    const val LEGAL_LOAD_FAILED =
+        "Couldn't load this page. Check your connection and try again."
+
+    // ── Privacy choices / RTD opt-out ──
+
+    /** Muted entry-point link at the bottom of the how-it-works screen (2.9.4:
+     *  opens the in-app privacy webview directly — the ?app=1 build carries
+     *  the delete-my-data section; the native choices dialog is gone). */
+    const val PRIVACY_CHOICES = "Privacy choices"
     const val OPT_OUT_TITLE = "Delete my data & stop participating"
     const val OPT_OUT_BODY =
         "This permanently deletes your WINR data, ends your giveaway participation, " +
