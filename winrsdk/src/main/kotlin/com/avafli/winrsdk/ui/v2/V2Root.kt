@@ -11,11 +11,15 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -43,7 +47,8 @@ import kotlinx.coroutines.delay
 
 // Root router for the V2 experience, ported from iOS WINRV2ExperienceRoot:
 // dimmed host app behind a dark drawer flush to the screen bottom + sides,
-// TOP corners rounded 30dp, ~90% screen height, slide-up spring-in.
+// TOP corners rounded 30dp, near-full height (small top reveal below the
+// status bar, 2.9.6), slide-up spring-in.
 
 @Composable
 internal fun WINRV2ExperienceRoot(
@@ -77,6 +82,15 @@ internal fun WINRV2ExperienceRoot(
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val screenHeight = maxHeight
+        // 2.9.6 (Ryan's device review): near-full-height drawer — the sheet
+        // rises to just below the status bar with a small reveal of the host
+        // app, replacing the fixed 90% proportion. On tall gesture-nav phones
+        // the old 90% (whose bottom slice the nav inset then ate) clipped the
+        // capture footer and forced the dashboard to scroll; the goal is that
+        // every screen fits WITHOUT scrolling on typical phones (scrolling
+        // remains the fallback for very short ones).
+        val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+        val drawerHeight = screenHeight - statusBarTop - 14.dp
 
         // Dimmed host app behind the drawer.
         val scrimAlpha by animateFloatAsState(
@@ -100,56 +114,62 @@ internal fun WINRV2ExperienceRoot(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .height(screenHeight * 0.90f)
+                .height(drawerHeight)
                 .offset(y = drawerOffset)
                 .clip(RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp))
                 .background(WINRV2Color.gunmetal),
         ) {
-            CompositionLocalProvider(LocalWinrLegalOpener provides { legalPage = it }) {
-                DrawerContent(
-                    ui = ui,
-                    accent = accent,
-                    logoUrl = logoUrl,
-                    rulesUrl = rulesUrl,
-                    visitMode = visitMode,
-                    viewModel = viewModel,
-                    onDismiss = onDismiss,
-                    onWinnerTap = { showWinnerModal = true },
-                )
-            }
+            // The gunmetal sheet bleeds under the gesture-nav bar (flush to the
+            // physical bottom), but CONTENT never renders beneath it (2.9.6):
+            // everything inside — screens, the legal webview, the delete
+            // confirmation — is inset above the navigation bars.
+            Box(Modifier.fillMaxSize().navigationBarsPadding()) {
+                CompositionLocalProvider(LocalWinrLegalOpener provides { legalPage = it }) {
+                    DrawerContent(
+                        ui = ui,
+                        accent = accent,
+                        logoUrl = logoUrl,
+                        rulesUrl = rulesUrl,
+                        visitMode = visitMode,
+                        viewModel = viewModel,
+                        onDismiss = onDismiss,
+                        onWinnerTap = { showWinnerModal = true },
+                    )
+                }
 
-            // Legal webview overlay, inside the drawer chrome. The privacy
-            // page's winr://delete bridge closes the webview FIRST, then
-            // raises the EXISTING opt-out confirmation over the SDK experience
-            // (matching iOS/web, 2.9.5) — so Cancel returns the user to the
-            // screen they came from, not the privacy page.
-            legalPage?.let { page ->
-                WINRV2LegalWebViewScreen(
-                    accent = accent,
-                    page = page,
-                    onDeleteBridge = {
-                        legalPage = null
-                        viewModel.showOptOutConfirmation()
-                    },
-                    onClose = { legalPage = null },
-                )
-            }
+                // Legal webview overlay, inside the drawer chrome. The privacy
+                // page's winr://delete bridge closes the webview FIRST, then
+                // raises the EXISTING opt-out confirmation over the SDK experience
+                // (matching iOS/web, 2.9.5) — so Cancel returns the user to the
+                // screen they came from, not the privacy page.
+                legalPage?.let { page ->
+                    WINRV2LegalWebViewScreen(
+                        accent = accent,
+                        page = page,
+                        onDeleteBridge = {
+                            legalPage = null
+                            viewModel.showOptOutConfirmation()
+                        },
+                        onClose = { legalPage = null },
+                    )
+                }
 
-            // Destructive delete confirmation (+ in-flight/failed/deleted
-            // states) — root-level since 2.9.4 so the webview bridge can raise
-            // it (after the webview closes) over any screen. Done holds the
-            // success copy a beat, then dismisses the WHOLE experience.
-            if (ui.optOutPhase != OptOutPhase.Idle) {
-                WINRV2OptOutConfirmDialog(
-                    phase = ui.optOutPhase,
-                    onConfirm = { viewModel.confirmOptOut() },
-                    onCancel = { viewModel.cancelOptOut() },
-                )
-            }
-            LaunchedEffect(ui.optOutPhase) {
-                if (ui.optOutPhase == OptOutPhase.Done) {
-                    delay(WINRExperienceViewModel.OPT_OUT_SUCCESS_HOLD_MS)
-                    onDismiss()
+                // Destructive delete confirmation (+ in-flight/failed/deleted
+                // states) — root-level since 2.9.4 so the webview bridge can raise
+                // it (after the webview closes) over any screen. Done holds the
+                // success copy a beat, then dismisses the WHOLE experience.
+                if (ui.optOutPhase != OptOutPhase.Idle) {
+                    WINRV2OptOutConfirmDialog(
+                        phase = ui.optOutPhase,
+                        onConfirm = { viewModel.confirmOptOut() },
+                        onCancel = { viewModel.cancelOptOut() },
+                    )
+                }
+                LaunchedEffect(ui.optOutPhase) {
+                    if (ui.optOutPhase == OptOutPhase.Done) {
+                        delay(WINRExperienceViewModel.OPT_OUT_SUCCESS_HOLD_MS)
+                        onDismiss()
+                    }
                 }
             }
         }

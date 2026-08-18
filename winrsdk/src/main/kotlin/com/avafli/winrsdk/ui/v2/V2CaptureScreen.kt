@@ -146,6 +146,15 @@ internal fun WINRV2CaptureScreen(
 
             PrizeStrip(giveaway)
 
+            // Free-height distribution (2.9.6, Ryan): with the taller drawer
+            // the leftover height no longer pools as one dead block between
+            // the CTA and the footer — it splits evenly above and below the
+            // form, so the email/consent/CTA cluster floats balanced between
+            // the prize strip and the bottom-anchored legal text. Both
+            // spacers collapse to zero on short screens / with the IME open,
+            // where the existing scroll behavior takes over.
+            Spacer(Modifier.weight(1f, fill = true))
+
             Column(
                 modifier = Modifier.padding(horizontal = 22.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -212,15 +221,9 @@ internal fun WINRV2CaptureScreen(
                 }
             }
 
-            // Anchor the legal block to the drawer's bottom (Ryan): the weighted
-            // spacer absorbs any free height between the CTA and the footer, so
-            // the legal text sits at the bottom padding instead of congested
-            // under the button. On short screens or with the IME open the
-            // content exceeds the viewport, the spacer collapses to zero, and
-            // the column's 18dp spacing remains the minimum gap — everything
-            // scrolls via the existing verticalScroll + imePadding behavior,
-            // never overlapping the button. Same pattern as the code-entry
-            // screen's footer.
+            // Anchor the legal block to the drawer's bottom (Ryan): same
+            // pattern as the code-entry screen's footer; pairs with the
+            // spacer above the form block to split the free height.
             Spacer(Modifier.weight(1f, fill = true))
 
             Column(

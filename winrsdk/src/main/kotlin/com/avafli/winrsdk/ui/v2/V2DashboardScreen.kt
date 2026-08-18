@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -141,10 +142,15 @@ internal fun WINRV2DashboardScreen(
                 // when it was there at mount.
                 celebrating = pendingClaimEntries != null,
             )
+            // Anchor GOT IT + the legal row to the drawer's bottom (2.9.6):
+            // any free height on tall screens sits between the come-back bar
+            // and the button instead of below the legal row; collapses to
+            // zero when the content fills the drawer (scroll fallback).
+            Spacer(Modifier.weight(1f, fill = true))
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 24.dp),
+                    .padding(bottom = 18.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {

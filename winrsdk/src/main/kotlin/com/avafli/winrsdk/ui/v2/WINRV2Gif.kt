@@ -6,6 +6,8 @@ import android.graphics.drawable.Animatable2
 import android.graphics.drawable.AnimatedImageDrawable
 import android.graphics.drawable.Drawable
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.view.View
 import android.widget.ImageView
 import androidx.annotation.RawRes
@@ -80,6 +82,21 @@ internal object WINRV2GifAssets {
             null
         } as? AnimatedImageDrawable ?: return null
         decoded.repeatCount = 0 // play exactly once
+        // AOSP race guard (observed as a FATAL NPE on API 35 at the reveal
+        // beat): AnimatedImageDrawable.postOnAnimationEnd() null-checks
+        // mAnimationCallbacks at POST time, but the posted handler lambda
+        // iterates the field again at RUN time with no check. Unregistering
+        // the last real callback (our DisposableEffect teardown racing a
+        // just-posted end dispatch — e.g. the overlay is removed on the same
+        // frame the GIF ends) nulls the list via clearAnimationCallbacks()
+        // and the pending lambda crashes the app. A permanent no-op callback
+        // keeps the list non-empty for the cached drawable's lifetime, so the
+        // posted dispatch always has a list to iterate. Registration must run
+        // on a looper thread (the native listener asserts one) — post to main;
+        // it lands long before any burst's animation can end.
+        Handler(Looper.getMainLooper()).post {
+            decoded.registerAnimationCallback(object : Animatable2.AnimationCallback() {})
+        }
         cache.putIfAbsent(resId, decoded)
         return cache[resId] ?: decoded
     }

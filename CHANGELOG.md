@@ -3,6 +3,29 @@
 All notable changes to the WINR Android SDK will be documented in this file.
 
 
+## 2.9.6 — 2026-08-18
+
+- **Taller drawer: dashboard and capture fit without scrolling; bottom
+  insets respected** — the V2 sheet now rises to just below the status bar
+  (small reveal of the host app, matching the iOS feel) instead of a fixed
+  90% of the screen, and everything inside the drawer is inset above the
+  navigation bars, so nothing renders under the gesture bar. On tall
+  gesture-nav phones the old geometry clipped the capture screen's legal
+  fine print mid-line and pushed the dashboard's legal row out of view
+  entirely; now the full dashboard (winner banner, prize card, progress
+  tiles, streak callout, GOT IT, legal row) and the capture screen fit with
+  no scrolling on typical phones — scrolling remains as a fallback for very
+  short screens. The capture screen's leftover height also no longer pools
+  as one dead block above the footer: it splits evenly around the form, and
+  the dashboard's GOT IT + legal row anchor to the drawer's bottom.
+- **Reveal-beat crash fixed (API 34/35)** — a platform race in
+  `AnimatedImageDrawable`'s animation-end dispatch (the posted callback
+  lambda re-reads the callback list without a null check; tearing down a
+  confetti burst on the same frame the GIF ends nulls it) could crash the
+  app right after the daily celebration. The decoded GIF now keeps a
+  permanent no-op animation callback registered so the framework's posted
+  dispatch always has a list to iterate.
+
 ## 2.9.5 — 2026-08-18
 
 - **Delete confirmation presents over the experience** — on the privacy
