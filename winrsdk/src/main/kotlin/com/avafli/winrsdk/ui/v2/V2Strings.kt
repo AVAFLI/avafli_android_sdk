@@ -108,12 +108,9 @@ internal object V2Strings {
     const val LEGAL_LOAD_FAILED =
         "Couldn't load this page. Check your connection and try again."
 
-    // ── Privacy choices / RTD opt-out ──
+    // ── RTD opt-out (reached via the privacy webview's delete section, whose
+    //    winr://delete bridge raises this confirmation) ──
 
-    /** Muted entry-point link at the bottom of the how-it-works screen (2.9.4:
-     *  opens the in-app privacy webview directly — the ?app=1 build carries
-     *  the delete-my-data section; the native choices dialog is gone). */
-    const val PRIVACY_CHOICES = "Privacy choices"
     const val OPT_OUT_TITLE = "Delete my data & stop participating"
     const val OPT_OUT_BODY =
         "This permanently deletes your WINR data, ends your giveaway participation, " +

@@ -1,31 +1,28 @@
 package com.avafli.winrsdk.ui.v2
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 // How-it-works screen, ported from iOS WINRV2HowItWorksView. The header swaps
 // the "?" for a back arrow that returns to the previous screen.
 //
-// 2.9.4: the "Privacy choices" fine print no longer raises a native dialog —
-// it opens the in-app privacy WEBVIEW directly (?app=1 build), whose "Delete
-// my data" section hands control back via the winr://delete bridge. The
-// destructive confirmation itself now lives at the V2 root
-// (WINRV2OptOutConfirmDialog), rendered over whatever screen is up.
+// 2.9.5: the "Privacy choices" fine print is GONE (it was redundant once the
+// legal webview landed) — the delete path stays findable through the Privacy
+// Policy webview reached from the legal-links rows (dashboard/code entry) and
+// the capture screen's inline links: the ?app=1 build carries the
+// delete-my-data section, whose winr://delete bridge raises the destructive
+// confirmation at the V2 root (WINRV2OptOutConfirmDialog).
 
 @Composable
 internal fun WINRV2HowItWorksScreen(
@@ -36,10 +33,6 @@ internal fun WINRV2HowItWorksScreen(
     onDone: () -> Unit,
     onClose: () -> Unit,
 ) {
-    // In-experience legal webview opener (2.9.4); falls back to the browser
-    // outside the V2 root.
-    val openLegal = rememberWinrLegalOpener()
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -131,24 +124,7 @@ internal fun WINRV2HowItWorksScreen(
                     .padding(top = 20.dp),
             ) { onDone() }
 
-            // Muted privacy entry point — deliberately quiet: present for those
-            // who look for it, invisible to the pitch. Opens the in-app privacy
-            // webview (whose ?app=1 build carries the delete-my-data section).
-            Text(
-                V2Strings.PRIVACY_CHOICES,
-                style = WINRV2Font.inter(12.sp, color = WINRV2Color.textTertiary)
-                    .copy(textDecoration = TextDecoration.Underline),
-                modifier = Modifier
-                    .padding(top = 18.dp, bottom = 30.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .clickable(onClick = {
-                        openLegal(
-                            V2Strings.PRIVACY_POLICY_LINK,
-                            WINRLegalWebPolicy.privacyUrlForApp(),
-                        )
-                    })
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
-            )
+            Spacer(Modifier.height(30.dp))
         }
     }
 }

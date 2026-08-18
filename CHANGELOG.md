@@ -3,6 +3,18 @@
 All notable changes to the WINR Android SDK will be documented in this file.
 
 
+## 2.9.5 — 2026-08-18
+
+- **Delete confirmation presents over the experience** — on the privacy
+  page's `winr://delete` bridge the legal webview now closes FIRST, and the
+  destructive delete confirmation raises over the SDK screen the user came
+  from (matching iOS/web). Cancel therefore returns to that screen, not the
+  privacy page.
+- **"Privacy choices" link removed from How it works** — redundant now that
+  the delete path lives inside the Privacy Policy webview, which stays
+  findable via the OFFICIAL RULES • PRIVACY POLICY rows (dashboard and
+  code-entry screens) and the capture screen's inline links.
+
 ## 2.9.4 — 2026-08-18
 
 - **Legal documents open inside the experience** — Official Rules and the

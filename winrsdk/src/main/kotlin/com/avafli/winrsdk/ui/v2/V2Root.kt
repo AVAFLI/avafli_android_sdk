@@ -119,22 +119,26 @@ internal fun WINRV2ExperienceRoot(
             }
 
             // Legal webview overlay, inside the drawer chrome. The privacy
-            // page's winr://delete bridge routes into the EXISTING opt-out
-            // confirmation below; the webview stays up behind it so Cancel
-            // returns to the page.
+            // page's winr://delete bridge closes the webview FIRST, then
+            // raises the EXISTING opt-out confirmation over the SDK experience
+            // (matching iOS/web, 2.9.5) — so Cancel returns the user to the
+            // screen they came from, not the privacy page.
             legalPage?.let { page ->
                 WINRV2LegalWebViewScreen(
                     accent = accent,
                     page = page,
-                    onDeleteBridge = { viewModel.showOptOutConfirmation() },
+                    onDeleteBridge = {
+                        legalPage = null
+                        viewModel.showOptOutConfirmation()
+                    },
                     onClose = { legalPage = null },
                 )
             }
 
             // Destructive delete confirmation (+ in-flight/failed/deleted
             // states) — root-level since 2.9.4 so the webview bridge can raise
-            // it over any screen. Done holds the success copy a beat, then
-            // dismisses the WHOLE experience.
+            // it (after the webview closes) over any screen. Done holds the
+            // success copy a beat, then dismisses the WHOLE experience.
             if (ui.optOutPhase != OptOutPhase.Idle) {
                 WINRV2OptOutConfirmDialog(
                     phase = ui.optOutPhase,
@@ -325,9 +329,10 @@ private fun DrawerContent(
             onClose = onDismiss,
         )
 
-        // 2.9.4: the screen's "Privacy choices" fine print opens the in-app
-        // privacy webview directly (via LocalWinrLegalOpener); the delete
-        // confirmation renders at the root, so no opt-out plumbing here.
+        // 2.9.5: no opt-out plumbing here — the "Privacy choices" fine print
+        // is gone; delete is reached through the Privacy Policy webview
+        // (legal-links rows / capture inline links) and its winr://delete
+        // bridge, with the confirmation rendered at the root.
         is ExperienceScreen.HowItWorks -> WINRV2HowItWorksScreen(
             accent = accent,
             logoUrl = logoUrl,
