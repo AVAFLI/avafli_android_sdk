@@ -1,6 +1,51 @@
 # Changelog
 
-All notable changes to the WINR Android SDK will be documented in this file.
+All notable changes to the Avafli Android SDK (formerly the WINR Android SDK)
+will be documented in this file. Entries for 2.9.6 and earlier predate the
+rebrand and use the former WINR names.
+
+
+## 3.0.0 — 2026-08-25
+
+**Full brand rename: WINR → Avafli.** Behavior, backend, and API keys are
+unchanged — this release renames the SDK's coordinates, packages, and public
+symbols. The **2.9.x line stays functional but frozen**: existing integrations
+keep working against the same backend, but all new features and fixes ship as
+Avafli 3.x only.
+
+- **Gradle coordinates** — the module is now `:avaflisdk` and the Maven
+  artifact `com.avafli:avafli-sdk`; via JitPack:
+  `com.github.AVAFLI:avafli_android_sdk:v3.0.0`
+  (was `com.github.AVAFLI:winr_android_sdk:v2.9.6`).
+- **Package** — `com.avafli.winrsdk` → `com.avafli.avaflisdk`.
+- **Public API symbols renamed:**
+
+  | 2.x (WINR) | 3.x (Avafli) |
+  | ---------- | ------------ |
+  | `WINR.configure(...)` | `Avafli.configure(...)` |
+  | `WINRConfiguration` | `AvafliConfiguration` |
+  | `WINRUser` / `WINRUser.GUEST` | `AvafliUser` / `AvafliUser.GUEST` |
+  | `WINROptions` | `AvafliOptions` |
+  | `WINREnvironment` | `AvafliEnvironment` |
+  | `WINRError` | `AvafliError` |
+  | `WINR.optOut()` | `Avafli.optOut()` |
+  | `WINR.registerForPushNotifications(...)` | `Avafli.registerForPushNotifications(...)` |
+  | `WINR.onNewToken(...)` | `Avafli.onNewToken(...)` |
+
+- **Internal symbols, resources, and the example app** renamed to the Avafli
+  prefix throughout (`WinrApi` → `AvafliApi`, `WINRV2*`/`V2*` composables →
+  `AvafliV2*`, `winr_*` resources → `avafli_*`).
+- **Delete bridge accepts both schemes** — the in-app privacy page's
+  delete-my-data bridge is intercepted as `avafli://delete` AND the legacy
+  `winr://delete`, so either build of the hosted page works.
+- **User-visible branding** — all "WINR" / "WINR Media" strings in the
+  experience and the example app now read Avafli.
+- **Unchanged on purpose (compatibility):** legal document URLs remain on
+  `winrmedia.com`; API key prefixes remain `winr_live_` / `winr_test_`; guest
+  ids remain `winr_guest_…`; analytics event names (e.g.
+  `winr_daily_entry_claimed`) and the `utm_medium=winr_share` share tag are
+  unchanged; on-device storage keys are unchanged so existing installs keep
+  their streaks, entries, auth, and opt-out state across the upgrade.
 
 
 ## 2.9.6 — 2026-08-18

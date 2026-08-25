@@ -13,6 +13,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "winr-android-sdk"
-include(":winrsdk")
+rootProject.name = "avafli-android-sdk"
+include(":avaflisdk")
 include(":example")

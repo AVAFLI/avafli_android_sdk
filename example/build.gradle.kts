@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.avafli.winrexample"
+    namespace = "com.avafli.avafliexample"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.avafli.winrexample"
+        applicationId = "com.avafli.avafliexample"
         minSdk = 26
         targetSdk = 35
         versionCode = 1
@@ -41,7 +41,7 @@ android {
 }
 
 dependencies {
-    implementation(project(":winrsdk"))
+    implementation(project(":avaflisdk"))
     implementation(libs.core.ktx)
     implementation(libs.activity.compose)
     implementation(platform(libs.compose.bom))

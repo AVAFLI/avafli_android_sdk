@@ -1,7 +1,7 @@
-# WINR Android SDK
+# Avafli Android SDK
 **Drop-in sweepstakes, prizing, and gamification for your Android app**
 
-[![JitPack](https://jitpack.io/v/AVAFLI/winr_android_sdk.svg)](https://jitpack.io/#AVAFLI/winr_android_sdk)
+[![JitPack](https://jitpack.io/v/AVAFLI/avafli_android_sdk.svg)](https://jitpack.io/#AVAFLI/avafli_android_sdk)
 [![API](https://img.shields.io/badge/API-26%2B-brightgreen.svg)](https://android-arsenal.com/api?level=26)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.1%2B-7F52FF.svg?logo=kotlin&logoColor=white)](https://kotlinlang.org)
 [![Compose](https://img.shields.io/badge/Jetpack%20Compose-Material%203-4285F4.svg?logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
@@ -10,7 +10,7 @@
 
 ## Overview
 
-WINR lets you add daily-entry sweepstakes and prize experiences to your app in under 20 lines of code. The V2 experience is a bottom drawer that opens itself on the first app-open of each day, claims the user's daily entries automatically, and celebrates the result. You integrate once; prize configuration and branding are managed server-side from the WINR dashboard.
+Avafli lets you add daily-entry sweepstakes and prize experiences to your app in under 20 lines of code. The V2 experience is a bottom drawer that opens itself on the first app-open of each day, claims the user's daily entries automatically, and celebrates the result. You integrate once; prize configuration and branding are managed server-side from the Avafli dashboard.
 
 **Key capabilities:**
 - **Daily entry sweepstakes** — Users earn entries every day they engage
@@ -29,52 +29,52 @@ WINR lets you add daily-entry sweepstakes and prize experiences to your app in u
 ## Quick Start
 
 ```kotlin
-import com.avafli.winrsdk.WINR
-import com.avafli.winrsdk.WINRConfiguration
-import com.avafli.winrsdk.WINROptions
-import com.avafli.winrsdk.WINRUser
+import com.avafli.avaflisdk.Avafli
+import com.avafli.avaflisdk.AvafliConfiguration
+import com.avafli.avaflisdk.AvafliOptions
+import com.avafli.avaflisdk.AvafliUser
 
-val config = WINRConfiguration(
+val config = AvafliConfiguration(
     context = applicationContext,
     apiKey = "YOUR_API_KEY",  // debug builds: use your winr_test_ sandbox key
-    user = WINRUser(
+    user = AvafliUser(
         id = "user_123",              // only id is required — pass whatever identity you have
         firstName = "Jane",
         lastName = "Doe",
         email = "jane@example.com"    // include it when you have it — pre-fills & locks the capture form (consent stays explicit)
     ),
-    // Nobody signed in? use user = WINRUser.GUEST
-    options = WINROptions(
+    // Nobody signed in? use user = AvafliUser.GUEST
+    options = AvafliOptions(
         debugLogging = false,         // true while integrating
         enablePushReminders = true    // streak reminders via YOUR Firebase project (upload the key in your dashboard)
     )
 )
-WINR.configure(config)
+Avafli.configure(config)
 
 // Done — the experience auto-opens once per day. No further calls needed.
 // Push reminders: forward your FCM token from your FirebaseMessagingService:
-//   WINR.onNewToken(token)
+//   Avafli.onNewToken(token)
 ```
 
 > **Auto-open:** After `configure()`, the SDK presents the experience automatically once per calendar day (after registration and on activity resumes — a new day re-opens it even if the app stayed in memory). It can be disabled remotely via the dashboard's `experience.autoOpenEnabled` kill switch; unregistered users see at most 3 auto-opens until they submit an email, and RTD opted-out users never see it.
 
 ### Identity — pass what you have, the SDK captures the rest
 
-Only `id` is required. Construct a `WINRUser` from whatever identity data you
+Only `id` is required. Construct a `AvafliUser` from whatever identity data you
 already hold — even just an id — and the SDK fills in the gaps: it captures the
 email through its own screen, and the name at prize-claim time if the user wins.
 There are three cases:
 
-**1. Signed-in user without an email (the common case, and WINR's main value).**
+**1. Signed-in user without an email (the common case, and Avafli's main value).**
 Pass the id plus whatever you have and OMIT `email`. The SDK shows its capture
 screen and the user types their email — so you capture an address you didn't
 have before:
 
 ```kotlin
-user = WINRUser(id = "user_123", firstName = "Jane", lastName = "Doe")   // no email
+user = AvafliUser(id = "user_123", firstName = "Jane", lastName = "Doe")   // no email
 ```
 
-Even just `WINRUser(id = "user_123")` is valid — name is collected later at
+Even just `AvafliUser(id = "user_123")` is valid — name is collected later at
 prize-claim, only if they win.
 
 **2. Signed-in user with an email.** Pass `email` too and it pre-fills and
@@ -82,16 +82,16 @@ prize-claim, only if they win.
 `email` is a plain `String`:
 
 ```kotlin
-user = WINRUser(id = "user_123", firstName = "Jane", lastName = "Doe", email = "jane@example.com")
+user = AvafliUser(id = "user_123", firstName = "Jane", lastName = "Doe", email = "jane@example.com")
 ```
 
-**3. No signed-in user at all.** Pass `WINRUser.GUEST`:
+**3. No signed-in user at all.** Pass `AvafliUser.GUEST`:
 
 ```kotlin
-WINR.configure(context, WINRConfiguration(
+Avafli.configure(context, AvafliConfiguration(
     apiKey = "winr_live_…",
     bundleId = packageName,
-    user = WINRUser.GUEST,
+    user = AvafliUser.GUEST,
 ))
 ```
 
@@ -122,50 +122,73 @@ In your app-level `build.gradle.kts`:
 
 ```kotlin
 dependencies {
-    implementation("com.github.AVAFLI:winr_android_sdk:v2.9.6")
+    implementation("com.github.AVAFLI:avafli_android_sdk:v3.0.0")
 }
 ```
 
 > **Note:** Contact [AVAFLI](https://avafli-website.web.app/sdk/pricing) to obtain an API key.
+
+## Migrating from 2.x (WINR SDK)
+
+Version 3.0.0 renames the SDK from **WINR** to **Avafli**. The behavior, backend,
+and your API keys are unchanged — only the coordinates and symbols moved. The
+2.9.x line stays functional but frozen; all new work ships as Avafli 3.x.
+
+| 2.x (WINR) | 3.x (Avafli) |
+| ---------- | ------------ |
+| `com.github.AVAFLI:winr_android_sdk:v2.9.6` | `com.github.AVAFLI:avafli_android_sdk:v3.0.0` |
+| `import com.avafli.winrsdk.*` | `import com.avafli.avaflisdk.*` |
+| `WINR.configure(...)` | `Avafli.configure(...)` |
+| `WINRConfiguration` | `AvafliConfiguration` |
+| `WINRUser` / `WINRUser.GUEST` | `AvafliUser` / `AvafliUser.GUEST` |
+| `WINROptions` | `AvafliOptions` |
+| `WINREnvironment` | `AvafliEnvironment` |
+| `WINRError` | `AvafliError` |
+| `WINR.optOut()` / `WINR.onNewToken(...)` | `Avafli.optOut()` / `Avafli.onNewToken(...)` |
+
+API keys keep their existing `winr_live_` / `winr_test_` prefixes, guest ids
+keep the `winr_guest_` prefix, and analytics event names are unchanged — no
+dashboard, backend, or key changes are needed. Existing installs upgrade in
+place: streaks, entries, and opt-out state carry over.
 
 ## Configuration
 
 Initialize the SDK with your user and environment settings:
 
 ```kotlin
-val config = WINRConfiguration(
+val config = AvafliConfiguration(
     context = applicationContext,
     apiKey = "winr_live_xxxxxxxxxx",
-    environment = WINREnvironment.Production,
-    user = WINRUser(
+    environment = AvafliEnvironment.Production,
+    user = AvafliUser(
         id = "user_abc123",
         firstName = "Jane",
         lastName = "Doe",
         phone = "+15551234567"  // optional
     ),
-    options = WINROptions(
+    options = AvafliOptions(
         debugLogging = true,
         analyticsAdapter = myAdapter,
         enablePushReminders = true
     )
 )
 
-WINR.configure(config)
+Avafli.configure(config)
 ```
 
-### WINRConfiguration
+### AvafliConfiguration
 
 | Parameter | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
 | `context` | `Context` | ✅ | Application or Activity context |
-| `apiKey` | `String` | ✅ | Your WINR API key from the dashboard |
-| `environment` | `WINREnvironment` | — | `.Production` (default) |
-| `user` | `WINRUser` | ✅ | The authenticated user |
-| `options` | `WINROptions?` | — | Optional behavior toggles |
+| `apiKey` | `String` | ✅ | Your Avafli API key from the dashboard |
+| `environment` | `AvafliEnvironment` | — | `.Production` (default) |
+| `user` | `AvafliUser` | ✅ | The authenticated user |
+| `options` | `AvafliOptions?` | — | Optional behavior toggles |
 
 > **App ID:** The SDK auto-detects your Android application ID from the host `Context` (`context.packageName`). You do not pass it manually.
 
-### WINROptions
+### AvafliOptions
 
 | Parameter | Type | Default | Description |
 | --------- | ---- | ------- | ----------- |
@@ -175,7 +198,7 @@ WINR.configure(config)
 | `enableCertificatePinning` | `Boolean` | `true` | Certificate pinning for backend calls (recommended for production) |
 | `networkTimeoutSeconds` | `Long` | `30` | Custom timeout for network requests |
 
-### WINRUser
+### AvafliUser
 
 | Parameter | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
@@ -221,7 +244,7 @@ Email is captured inside the SDK's own opt-in screen (see the identity section a
 
 Two verification paths run from that screen:
 
-- **Cross-device verified adoption.** When the typed email matches an existing WINR account (from another device or install), the SDK asks for a **6-digit code** emailed to that address before the two identities are merged — so a streak follows the person across devices without letting anyone attach to someone else's record.
+- **Cross-device verified adoption.** When the typed email matches an existing Avafli account (from another device or install), the SDK asks for a **6-digit code** emailed to that address before the two identities are merged — so a streak follows the person across devices without letting anyone attach to someone else's record.
 - **Soft email verification (2.7.0+).** A brand-new, never-before-seen typed email surfaces a persistent, dismissible **"Verify your email"** chip on the dashboard. It **never blocks play** — the user keeps earning entries — it only affects prize-draw eligibility until the address is confirmed.
 
 ## Winner Experience
@@ -230,7 +253,7 @@ When one of your users is drawn as a giveaway winner, the drawer automatically o
 
 ## Push Notifications
 
-Drive re-engagement with daily reminders. Publishers forward their FCM token to WINR:
+Drive re-engagement with daily reminders. Publishers forward their FCM token to Avafli:
 
 ### 1. Setup Firebase Cloud Messaging
 
@@ -239,8 +262,8 @@ Follow the [Firebase Android setup guide](https://firebase.google.com/docs/cloud
 ### 2. Register for Notifications
 
 ```kotlin
-// After WINR.configure() — no-op if WINROptions.enablePushReminders is false
-WINR.registerForPushNotifications(context)
+// After Avafli.configure() — no-op if AvafliOptions.enablePushReminders is false
+Avafli.registerForPushNotifications(context)
 ```
 
 ### 3. Forward FCM Token
@@ -249,18 +272,18 @@ WINR.registerForPushNotifications(context)
 class MyFirebaseMessagingService : FirebaseMessagingService() {
     override fun onNewToken(token: String) {
         super.onNewToken(token)
-        WINR.onNewToken(token)
+        Avafli.onNewToken(token)
     }
 }
 ```
 
 ### 4. Upload FCM Service Account Key
 
-Upload your FCM service account key via the [WINR Dashboard](https://avafli-website.web.app/sdk/dashboard) to enable push notifications. Reminder schedules and messaging are configured server-side from the dashboard.
+Upload your FCM service account key via the [Avafli Dashboard](https://avafli-website.web.app/sdk/dashboard) to enable push notifications. Reminder schedules and messaging are configured server-side from the dashboard.
 
 ## Customization
 
-The V2 experience is hardcoded to the WINR design; publishers customize exactly three things through the [WINR Dashboard](https://avafli-website.web.app/sdk/dashboard):
+The V2 experience is hardcoded to the Avafli design; publishers customize exactly three things through the [Avafli Dashboard](https://avafli-website.web.app/sdk/dashboard):
 
 - **Logo** — Shown in the drawer header
 - **Prize image** — Art for the dashboard prize card
@@ -272,7 +295,7 @@ Changes apply instantly across all app installations without requiring an app up
 
 ## Analytics
 
-Forward WINR events to your existing analytics stack:
+Forward Avafli events to your existing analytics stack:
 
 ```kotlin
 class MyAnalyticsAdapter : AnalyticsAdapter {
@@ -291,7 +314,7 @@ class MyAnalyticsAdapter : AnalyticsAdapter {
 }
 
 // Pass during configuration
-val options = WINROptions(
+val options = AvafliOptions(
     analyticsAdapter = MyAnalyticsAdapter()
 )
 ```
@@ -305,7 +328,7 @@ Handle erasure requests with `optOut()`:
 
 ```kotlin
 lifecycleScope.launch {
-    WINR.optOut()
+    Avafli.optOut()
         .onSuccess { /* Data erased, experience silenced */ }
         .onFailure { error -> /* Handle error */ }
 }
@@ -331,17 +354,17 @@ section runs the same erasure as `optOut()`.
 
 | Method | Returns | Description |
 | ------ | ------- | ----------- |
-| `WINR.configure(config)` | `Unit` | Initialize the SDK; the experience auto-opens once per day |
-| `WINR.optOut()` | `suspend Result<Unit>` | RTD opt-out — permanently silence the experience |
+| `Avafli.configure(config)` | `Unit` | Initialize the SDK; the experience auto-opens once per day |
+| `Avafli.optOut()` | `suspend Result<Unit>` | RTD opt-out — permanently silence the experience |
 
 ### Push Notifications
 
 | Method | Returns | Description |
 | ------ | ------- | ----------- |
-| `WINR.registerForPushNotifications(context)` | `Unit` | Register for push notifications |
-| `WINR.onNewToken(token)` | `Unit` | Forward an FCM token to WINR |
+| `Avafli.registerForPushNotifications(context)` | `Unit` | Register for push notifications |
+| `Avafli.onNewToken(token)` | `Unit` | Forward an FCM token to Avafli |
 
-For detailed API documentation, see the [WINR Docs](https://avafli-website.web.app/sdk/android).
+For detailed API documentation, see the [Avafli Docs](https://avafli-website.web.app/sdk/android).
 
 ## Links
 
