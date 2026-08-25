@@ -44,7 +44,7 @@ class AvafliUserOptionalNameTest {
         // for a signed-in (non-guest) user. An id-only user must still be
         // treated as signed in so its id is used, not a minted guest id.
         val user = AvafliUser(id = "user_123")
-        val effectiveId = if (user.isGuest) "winr_guest_minted" else user.id
+        val effectiveId = if (user.isGuest) "avafli_guest_minted" else user.id
         assertEquals("user_123", effectiveId)
     }
 }

@@ -8,7 +8,7 @@ import org.junit.Test
 
 /**
  * Share-link UTM tagging: whenever the publisher's shareUrl rides along in a
- * share action it gains `utm_source={network}&utm_medium=winr_share` — unless
+ * share action it gains `utm_source={network}&utm_medium=avafli_share` — unless
  * the publisher already tagged it with their own utm_source.
  */
 class ShareUtmTaggingTest {
@@ -16,7 +16,7 @@ class ShareUtmTaggingTest {
     @Test
     fun `appends utm params to a plain URL`() {
         assertEquals(
-            "https://example.com/app?utm_source=x&utm_medium=winr_share",
+            "https://example.com/app?utm_source=x&utm_medium=avafli_share",
             AvafliShareSheet.taggedShareUrl("https://example.com/app", "x"),
         )
     }
@@ -24,7 +24,7 @@ class ShareUtmTaggingTest {
     @Test
     fun `appends utm params to a URL with an existing query string`() {
         assertEquals(
-            "https://example.com/app?ref=abc&utm_source=facebook&utm_medium=winr_share",
+            "https://example.com/app?ref=abc&utm_source=facebook&utm_medium=avafli_share",
             AvafliShareSheet.taggedShareUrl("https://example.com/app?ref=abc", "facebook"),
         )
     }

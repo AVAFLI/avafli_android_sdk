@@ -95,7 +95,7 @@ Avafli.configure(context, AvafliConfiguration(
 ))
 ```
 
-The SDK mints a stable per-install guest id (`winr_guest_…`) for attribution —
+The SDK mints a stable per-install guest id (`avafli_guest_…`) for attribution —
 never fabricate placeholder ids yourself. The experience is fully functional
 for guests. When the user signs in, call `configure` again with the real user:
 attribution upgrades in place and the streak carries over automatically.
@@ -145,11 +145,15 @@ and your API keys are unchanged — only the coordinates and symbols moved. The
 | `WINREnvironment` | `AvafliEnvironment` |
 | `WINRError` | `AvafliError` |
 | `WINR.optOut()` / `WINR.onNewToken(...)` | `Avafli.optOut()` / `Avafli.onNewToken(...)` |
+| Analytics events `winr_*` (e.g. `winr_daily_entry_claimed`) | `avafli_*` (e.g. `avafli_daily_entry_claimed`) |
+| Share links `utm_medium=winr_share` | `utm_medium=avafli_share` |
+| New guest ids minted as `winr_guest_…` | Minted as `avafli_guest_…` (ids already stored on a device are NOT rewritten) |
 
-API keys keep their existing `winr_live_` / `winr_test_` prefixes, guest ids
-keep the `winr_guest_` prefix, and analytics event names are unchanged — no
-dashboard, backend, or key changes are needed. Existing installs upgrade in
-place: streaks, entries, and opt-out state carry over.
+If you forward SDK analytics events or filter share traffic on `utm_medium`,
+update those references to the `avafli_` names. API keys keep their existing
+`winr_live_` / `winr_test_` prefixes — no dashboard, backend, or key changes
+are needed. Existing installs upgrade in place: streaks, entries, guest
+identity, and opt-out state carry over.
 
 ## Configuration
 
@@ -320,7 +324,7 @@ val options = AvafliOptions(
 ```
 
 **Events emitted by the SDK:**
-- `winr_daily_entry_claimed` — Daily entries awarded (auto-claimed on open). Params: `day`, `entries`.
+- `avafli_daily_entry_claimed` — Daily entries awarded (auto-claimed on open). Params: `day`, `entries`.
 
 ## GDPR / CCPA
 

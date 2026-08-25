@@ -509,7 +509,7 @@ internal class AvafliExperienceViewModel(
                 sdkConfig = sdkConfig,
             )
             analytics?.trackEvent(
-                "winr_winner_claim_shown",
+                "avafli_winner_claim_shown",
                 mapOf("giveaway_id" to claim.giveawayId),
             )
             if (backendClaimedToday != true && preferencesStorage.isEmailSubmitted()) {
@@ -538,7 +538,7 @@ internal class AvafliExperienceViewModel(
                         giveaway = activeGiveaway,
                         sdkConfig = sdkConfig,
                     )
-                    analytics?.trackEvent("winr_adoption_restaged")
+                    analytics?.trackEvent("avafli_adoption_restaged")
                     return
                 }
             }
@@ -767,7 +767,7 @@ internal class AvafliExperienceViewModel(
             )
 
             analytics?.trackEvent(
-                "winr_daily_entry_claimed",
+                "avafli_daily_entry_claimed",
                 buildMap {
                     put("day", response.streakDay)
                     put("entries", response.entries)
@@ -1024,7 +1024,7 @@ internal class AvafliExperienceViewModel(
                     )
                     return@launch
                 }
-                analytics?.trackEvent("winr_email_verified")
+                analytics?.trackEvent("avafli_email_verified")
                 val previous = screenBeforeEmailVerify ?: _uiState.value.screen
                 _uiState.value = _uiState.value.copy(
                     isVerifyingCode = false,
@@ -1128,7 +1128,7 @@ internal class AvafliExperienceViewModel(
                 if (!ok) throw IllegalStateException("optOut returned success=false")
                 preferencesStorage.saveOptedOut(true)
                 Avafli.noteOptedOut()
-                analytics?.trackEvent("winr_opted_out")
+                analytics?.trackEvent("avafli_opted_out")
                 logger.info("User opted out of Avafli (RTD) — experience permanently silenced")
                 _uiState.value = _uiState.value.copy(optOutPhase = OptOutPhase.Done)
             } catch (e: Exception) {
@@ -1209,7 +1209,7 @@ internal class AvafliExperienceViewModel(
                 isClaimingDaily = false
 
                 analytics?.trackEvent(
-                    "winr_daily_entry_claimed",
+                    "avafli_daily_entry_claimed",
                     buildMap {
                         put("day", response.streakDay)
                         put("entries", response.entries)
@@ -1505,7 +1505,7 @@ internal class AvafliExperienceViewModel(
                     ),
                 )
                 analytics?.trackEvent(
-                    "winr_prize_claim_submitted",
+                    "avafli_prize_claim_submitted",
                     mapOf(
                         "giveaway_id" to screen.claim.giveawayId,
                         "claim_number" to response.claimNumber,

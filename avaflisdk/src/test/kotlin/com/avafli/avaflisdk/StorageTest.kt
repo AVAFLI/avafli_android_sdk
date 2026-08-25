@@ -1,6 +1,7 @@
 package com.avafli.avaflisdk
 
 import com.avafli.avaflisdk.storage.PreferencesStorage
+import com.avafli.avaflisdk.storage.SecureStorage
 import io.mockk.*
 import org.junit.Assert.*
 import org.junit.Test
@@ -11,6 +12,31 @@ import org.junit.Test
  * These tests validate the PreferencesStorage logic using mocks.
  */
 class StorageTest {
+
+    // ── Guest-id minting (3.0.0 rebrand) ──
+    // NEW guest ids carry the avafli_guest_ prefix; the storage KEY stays
+    // winr_guest_id and stored ids are never rewritten, so existing installs
+    // keep their pre-rebrand winr_guest_ identity verbatim (verified by
+    // loadOrCreateGuestId returning any stored value untouched).
+
+    @Test
+    fun `minted guest ids carry the avafli prefix`() {
+        val id = SecureStorage.mintGuestId()
+        assertTrue(id.startsWith("avafli_guest_"))
+    }
+
+    @Test
+    fun `minted guest ids are lowercase uuids after the prefix`() {
+        val suffix = SecureStorage.mintGuestId().removePrefix("avafli_guest_")
+        assertTrue(
+            suffix.matches(Regex("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"))
+        )
+    }
+
+    @Test
+    fun `minted guest ids are unique per mint`() {
+        assertNotEquals(SecureStorage.mintGuestId(), SecureStorage.mintGuestId())
+    }
 
     @Test
     fun `completed days serialization round trips correctly`() {

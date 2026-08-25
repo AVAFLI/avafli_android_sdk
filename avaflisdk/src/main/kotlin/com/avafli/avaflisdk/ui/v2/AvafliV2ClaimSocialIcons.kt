@@ -136,7 +136,7 @@ internal object AvafliShareSheet {
     }
 
     /**
-     * Appends `utm_source={network}&utm_medium=winr_share` to the publisher's
+     * Appends `utm_source={network}&utm_medium=avafli_share` to the publisher's
      * shareUrl (via okhttp's HttpUrl builder, so URLs with an existing query
      * string extend correctly). A URL already carrying a `utm_source` param is
      * returned untouched — the publisher's own tagging wins. Unparseable URLs
@@ -148,7 +148,7 @@ internal object AvafliShareSheet {
         if (url.queryParameter("utm_source") != null) return shareUrl
         return url.newBuilder()
             .addQueryParameter("utm_source", network)
-            .addQueryParameter("utm_medium", "winr_share")
+            .addQueryParameter("utm_medium", "avafli_share")
             .build()
             .toString()
     }

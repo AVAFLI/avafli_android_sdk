@@ -38,7 +38,7 @@ data class AvafliUser(
         /**
          * A guest session — the person is not signed in to YOUR app (or your
          * app has no accounts). The SDK mints a stable per-install guest id
-         * (`winr_guest_…`) and uses it for attribution, so there is always a
+         * (`avafli_guest_…`) and uses it for attribution, so there is always a
          * real identifier without your integration fabricating one. The Avafli
          * experience is fully functional for guests; when your user signs in,
          * call configure again with the real user and attribution upgrades in

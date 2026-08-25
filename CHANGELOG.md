@@ -31,6 +31,16 @@ Avafli 3.x only.
   | `WINR.optOut()` | `Avafli.optOut()` |
   | `WINR.registerForPushNotifications(...)` | `Avafli.registerForPushNotifications(...)` |
   | `WINR.onNewToken(...)` | `Avafli.onNewToken(...)` |
+  | Analytics events `winr_*` (`winr_daily_entry_claimed`, `winr_opted_out`, `winr_email_verified`, `winr_winner_claim_shown`, `winr_prize_claim_submitted`, `winr_adoption_restaged`) | `avafli_*` equivalents |
+  | Share links `utm_medium=winr_share` | `utm_medium=avafli_share` |
+  | New guest ids minted as `winr_guest_…` | Minted as `avafli_guest_…` |
+
+  Guest ids already persisted on a device are **not rewritten** — stored
+  identity is never migrated, so existing installs keep their
+  `winr_guest_…` id (and their streaks and attribution) verbatim; only
+  freshly minted ids carry the new prefix. Adopted platform-wide to match
+  the web SDK 3.0; the backend performs no validation or aggregation on
+  event names, the UTM tag, or the guest-id prefix.
 
 - **Internal symbols, resources, and the example app** renamed to the Avafli
   prefix throughout (`WinrApi` → `AvafliApi`, `WINRV2*`/`V2*` composables →
@@ -41,11 +51,10 @@ Avafli 3.x only.
 - **User-visible branding** — all "WINR" / "WINR Media" strings in the
   experience and the example app now read Avafli.
 - **Unchanged on purpose (compatibility):** legal document URLs remain on
-  `winrmedia.com`; API key prefixes remain `winr_live_` / `winr_test_`; guest
-  ids remain `winr_guest_…`; analytics event names (e.g.
-  `winr_daily_entry_claimed`) and the `utm_medium=winr_share` share tag are
-  unchanged; on-device storage keys are unchanged so existing installs keep
-  their streaks, entries, auth, and opt-out state across the upgrade.
+  `winrmedia.com`; API key prefixes remain `winr_live_` / `winr_test_`;
+  on-device storage (prefs file names and keys, including the stored guest
+  id) is unchanged so existing installs keep their streaks, entries, auth,
+  guest identity, and opt-out state across the upgrade.
 
 
 ## 2.9.6 — 2026-08-18

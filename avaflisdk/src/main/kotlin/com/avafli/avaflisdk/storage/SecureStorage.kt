@@ -80,12 +80,14 @@ internal class SecureStorage(context: Context) {
      * Stable per-install guest identity, minted on first use. Persisted in
      * EncryptedSharedPreferences so a guest's attribution doesn't churn per
      * session.
+     *
+     * Stored identity is NEVER migrated: an id persisted under the pre-3.0
+     * `winr_guest_` prefix keeps being returned verbatim — only ids minted
+     * from 3.0.0 on carry the `avafli_guest_` prefix.
      */
     fun loadOrCreateGuestId(): String {
-        getString("winr_guest_id")?.let { return it }
-        val fresh = "winr_guest_" + java.util.UUID.randomUUID().toString().lowercase()
-        saveString("winr_guest_id", fresh)
-        return fresh
+        getString(KEY_GUEST_ID)?.let { return it }
+        return mintGuestId().also { saveString(KEY_GUEST_ID, it) }
     }
 
     fun remove(key: String) {
@@ -93,9 +95,17 @@ internal class SecureStorage(context: Context) {
     }
 
     companion object {
+        // Prefs file and keys deliberately keep their pre-rebrand winr_ names —
+        // renaming them would orphan existing installs' auth, identity, and
+        // opt-out state on upgrade.
         private const val PREFS_NAME = "winr_secure_prefs"
         private const val KEY_TOKEN = "winr_auth_token"
         private const val KEY_REFRESH_TOKEN = "winr_refresh_token"
         private const val KEY_UUID = "winr_device_uuid"
+        private const val KEY_GUEST_ID = "winr_guest_id"
+
+        /** A fresh guest id — `avafli_guest_` + lowercase UUID (3.0.0+). */
+        internal fun mintGuestId(): String =
+            "avafli_guest_" + java.util.UUID.randomUUID().toString().lowercase()
     }
 }

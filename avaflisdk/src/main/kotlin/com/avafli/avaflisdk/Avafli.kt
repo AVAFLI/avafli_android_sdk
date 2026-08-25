@@ -175,7 +175,7 @@ object Avafli {
                         // Guests get the SDK-minted stable id; a later configure
                         // with the signed-in user overwrites it in place.
                         publisherUserId = if (user.isGuest) {
-                            secureStorage?.loadOrCreateGuestId() ?: "winr_guest_unpersisted"
+                            secureStorage?.loadOrCreateGuestId() ?: "avafli_guest_unpersisted"
                         } else user.id
                     )
                 } catch (e: Exception) {
