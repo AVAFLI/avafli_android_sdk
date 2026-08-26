@@ -126,7 +126,7 @@ dependencies {
 }
 ```
 
-> **Note:** Contact [AVAFLI](https://avafli-website.web.app/sdk/pricing) to obtain an API key.
+> **Note:** Contact [AVAFLI](https://sdk.avafli.com/pricing) to obtain an API key.
 
 ## Migrating from 2.x (WINR SDK)
 
@@ -283,11 +283,11 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
 
 ### 4. Upload FCM Service Account Key
 
-Upload your FCM service account key via the [Avafli Dashboard](https://avafli-website.web.app/sdk/dashboard) to enable push notifications. Reminder schedules and messaging are configured server-side from the dashboard.
+Upload your FCM service account key via the [Avafli Dashboard](https://sdk.avafli.com/dashboard) to enable push notifications. Reminder schedules and messaging are configured server-side from the dashboard.
 
 ## Customization
 
-The V2 experience is hardcoded to the Avafli design; publishers customize exactly three things through the [Avafli Dashboard](https://avafli-website.web.app/sdk/dashboard):
+The V2 experience is hardcoded to the Avafli design; publishers customize exactly three things through the [Avafli Dashboard](https://sdk.avafli.com/dashboard):
 
 - **Logo** — Shown in the drawer header
 - **Prize image** — Art for the dashboard prize card
@@ -368,12 +368,12 @@ section runs the same erasure as `optOut()`.
 | `Avafli.registerForPushNotifications(context)` | `Unit` | Register for push notifications |
 | `Avafli.onNewToken(token)` | `Unit` | Forward an FCM token to Avafli |
 
-For detailed API documentation, see the [Avafli Docs](https://avafli-website.web.app/sdk/android).
+For detailed API documentation, see the [Avafli Docs](https://sdk.avafli.com/android).
 
 ## Links
 
-- **Dashboard:** [https://avafli-website.web.app/sdk/dashboard](https://avafli-website.web.app/sdk/dashboard)
-- **Documentation:** [https://avafli-website.web.app/sdk/android](https://avafli-website.web.app/sdk/android)
+- **Dashboard:** [https://sdk.avafli.com/dashboard](https://sdk.avafli.com/dashboard)
+- **Documentation:** [https://sdk.avafli.com/android](https://sdk.avafli.com/android)
 - **Support:** [info@avafli.com](mailto:info@avafli.com)
 
 ---
