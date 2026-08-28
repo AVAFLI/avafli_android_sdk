@@ -24,6 +24,7 @@ Avafli lets you add daily-entry sweepstakes and prize experiences to your app in
 - **Push reminders** — Drive re-engagement with daily nudges (FCM); requests POST_NOTIFICATIONS on Android 13+
 - **Server-driven branding** — Logo, prize image, and primary color update without app releases
 - **GDPR/CCPA compliant** — Built-in consent flows, RTD opt-out via `optOut()`, and a self-serve "Delete my data & stop participating" section inside the in-app Privacy Policy
+- **No ad tracking** — The SDK collects no advertising identifiers (no Google advertising ID)
 - **Analytics forwarding** — Route SDK events to your existing analytics stack
 
 ## Quick Start
@@ -122,7 +123,7 @@ In your app-level `build.gradle.kts`:
 
 ```kotlin
 dependencies {
-    implementation("com.github.AVAFLI:avafli_android_sdk:v3.0.0")
+    implementation("com.github.AVAFLI:avafli_android_sdk:v3.0.1")
 }
 ```
 

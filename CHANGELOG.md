@@ -5,6 +5,24 @@ will be documented in this file. Entries for 2.9.6 and earlier predate the
 rebrand and use the former WINR names.
 
 
+## 3.0.1 — 2026-08-28
+
+### Removed
+
+- **Google advertising ID collection.** The SDK no longer reads the GAID
+  (the reflection-based `AdvertisingIdClient` lookup is gone) and sends no
+  advertising identifier. The backend `maid_id` field remains optional-absent
+  on the wire for a future opt-in attribution feature.
+
+### Fixed
+
+- **Status-state pills take the publisher accent.** The empty, geo-blocked,
+  and session-expired full-drawer states hardcoded the Avafli default blue on
+  their CTA pill, so a publisher-themed drawer flashed off-brand on those
+  screens. The resolved accent (`sdkConfig.branding.primaryColor`) now threads
+  from the root into these states — matching iOS and web.
+
+
 ## 3.0.0 — 2026-08-25
 
 **Full brand rename: WINR → Avafli.** Behavior, backend, and API keys are

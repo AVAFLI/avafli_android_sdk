@@ -40,9 +40,6 @@ import java.util.TimeZone
  */
 object Avafli {
 
-    /** All-zeros UUID returned by the Ad ID provider when the user has opted out. */
-    private const val OPT_OUT_AD_ID = "00000000-0000-0000-0000-000000000000"
-
     /** Request code for the Android 13+ POST_NOTIFICATIONS runtime prompt. */
     private const val REQUEST_CODE_POST_NOTIFICATIONS = 0x7717
 
@@ -165,13 +162,14 @@ object Avafli {
             // Submit user profile once we have a token
             if (secureStorage?.getToken() != null) {
                 try {
-                    val maidId = getAdvertisingId()
+                    // Advertising-id collection removed Aug 2026: the SDK collects no
+                    // Google advertising ID (GAID). The backend maid_id field remains
+                    // optional-absent for a future opt-in attribution feature.
                     api?.submitUserProfile(
                         firstName = user.firstName,
                         lastName = user.lastName,
                         phone = user.phone,
                         smsConsent = false,
-                        maidId = maidId,
                         // Guests get the SDK-minted stable id; a later configure
                         // with the signed-in user overwrites it in place.
                         publisherUserId = if (user.isGuest) {
@@ -608,39 +606,4 @@ object Avafli {
         ) ?: "unknown"
     }
 
-    private suspend fun getAdvertisingId(): String? = withContext(Dispatchers.IO) {
-        try {
-            val adIdClientClass = Class.forName(
-                "com.google.android.gms.ads.identifier.AdvertisingIdClient"
-            )
-            val getInfoMethod = adIdClientClass.getMethod(
-                "getAdvertisingIdInfo",
-                Context::class.java
-            )
-            val info = getInfoMethod.invoke(null, config?.context)
-
-            // Respect the user's limit-ad-tracking choice. If LAT is enabled we must not
-            // collect the GAID (spec: maid_id only collected when GAID is granted).
-            val isLatMethod = info?.javaClass?.getMethod("isLimitAdTrackingEnabled")
-            val limitAdTracking = isLatMethod?.invoke(info) as? Boolean ?: true
-            if (limitAdTracking) {
-                logger?.debug("Limit-ad-tracking enabled; omitting GAID")
-                return@withContext null
-            }
-
-            val getIdMethod = info?.javaClass?.getMethod("getId")
-            val adId = getIdMethod?.invoke(info) as? String
-
-            // The all-zeros UUID is the documented opt-out sentinel; treat as unavailable.
-            if (adId == null || adId == OPT_OUT_AD_ID) {
-                logger?.debug("GAID unavailable or opt-out sentinel; omitting")
-                null
-            } else {
-                adId
-            }
-        } catch (e: Exception) {
-            logger?.debug("AdvertisingId not available: ${e.message}")
-            null
-        }
-    }
 }

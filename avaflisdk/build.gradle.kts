@@ -88,9 +88,6 @@ dependencies {
     // Secure Storage
     implementation(libs.security.crypto)
 
-    // Optional: Ad ID
-    compileOnly(libs.play.services.ads.identifier)
-
     // Optional: FCM
     compileOnly(libs.firebase.messaging)
 
@@ -108,7 +105,7 @@ afterEvaluate {
                 from(components["release"])
                 groupId = "com.avafli"
                 artifactId = "avafli-sdk"
-                version = "3.0.0"
+                version = "3.0.1"
 
                 pom {
                     name.set("Avafli SDK")
