@@ -202,11 +202,12 @@ private fun DrawerContent(
         // AvafliError text is never rendered. Geo-block and session expiry are
         // routed to their dedicated states below.
         is ExperienceScreen.NoActiveGiveaway,
-        is ExperienceScreen.Error -> EmptyState(onDismiss)
+        is ExperienceScreen.Error -> EmptyState(accent, onDismiss)
 
-        is ExperienceScreen.GeoBlocked -> GeoBlockedState(onDismiss)
+        is ExperienceScreen.GeoBlocked -> GeoBlockedState(accent, onDismiss)
 
         is ExperienceScreen.SessionExpired -> SessionExpiredState(
+            accent = accent,
             onRetry = { viewModel.retryAfterSessionExpiry() },
             onDismiss = onDismiss,
         )
@@ -366,8 +367,9 @@ private fun DrawerContent(
 
 /** Nothing to pitch (or opted out / unrecognized error) — quiet empty state. */
 @Composable
-private fun EmptyState(onDismiss: () -> Unit) {
+private fun EmptyState(accent: Color, onDismiss: () -> Unit) {
     StatusState(
+        accent = accent,
         headline = AvafliV2Strings.EMPTY_HEADLINE,
         body = AvafliV2Strings.EMPTY_BODY,
         primaryTitle = AvafliV2Strings.CLOSE,
@@ -377,8 +379,9 @@ private fun EmptyState(onDismiss: () -> Unit) {
 
 /** US-only geo-fence rejection — the person learns WHY nothing is available. */
 @Composable
-private fun GeoBlockedState(onDismiss: () -> Unit) {
+private fun GeoBlockedState(accent: Color, onDismiss: () -> Unit) {
     StatusState(
+        accent = accent,
         headline = AvafliV2Strings.GEO_BLOCKED_HEADLINE,
         body = AvafliV2Strings.GEO_BLOCKED_BODY,
         primaryTitle = AvafliV2Strings.CLOSE,
@@ -388,8 +391,9 @@ private fun GeoBlockedState(onDismiss: () -> Unit) {
 
 /** Token refresh failed — RETRY re-registers the device and reloads. */
 @Composable
-private fun SessionExpiredState(onRetry: () -> Unit, onDismiss: () -> Unit) {
+private fun SessionExpiredState(accent: Color, onRetry: () -> Unit, onDismiss: () -> Unit) {
     StatusState(
+        accent = accent,
         headline = AvafliV2Strings.SESSION_EXPIRED,
         body = null,
         primaryTitle = AvafliV2Strings.RETRY,
@@ -402,9 +406,12 @@ private fun SessionExpiredState(onRetry: () -> Unit, onDismiss: () -> Unit) {
 /**
  * Shared full-drawer status layout: bold headline, optional body, primary
  * pill, optional secondary text action (the EmptyState look, generalized).
+ * The pill takes the PUBLISHER accent (branding parity — never the Avafli
+ * default blue when the publisher has themed the drawer).
  */
 @Composable
 private fun StatusState(
+    accent: Color,
     headline: String,
     body: String?,
     primaryTitle: String,
@@ -437,7 +444,7 @@ private fun StatusState(
             )
         }
         AvafliV2PillButton(
-            accent = AvafliV2Color.avafliBlue,
+            accent = accent,
             title = primaryTitle,
             modifier = Modifier.padding(top = 24.dp).width(220.dp),
         ) { onPrimary() }
