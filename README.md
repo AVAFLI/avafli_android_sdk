@@ -123,7 +123,7 @@ In your app-level `build.gradle.kts`:
 
 ```kotlin
 dependencies {
-    implementation("com.github.AVAFLI:avafli_android_sdk:v3.0.2")
+    implementation("com.github.AVAFLI:avafli_android_sdk:v3.0.3")
 }
 ```
 

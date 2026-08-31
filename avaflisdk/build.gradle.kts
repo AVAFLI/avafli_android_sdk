@@ -105,7 +105,7 @@ afterEvaluate {
                 from(components["release"])
                 groupId = "com.avafli"
                 artifactId = "avafli-sdk"
-                version = "3.0.2"
+                version = "3.0.3"
 
                 pom {
                     name.set("Avafli SDK")

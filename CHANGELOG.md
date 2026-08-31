@@ -5,7 +5,7 @@ will be documented in this file. Entries for 2.9.6 and earlier predate the
 rebrand and use the former WINR names.
 
 
-## Unreleased
+## 3.0.3 — 2026-09-01
 
 ### Changed
 
@@ -15,6 +15,21 @@ rebrand and use the former WINR names.
   banner's + button — renders only when the server sends
   `sdkConfig.experience.winnerBannerEnabled: true`; absent, `false`, or `null`
   hides it. Admin enables per publisher.
+
+### Fixed
+
+- **`smsConsent` is never transmitted unless the user actually expressed it.**
+  The user-update call previously defaulted `smsConsent` to `false` and always
+  sent it, which the server recorded as an explicit opt-out (stamping a
+  spurious `sms_optout_ts`). The field is now tri-state (`Boolean?`, default
+  `null`) and is omitted from the payload when unset.
+
+### Docs
+
+- README and docs now show the current API key prefixes
+  (`avafli_test_` / `avafli_live_`), and the rename-era "Migrating from 2.x
+  (WINR SDK)" section is removed (the 3.0.0 CHANGELOG entry keeps the
+  migration table).
 
 
 ## 3.0.2 — 2026-08-31
