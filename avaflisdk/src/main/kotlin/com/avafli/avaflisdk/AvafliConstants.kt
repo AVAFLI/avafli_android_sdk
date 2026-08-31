@@ -12,5 +12,5 @@ internal object AvafliConstants {
      * configured `rulesUrl`. Before 2.9.2 the privacy links latently opened
      * `rulesUrl` — a cross-platform bug fixed on all SDKs.
      */
-    const val PRIVACY_URL = "https://winrmedia.com/sdk/privacy"
+    const val PRIVACY_URL = "https://sdk.avafli.com/sdk/privacy"
 }

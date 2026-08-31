@@ -47,7 +47,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 // In-experience legal webview (2.9.4): Official Rules and the Privacy Policy
 // open INSIDE the drawer instead of bouncing the user out to a browser
 // (ACTION_VIEW). The privacy page is loaded with ?app=1 — the parallel in-app
-// build of winrmedia.com/sdk/privacy that renders a "Delete my data" section —
+// build of sdk.avafli.com/sdk/privacy that renders a "Delete my data" section —
 // and hands control back to the SDK via a delete-bridge navigation —
 // `avafli://delete`, with the legacy `winr://delete` still honored (the hosted
 // privacy page predates the Avafli rebrand and may emit either) — which the

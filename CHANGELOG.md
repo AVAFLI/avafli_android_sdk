@@ -5,6 +5,18 @@ will be documented in this file. Entries for 2.9.6 and earlier predate the
 rebrand and use the former WINR names.
 
 
+## 3.0.2 — 2026-08-31
+
+### Changed
+
+- **Legal pages now load from `sdk.avafli.com`; no `winrmedia.com` references
+  remain.** The fallback Privacy Policy URL (`AvafliConstants.PRIVACY_URL`) is
+  now `https://sdk.avafli.com/sdk/privacy` — the `?app=1` in-app build and the
+  delete-bridge flow are unchanged, and the legacy `winr://delete` bridge
+  navigation is still honored alongside `avafli://delete`. With no legacy
+  installed base, no `winrmedia.com` compatibility is retained.
+
+
 ## 3.0.1 — 2026-08-28
 
 ### Removed

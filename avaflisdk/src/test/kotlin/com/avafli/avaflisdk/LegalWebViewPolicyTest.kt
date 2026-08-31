@@ -22,22 +22,28 @@ class LegalWebViewPolicyTest {
     @Test
     fun `appends app=1 to the default privacy URL`() {
         assertEquals(
-            "https://winrmedia.com/sdk/privacy?app=1",
+            "https://sdk.avafli.com/sdk/privacy?app=1",
             AvafliLegalWebPolicy.privacyUrlForApp(),
         )
     }
 
     @Test
+    fun `the default privacy URL is hosted on sdk avafli com — not the retired winrmedia host`() {
+        assertEquals("https://sdk.avafli.com/sdk/privacy", AvafliConstants.PRIVACY_URL)
+        assertFalse(AvafliConstants.PRIVACY_URL.contains("winrmedia"))
+    }
+
+    @Test
     fun `appends app=1 to a URL with an existing query string`() {
         assertEquals(
-            "https://winrmedia.com/sdk/privacy?lang=en&app=1",
-            AvafliLegalWebPolicy.privacyUrlForApp("https://winrmedia.com/sdk/privacy?lang=en"),
+            "https://sdk.avafli.com/sdk/privacy?lang=en&app=1",
+            AvafliLegalWebPolicy.privacyUrlForApp("https://sdk.avafli.com/sdk/privacy?lang=en"),
         )
     }
 
     @Test
     fun `leaves a URL already carrying an app param untouched`() {
-        val url = "https://winrmedia.com/sdk/privacy?app=1"
+        val url = "https://sdk.avafli.com/sdk/privacy?app=1"
         assertEquals(url, AvafliLegalWebPolicy.privacyUrlForApp(url))
     }
 
@@ -72,8 +78,8 @@ class LegalWebViewPolicyTest {
 
     @Test
     fun `ordinary web navigations are not intercepted`() {
-        assertFalse(AvafliLegalWebPolicy.isDeleteBridge("https://winrmedia.com/sdk/privacy?app=1"))
-        assertFalse(AvafliLegalWebPolicy.isDeleteBridge("https://winrmedia.com/delete"))
+        assertFalse(AvafliLegalWebPolicy.isDeleteBridge("https://sdk.avafli.com/sdk/privacy?app=1"))
+        assertFalse(AvafliLegalWebPolicy.isDeleteBridge("https://sdk.avafli.com/delete"))
         assertFalse(AvafliLegalWebPolicy.isDeleteBridge("mailto:info@avafli.com"))
     }
 
