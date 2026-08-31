@@ -44,6 +44,14 @@ internal fun AvafliV2DashboardScreen(
     onClose: () -> Unit,
     onWinnerTap: (() -> Unit)? = null,
     /**
+     * Server flag gate for the "WE HAVE A WINNER!" banner (Aug 31 GTM
+     * decision): the banner — and with it the winner-feed modal, whose only
+     * entry point is the banner's + button — renders ONLY when
+     * `sdkConfig.experience.winnerBannerEnabled` is exactly true. Default
+     * false (absent/false/null → hidden), keeping GOT IT above the fold.
+     */
+    winnerBannerEnabled: Boolean = false,
+    /**
      * Soft email verification (2.7.0): show the persistent "Verify your email"
      * chip while the typed email is unconfirmed. Non-blocking — it never covers
      * the streak content and gates nothing; tapping opens the code screen.
@@ -105,7 +113,7 @@ internal fun AvafliV2DashboardScreen(
                     onRetry = onNoticeRetry,
                 )
             }
-            if (giveaway?.latestWinner != null && onWinnerTap != null) {
+            if (winnerBannerEnabled && giveaway?.latestWinner != null && onWinnerTap != null) {
                 AvafliV2WinnerBanner(onTap = onWinnerTap)
             }
             AvafliV2PrizeCard(

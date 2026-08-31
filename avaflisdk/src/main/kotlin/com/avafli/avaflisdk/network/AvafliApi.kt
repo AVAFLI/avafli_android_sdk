@@ -507,7 +507,8 @@ internal class AvafliApi(
             ExperienceConfig(
                 autoOpenEnabled = it["autoOpenEnabled"]?.jsonPrimitive?.booleanOrNull,
                 unregisteredImpressionCap = it["unregisteredImpressionCap"]?.jsonPrimitive?.intOrNull,
-                requireDismissClick = it["requireDismissClick"]?.jsonPrimitive?.booleanOrNull
+                requireDismissClick = it["requireDismissClick"]?.jsonPrimitive?.booleanOrNull,
+                winnerBannerEnabled = it["winnerBannerEnabled"]?.jsonPrimitive?.booleanOrNull
             )
         }
 

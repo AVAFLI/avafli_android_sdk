@@ -57,7 +57,14 @@ data class ExperienceConfig(
      */
     val unregisteredImpressionCap: Int? = null,
     /** Dismissal requires an explicit tap; never auto-fade (default true). */
-    val requireDismissClick: Boolean? = null
+    val requireDismissClick: Boolean? = null,
+    /**
+     * "WE HAVE A WINNER!" dashboard banner — the winner feed's only entry
+     * point. Shown ONLY when this is exactly true; absent/false/null → hidden.
+     * Default OFF (Aug 31 GTM decision — keeps the GOT IT button above the
+     * fold); admin enables per publisher.
+     */
+    val winnerBannerEnabled: Boolean? = null
 )
 
 /**

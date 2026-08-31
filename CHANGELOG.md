@@ -5,6 +5,18 @@ will be documented in this file. Entries for 2.9.6 and earlier predate the
 rebrand and use the former WINR names.
 
 
+## Unreleased
+
+### Changed
+
+- **The "WE HAVE A WINNER!" dashboard banner is now server-flag-gated and
+  hidden by default** (Aug 31 GTM decision — keeps the GOT IT button above the
+  fold). The banner — and the winner-feed modal, whose only entry point is the
+  banner's + button — renders only when the server sends
+  `sdkConfig.experience.winnerBannerEnabled: true`; absent, `false`, or `null`
+  hides it. Admin enables per publisher.
+
+
 ## 3.0.2 — 2026-08-31
 
 ### Changed

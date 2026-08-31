@@ -314,6 +314,10 @@ private fun DrawerContent(
                 onInfo = { viewModel.showHowItWorks() },
                 onClose = onDismiss,
                 onWinnerTap = onWinnerTap,
+                // Winner banner is server-flag-gated, default hidden (Aug 31
+                // GTM): only an explicit true shows it (and thereby the winner
+                // feed — the banner is the feed's only entry point).
+                winnerBannerEnabled = ui.sdkConfig?.experience?.winnerBannerEnabled == true,
                 // Soft email verification (2.7.0): persistent, non-blocking chip.
                 showVerifyChip = ui.unverified,
                 onVerifyTap = { viewModel.showEmailVerification() },

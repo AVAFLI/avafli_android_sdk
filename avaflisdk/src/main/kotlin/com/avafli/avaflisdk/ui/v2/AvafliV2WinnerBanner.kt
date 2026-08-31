@@ -31,7 +31,9 @@ import com.avafli.avaflisdk.R
 
 /**
  * "WE HAVE A WINNER!" banner (below the header, above the prize card), ported
- * from iOS AvafliV2WinnerBanner. Shown when the giveaway carries a latestWinner.
+ * from iOS AvafliV2WinnerBanner. Shown only when the giveaway carries a
+ * latestWinner AND the server flag `sdkConfig.experience.winnerBannerEnabled`
+ * is exactly true (default hidden — Aug 31 GTM decision).
  */
 @Composable
 internal fun AvafliV2WinnerBanner(
