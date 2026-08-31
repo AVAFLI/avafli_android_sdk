@@ -129,33 +129,6 @@ dependencies {
 
 > **Note:** Contact [AVAFLI](https://sdk.avafli.com/pricing) to obtain an API key.
 
-## Migrating from 2.x (WINR SDK)
-
-Version 3.0.0 renames the SDK from **WINR** to **Avafli**. The behavior, backend,
-and your API keys are unchanged — only the coordinates and symbols moved. The
-2.9.x line stays functional but frozen; all new work ships as Avafli 3.x.
-
-| 2.x (WINR) | 3.x (Avafli) |
-| ---------- | ------------ |
-| `com.github.AVAFLI:winr_android_sdk:v2.9.6` | `com.github.AVAFLI:avafli_android_sdk:v3.0.0` |
-| `import com.avafli.winrsdk.*` | `import com.avafli.avaflisdk.*` |
-| `WINR.configure(...)` | `Avafli.configure(...)` |
-| `WINRConfiguration` | `AvafliConfiguration` |
-| `WINRUser` / `WINRUser.GUEST` | `AvafliUser` / `AvafliUser.GUEST` |
-| `WINROptions` | `AvafliOptions` |
-| `WINREnvironment` | `AvafliEnvironment` |
-| `WINRError` | `AvafliError` |
-| `WINR.optOut()` / `WINR.onNewToken(...)` | `Avafli.optOut()` / `Avafli.onNewToken(...)` |
-| Analytics events `winr_*` (e.g. `winr_daily_entry_claimed`) | `avafli_*` (e.g. `avafli_daily_entry_claimed`) |
-| Share links `utm_medium=winr_share` | `utm_medium=avafli_share` |
-| New guest ids minted as `winr_guest_…` | Minted as `avafli_guest_…` (ids already stored on a device are NOT rewritten) |
-
-If you forward SDK analytics events or filter share traffic on `utm_medium`,
-update those references to the `avafli_` names. API keys keep their existing
-`winr_live_` / `winr_test_` prefixes — no dashboard, backend, or key changes
-are needed. Existing installs upgrade in place: streaks, entries, guest
-identity, and opt-out state carry over.
-
 ## Configuration
 
 Initialize the SDK with your user and environment settings:
