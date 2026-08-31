@@ -313,7 +313,7 @@ internal class AvafliApi(
         firstName: String? = null,
         lastName: String? = null,
         phone: String? = null,
-        smsConsent: Boolean = false,
+        smsConsent: Boolean? = null,
         maidId: String? = null,
         publisherUserId: String? = null
     ): Boolean {
@@ -321,7 +321,7 @@ internal class AvafliApi(
             firstName?.let { put("firstName", JsonPrimitive(it)) }
             lastName?.let { put("lastName", JsonPrimitive(it)) }
             phone?.let { put("phone", JsonPrimitive(it)) }
-            put("smsConsent", JsonPrimitive(smsConsent))
+            smsConsent?.let { put("smsConsent", JsonPrimitive(it)) }
             maidId?.let { put("maidId", JsonPrimitive(it)) }
             publisherUserId?.let { put("publisherUserId", JsonPrimitive(it)) }
         }

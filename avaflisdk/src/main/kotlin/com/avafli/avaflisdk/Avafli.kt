@@ -169,7 +169,6 @@ object Avafli {
                         firstName = user.firstName,
                         lastName = user.lastName,
                         phone = user.phone,
-                        smsConsent = false,
                         // Guests get the SDK-minted stable id; a later configure
                         // with the signed-in user overwrites it in place.
                         publisherUserId = if (user.isGuest) {
