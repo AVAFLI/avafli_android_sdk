@@ -37,7 +37,7 @@ import com.avafli.avaflisdk.AvafliUser
 
 val config = AvafliConfiguration(
     context = applicationContext,
-    apiKey = "YOUR_API_KEY",  // debug builds: use your winr_test_ sandbox key
+    apiKey = "YOUR_API_KEY",  // debug builds: use your avafli_test_ sandbox key
     user = AvafliUser(
         id = "user_123",              // only id is required — pass whatever identity you have
         firstName = "Jane",
@@ -90,7 +90,7 @@ user = AvafliUser(id = "user_123", firstName = "Jane", lastName = "Doe", email =
 
 ```kotlin
 Avafli.configure(context, AvafliConfiguration(
-    apiKey = "winr_live_…",
+    apiKey = "avafli_live_…",
     bundleId = packageName,
     user = AvafliUser.GUEST,
 ))
@@ -136,7 +136,7 @@ Initialize the SDK with your user and environment settings:
 ```kotlin
 val config = AvafliConfiguration(
     context = applicationContext,
-    apiKey = "winr_live_xxxxxxxxxx",
+    apiKey = "avafli_live_xxxxxxxxxx",
     environment = AvafliEnvironment.Production,
     user = AvafliUser(
         id = "user_abc123",
@@ -197,8 +197,8 @@ Your publisher dashboard shows two API keys:
 
 | Key | Use it in |
 | --- | --------- |
-| `winr_live_…` | Release builds — your real giveaway |
-| `winr_test_…` | Debug/dev builds and CI — an isolated sandbox |
+| `avafli_live_…` | Release builds — your real giveaway |
+| `avafli_test_…` | Debug/dev builds and CI — an isolated sandbox |
 
 The sandbox key hits the **same production backend** with identical behavior —
 registration, streaks, entries, the full experience — but every user and entry
