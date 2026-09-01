@@ -2,12 +2,16 @@ package com.avafli.avaflisdk.storage
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.avafli.avaflisdk.offline.OfflineStateStore
 
 /**
  * Non-sensitive preferences storage using standard SharedPreferences.
  * Used for streak state, UI preferences, and other non-secret data.
+ * Implements [OfflineStateStore] so the offline retry queue and analytics
+ * buffer persist alongside the SDK's other state (non-secret material, so
+ * SharedPreferences rather than SecureStorage).
  */
-internal class PreferencesStorage(context: Context) {
+internal class PreferencesStorage(context: Context) : OfflineStateStore {
 
     private val prefs: SharedPreferences = context.getSharedPreferences(
         PREFS_NAME, Context.MODE_PRIVATE
@@ -86,6 +90,21 @@ internal class PreferencesStorage(context: Context) {
 
     fun isOptedOut(): Boolean {
         return prefs.getBoolean("${KEY_OPTED_OUT}_$packageName", false)
+    }
+
+    // ── OfflineStateStore (offline retry queue + analytics buffer) ──
+    // Callers pass fully-namespaced keys (winr_… + `_$packageName` suffix).
+
+    override fun putString(key: String, value: String) {
+        prefs.edit().putString(key, value).apply()
+    }
+
+    override fun getString(key: String): String? {
+        return prefs.getString(key, null)
+    }
+
+    override fun remove(key: String) {
+        prefs.edit().remove(key).apply()
     }
 
     fun clearAll() {

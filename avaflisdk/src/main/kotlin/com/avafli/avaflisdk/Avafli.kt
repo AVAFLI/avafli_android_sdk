@@ -16,6 +16,10 @@ import com.avafli.avaflisdk.domain.Giveaway
 import com.avafli.avaflisdk.domain.SdkConfig
 import com.avafli.avaflisdk.network.NetworkClient
 import com.avafli.avaflisdk.network.AvafliApi
+import com.avafli.avaflisdk.offline.AvafliOfflineResilience
+import com.avafli.avaflisdk.offline.OfflineErrorClassifier
+import com.avafli.avaflisdk.offline.PendingIntent
+import com.avafli.avaflisdk.offline.RetryOutcome
 import com.avafli.avaflisdk.services.Logger
 import com.avafli.avaflisdk.services.PushNotificationManager
 import com.avafli.avaflisdk.storage.PreferencesStorage
@@ -131,6 +135,18 @@ object Avafli {
 
         logger?.info("Avafli SDK configured (env: ${resolvedConfig.environment.name}, debug: ${resolvedConfig.isDebug})")
 
+        // Offline resilience (launch item 15): connectivity monitor + persisted
+        // same-day retry queue + offline analytics buffering.
+        val offline = AvafliOfflineResilience.activate(
+            context = appContext,
+            store = preferencesStorage!!,
+            scope = scope,
+            logger = logger,
+        )
+        offline.coordinator.retryHandler = { kind -> performOfflineRetry(kind) }
+        // Next-launch flush of analytics buffered during a previous offline run.
+        offline.flushAnalyticsBuffer()
+
         // Auto-present on activity resumes too (covers the "app stayed in memory
         // overnight" case — a new day should re-open the experience).
         registerLifecycleCallbacks(appContext)
@@ -155,9 +171,19 @@ object Avafli {
                 // logged at ERROR with the server's own wording — it is the developer's
                 // problem to fix and they need to be told what it actually is.
                 logger?.error("Avafli device registration failed — the experience will not appear. ${e.message}", e)
+                // NETWORK-class failure (offline/timeout): queue a same-day retry
+                // on connectivity regain / resume / capped backoff. Backend
+                // rejections are NOT queued — they'd only be rejected again.
+                if (OfflineErrorClassifier.isRetriable(e)) {
+                    AvafliOfflineResilience.shared?.coordinator?.enqueue(PendingIntent.Kind.REGISTRATION)
+                }
             }
             registrationComplete = true
             autoPresentIfEligible()
+            // Launch trigger for the offline retry queue: a pending same-day
+            // claim persisted before a kill retries now that the session is
+            // (re)established.
+            AvafliOfflineResilience.shared?.coordinator?.noteLaunch()
 
             // Submit user profile once we have a token
             if (secureStorage?.getToken() != null) {
@@ -193,6 +219,10 @@ object Avafli {
                 if (activity is AvafliExperienceActivity) return
                 currentActivity = WeakReference(activity)
                 autoPresentIfEligible()
+                // Foreground trigger for the offline retry queue + buffered-
+                // analytics flush.
+                AvafliOfflineResilience.shared?.coordinator?.noteForeground()
+                AvafliOfflineResilience.shared?.flushAnalyticsBuffer()
             }
 
             override fun onActivityPaused(activity: Activity) {}
@@ -406,7 +436,11 @@ object Avafli {
             currentApi,
             currentPrefs,
             currentLogger,
-            config?.options?.analyticsAdapter
+            // Route publisher analytics through the offline buffering wrapper
+            // so events emitted while offline are queued (bounded, persisted)
+            // and flushed on reconnect with their original timestamps.
+            AvafliOfflineResilience.shared?.analyticsAdapter(config?.options?.analyticsAdapter)
+                ?: config?.options?.analyticsAdapter
         )
     }
 
@@ -463,6 +497,122 @@ object Avafli {
 
     /** Host-app-provided identity — prefills the winner prize-claim form. */
     internal fun getConfiguredUser(): AvafliUser? = config?.user
+
+    // ── Offline retry execution ──
+
+    /**
+     * @internal A background offline-claim retry just landed — an open
+     * experience registers here so it can reconcile through its existing
+     * load path (no new UI). Cleared in the ViewModel's onCleared().
+     */
+    @Volatile
+    internal var onOfflineClaimRecovered: (() -> Unit)? = null
+
+    /**
+     * @internal A claim transport failure in the experience. Queues a
+     * same-day automatic retry when (and only when) it was a NETWORK-class
+     * failure; backend rejections never queue.
+     */
+    internal fun enqueueOfflineClaimRetry(e: Throwable) {
+        if (!OfflineErrorClassifier.isRetriable(e)) return
+        AvafliOfflineResilience.shared?.coordinator?.enqueue(PendingIntent.Kind.CLAIM)
+    }
+
+    /**
+     * @internal Today's claim is definitively recorded on the backend; drop
+     * any queued claim retry.
+     */
+    internal fun clearOfflineClaimRetry() {
+        AvafliOfflineResilience.shared?.coordinator?.clear(PendingIntent.Kind.CLAIM)
+    }
+
+    /**
+     * Executes one queued offline retry.
+     *
+     * Duplicate-claim safety (verified in the backend claim transaction):
+     * `claimDailyEntries` dedups server-side by the canonical user's
+     * local-day entry window and `daily_last_claimed === today`, throwing an
+     * `already-exists` callable error — so a duplicate retry can never
+     * double-grant, and an already-claimed rejection is treated as SUCCESS.
+     */
+    internal suspend fun performOfflineRetry(kind: PendingIntent.Kind): RetryOutcome {
+        val context = config?.context ?: return RetryOutcome.RETRIABLE_FAILURE
+        return when (kind) {
+            PendingIntent.Kind.REGISTRATION -> try {
+                registerDeviceIfNeeded(context)
+                if (secureStorage?.getToken() != null) {
+                    RetryOutcome.SUCCESS
+                } else {
+                    RetryOutcome.RETRIABLE_FAILURE
+                }
+            } catch (e: Exception) {
+                if (OfflineErrorClassifier.isRetriable(e)) {
+                    RetryOutcome.RETRIABLE_FAILURE
+                } else {
+                    // Backend rejection (bad key, suspension…) — retrying
+                    // would only repeat it.
+                    RetryOutcome.PERMANENT_FAILURE
+                }
+            }
+
+            PendingIntent.Kind.CLAIM -> {
+                val currentApi = api ?: return RetryOutcome.RETRIABLE_FAILURE
+                if (secureStorage?.getToken() == null) {
+                    // Registration has to land first — its own retry restores
+                    // the session; keep the claim queued for the next trigger.
+                    return RetryOutcome.RETRIABLE_FAILURE
+                }
+                try {
+                    val response = currentApi.claimDailyEntries(TimeZone.getDefault().id)
+                    // Persist the claimed state the same way the experience
+                    // does, so the next open renders today as claimed.
+                    preferencesStorage?.saveStreakDay(response.streakDay)
+                    preferencesStorage?.saveTotalEntries(response.totalEntries)
+                    preferencesStorage?.saveLastClaimDate(LocalDate.now().toString())
+                    // Publisher-facing analytics for the recovered claim
+                    // (through the buffering wrapper, like every emission).
+                    AvafliOfflineResilience.shared
+                        ?.analyticsAdapter(config?.options?.analyticsAdapter)
+                        ?.trackEvent(
+                            "avafli_daily_entry_claimed",
+                            mapOf(
+                                "day" to response.streakDay,
+                                "entries" to response.entries,
+                                "recovered_offline" to true,
+                            ),
+                        )
+                    logger?.info("Offline claim retry recorded today's entry (+${response.entries})")
+                    // An open experience reconciles via its existing load path.
+                    withContext(Dispatchers.Main) { onOfflineClaimRecovered?.invoke() }
+                    RetryOutcome.SUCCESS
+                } catch (e: Exception) {
+                    if (isAlreadyClaimedRejection(e)) {
+                        // Server-side daily dedup already holds today's entry —
+                        // the original attempt (or another device) landed.
+                        preferencesStorage?.saveLastClaimDate(LocalDate.now().toString())
+                        logger?.info("Offline claim retry: already claimed — treating as success")
+                        RetryOutcome.SUCCESS
+                    } else if (OfflineErrorClassifier.isRetriable(e)) {
+                        RetryOutcome.RETRIABLE_FAILURE
+                    } else {
+                        RetryOutcome.PERMANENT_FAILURE
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * The backend's `already-exists` dedup messages: "Already claimed daily
+     * entries today" / "Already claimed today" / "You've already entered
+     * today on another device…".
+     */
+    internal fun isAlreadyClaimedRejection(e: Throwable): Boolean {
+        if (e is AvafliError.AlreadyClaimed) return true
+        val msg = e.message ?: return false
+        return msg.contains("already claimed", ignoreCase = true) ||
+            msg.contains("already entered today", ignoreCase = true)
+    }
 
     // --- Private helpers ---
 
@@ -533,6 +683,8 @@ object Avafli {
         // Do not log the uuid (PII-linked identifier) at info level.
         logger?.info("Device registered successfully")
         logger?.debug("Registered uuid present: ${response.uuid.isNotEmpty()}")
+        // Registration is definitively on the backend — drop any queued retry.
+        AvafliOfflineResilience.shared?.coordinator?.clear(PendingIntent.Kind.REGISTRATION)
     }
 
     /**

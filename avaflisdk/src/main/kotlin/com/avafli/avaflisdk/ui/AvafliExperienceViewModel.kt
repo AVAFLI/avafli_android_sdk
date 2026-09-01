@@ -288,6 +288,22 @@ internal class AvafliExperienceViewModel(
         adoptionPendingFlag = pending
     }
 
+    init {
+        // A background offline-claim retry landed while the drawer is open —
+        // reconcile through the existing loadInternal() refresh path (no new
+        // UI; totals/streak update in place exactly like any other reconcile).
+        Avafli.onOfflineClaimRecovered = {
+            if (_uiState.value.screen is ExperienceScreen.Streak) {
+                viewModelScope.launch { loadInternal() }
+            }
+        }
+    }
+
+    override fun onCleared() {
+        Avafli.onOfflineClaimRecovered = null
+        super.onCleared()
+    }
+
     /** Host-app-provided identity used to prefill the claim form. */
     private var prefillUser: AvafliUser? = null
 
@@ -776,8 +792,10 @@ internal class AvafliExperienceViewModel(
                     response.milestone?.let { put("milestone_day", it.day) }
                 }
             )
+            Avafli.clearOfflineClaimRetry()
         } catch (e: Exception) {
             logger.info("Day-1 claim after email submit failed (dashboard will retry): ${e.message}")
+            Avafli.enqueueOfflineClaimRetry(e)
         }
     }
 
@@ -1207,6 +1225,7 @@ internal class AvafliExperienceViewModel(
                 // for the offline-cache open that staged no prediction.
                 scheduleAutoReveal()
                 isClaimingDaily = false
+                Avafli.clearOfflineClaimRetry()
 
                 analytics?.trackEvent(
                     "avafli_daily_entry_claimed",
@@ -1238,6 +1257,8 @@ internal class AvafliExperienceViewModel(
         // instead of silently celebrating entries this claim never granted.
         if (isAlreadyClaimedError(e)) {
             logger.debug("Already claimed today — updating local state")
+            // The entry exists server-side — a queued offline retry is moot.
+            Avafli.clearOfflineClaimRetry()
             val today = LocalDate.now().toString()
             val localAlreadyKnew = preferencesStorage.getLastClaimDate() == today
             val updated = screen.streakState.copy(
@@ -1289,6 +1310,11 @@ internal class AvafliExperienceViewModel(
         // a non-blocking notice that carries a retry affordance.
         if (auto) {
             logger.debug("Auto-claim declined: ${e.message}")
+            // Offline resilience: queue a same-day automatic retry (connectivity
+            // regain / resume / capped backoff) so a transient drop can't cost
+            // the streak if the user closes the drawer without tapping TRY
+            // AGAIN. No-op for backend rejections (classifier-guarded).
+            Avafli.enqueueOfflineClaimRetry(e)
             val settled = screen.streakState.copy(
                 claimedToday = false,
                 totalEntries = _uiState.value.preClaimTotalEntries
@@ -1308,6 +1334,9 @@ internal class AvafliExperienceViewModel(
         }
 
         logger.error("Failed to claim entries: ${e.message}", e)
+        // Manual-claim transport failure also queues the same-day retry
+        // (classifier-guarded no-op for backend rejections).
+        Avafli.enqueueOfflineClaimRetry(e)
         setScreen(ExperienceScreen.Error(e.message ?: "Failed to claim entries"))
         onResult?.invoke(Result.failure(e))
     }
@@ -1406,8 +1435,10 @@ internal class AvafliExperienceViewModel(
                 cachedBackendTotalEntries = response.totalEntries
                 _uiState.value = _uiState.value.copy(claimedToday = true)
                 logger.debug("Silent daily claim during winner flow: +${response.entries}")
+                Avafli.clearOfflineClaimRetry()
             } catch (e: Exception) {
                 logger.debug("Silent daily claim declined during winner flow: ${e.message}")
+                Avafli.enqueueOfflineClaimRetry(e)
             }
         }
     }
