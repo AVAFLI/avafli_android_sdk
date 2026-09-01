@@ -5,7 +5,7 @@ will be documented in this file. Entries for 2.9.6 and earlier predate the
 rebrand and use the former WINR names.
 
 
-## Unreleased
+## 3.1.0 — 2026-09-01
 
 ### Added
 
