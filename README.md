@@ -61,7 +61,7 @@ Avafli.configure(config)
 
 ### Identity — pass what you have, the SDK captures the rest
 
-Only `id` is required. Construct a `AvafliUser` from whatever identity data you
+Only `id` is required. Construct an `AvafliUser` from whatever identity data you
 already hold — even just an id — and the SDK fills in the gaps: it captures the
 email through its own screen, and the name at prize-claim time if the user wins.
 There are three cases:
@@ -89,9 +89,9 @@ user = AvafliUser(id = "user_123", firstName = "Jane", lastName = "Doe", email =
 **3. No signed-in user at all.** Pass `AvafliUser.GUEST`:
 
 ```kotlin
-Avafli.configure(context, AvafliConfiguration(
-    apiKey = "avafli_live_…",
-    bundleId = packageName,
+Avafli.configure(AvafliConfiguration(
+    context = applicationContext,
+    apiKey = "YOUR_API_KEY",
     user = AvafliUser.GUEST,
 ))
 ```
@@ -299,32 +299,31 @@ val options = AvafliOptions(
 
 **Events emitted by the SDK:**
 - `avafli_daily_entry_claimed` — Daily entries awarded (auto-claimed on open). Params: `day`, `entries`.
+- `avafli_email_verified` / `avafli_adoption_restaged` — Email verification confirmed / an abandoned cross-device adoption re-staged
+- `avafli_winner_claim_shown` / `avafli_prize_claim_submitted` — Winner claim flow shown / submitted
+- `avafli_opted_out` — Right-to-delete opt-out completed
 
-## GDPR / CCPA
+## Account deletion in your app
 
-Handle erasure requests with `optOut()`:
+If your app has its own delete-account flow, call `optOut()` from it so the
+user's Avafli data is erased along with their account. Users can also delete
+their data themselves at any time from the Privacy Policy screen inside the
+experience — no integration required.
 
 ```kotlin
+// From your delete-account flow (optOut is a suspend function)
 lifecycleScope.launch {
     Avafli.optOut()
-        .onSuccess { /* Data erased, experience silenced */ }
+        .onSuccess { /* Avafli data erased, experience silenced */ }
         .onFailure { error -> /* Handle error */ }
 }
 ```
 
-This is the complete Right-to-be-Forgotten path. It removes the person's personal
-information everywhere it is held — including prize-claim records, which carry name,
-address and phone — links their devices together so one call covers all of them, and
-permanently silences the experience on the device so it survives a reinstall.
-
-De-identified entry records are deliberately retained. They are the evidence that a
-drawing was fair and that a prize went to a real eligible person, which a sweepstakes
-operator must be able to show; GDPR Art. 17(3) exempts data needed for legal claims.
-The person is erased, the proof is kept.
-
-Users can also self-serve without any code from you: every legal link opens the
-Privacy Policy in an in-app webview, and its **Delete my data & stop participating**
-section runs the same erasure as `optOut()`.
+The erasure is identity-wide (one call covers all of the person's devices),
+includes prize-claim records, and permanently silences the experience on the
+device — it survives a reinstall. De-identified entry records are retained as
+the legally required evidence that drawings were fair (GDPR Art. 17(3)): the
+person is erased, the proof is kept.
 
 ## API Reference
 
