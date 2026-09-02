@@ -9,8 +9,8 @@ import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -33,13 +33,13 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.focus.onFocusChanged
-import kotlinx.coroutines.launch
+import androidx.compose.ui.platform.LocalFocusManager
 import com.avafli.avaflisdk.R
 import com.avafli.avaflisdk.domain.Giveaway
 import com.avafli.avaflisdk.domain.AvafliFieldValidation
@@ -102,15 +102,21 @@ internal fun AvafliV2CaptureScreen(
 
     // 2.9: flat dark background — the same gunmetal the streak dashboard's
     // drawer uses — replacing the blue radial gradient (AvafliV2TopGlow).
-    Box(Modifier.fillMaxSize().background(AvafliV2Color.gunmetal)) {
+    // 3.1: a tap on empty background clears focus → keyboard dismisses.
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(AvafliV2Color.gunmetal)
+            .avafliClearFocusOnTap()
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                // IME never blocks fields (2.9): the keyboard becomes bottom
-                // padding so the email field, checkboxes, and CTA all stay
-                // reachable by scrolling while typing.
-                .imePadding(),
+                // IME never blocks fields (2.9, hardened 3.1): imePadding
+                // BEFORE verticalScroll shrinks the scroll VIEWPORT above the
+                // keyboard, so bring-into-view really scrolls the email field
+                // clear and checkboxes/CTA/footer stay reachable by scrolling.
+                .avafliImeScrollable(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
@@ -325,11 +331,11 @@ private fun EmailField(
     onFocusChanged: (Boolean) -> Unit = {},
 ) {
     // IME never blocks fields (2.9): scroll this row above the keyboard when
-    // it gains focus (the short delay lets the IME inset land first).
+    // it gains focus (and as the keyboard animates in — shared 3.1 helper).
     val bringIntoView = remember {
         androidx.compose.foundation.relocation.BringIntoViewRequester()
     }
-    val focusScope = androidx.compose.runtime.rememberCoroutineScope()
+    val focusManager = LocalFocusManager.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -373,18 +379,16 @@ private fun EmailField(
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Email,
                         autoCorrectEnabled = false,
+                        imeAction = ImeAction.Done,
+                    ),
+                    // Done just closes the keyboard — the age-gate checkbox
+                    // still stands between typing and the CTA.
+                    keyboardActions = KeyboardActions(
+                        onDone = { focusManager.clearFocus() },
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .onFocusChanged { state ->
-                            onFocusChanged(state.isFocused)
-                            if (state.isFocused) {
-                                focusScope.launch {
-                                    kotlinx.coroutines.delay(Avafli_IME_SETTLE_MS)
-                                    bringIntoView.bringIntoView()
-                                }
-                            }
-                        },
+                        .avafliBringIntoViewOnFocus(bringIntoView, onFocusChanged),
                 )
             }
         }
@@ -491,17 +495,25 @@ internal fun AvafliV2CodeEntryScreen(
     val bringIntoView = remember {
         androidx.compose.foundation.relocation.BringIntoViewRequester()
     }
-    val focusScope = androidx.compose.runtime.rememberCoroutineScope()
+    val focusManager = LocalFocusManager.current
 
     // Flat gunmetal drawer background (2.9.3) — the blue top glow is gone from
     // every screen, matching the capture screen's 2.9 treatment.
-    Box(Modifier.fillMaxSize().background(AvafliV2Color.gunmetal)) {
+    // 3.1: a tap on empty background clears focus → keyboard dismisses.
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(AvafliV2Color.gunmetal)
+            .avafliClearFocusOnTap()
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                // IME never blocks fields (2.9).
-                .imePadding(),
+                // IME never blocks fields (2.9, hardened 3.1): viewport-
+                // shrinking order — see avafliImeScrollable. VERIFY, "Send a
+                // new code", Cancel, and the legal footer all stay reachable
+                // by scrolling with the number pad open.
+                .avafliImeScrollable(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
@@ -518,10 +530,7 @@ internal fun AvafliV2CodeEntryScreen(
                 textAlign = TextAlign.Center,
             )
             Text(
-                subtitle ?: (
-                    "This email is already part of a Avafli streak. Enter the 6-digit " +
-                        "code we sent to $email to pick it up on this device."
-                ),
+                subtitle ?: AvafliV2Strings.adoptionSubtitle(email),
                 style = AvafliV2Font.inter(14.sp, color = Color.White.copy(alpha = 0.75f)),
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(horizontal = 26.dp),
@@ -561,17 +570,18 @@ internal fun AvafliV2CodeEntryScreen(
                                 .copy(textAlign = TextAlign.Center),
                             singleLine = true,
                             cursorBrush = SolidColor(AvafliV2Color.gunmetal),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Number,
+                                imeAction = ImeAction.Done,
+                            ),
+                            // Done closes the number pad; a complete code
+                            // already auto-submitted at the sixth digit.
+                            keyboardActions = KeyboardActions(
+                                onDone = { focusManager.clearFocus() },
+                            ),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .onFocusChanged { state ->
-                                    if (state.isFocused) {
-                                        focusScope.launch {
-                                            kotlinx.coroutines.delay(Avafli_IME_SETTLE_MS)
-                                            bringIntoView.bringIntoView()
-                                        }
-                                    }
-                                },
+                                .avafliBringIntoViewOnFocus(bringIntoView),
                         )
                     }
                 }

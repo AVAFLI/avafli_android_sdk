@@ -26,7 +26,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -36,7 +35,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -49,7 +47,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.onFocusEvent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
@@ -65,6 +62,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -157,7 +155,13 @@ internal fun AvafliV2ClaimStepsFlow(
         )
     }
 
-    Box(Modifier.fillMaxSize().background(AvafliV2Color.deepCharcoal)) {
+    // 3.1: a tap on empty background clears focus → keyboard dismisses.
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(AvafliV2Color.deepCharcoal)
+            .avafliClearFocusOnTap()
+    ) {
         // Gold-sparkle full-bleed backdrop fading into the dark body, per the
         // frames (406dp tall, transparent → deepCharcoal).
         Image(
@@ -337,10 +341,11 @@ private fun AvafliClaimStepPage(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            // IME never blocks fields (2.9): the open keyboard becomes bottom
-            // padding, so every field and the CTA stay reachable by scrolling.
-            .imePadding()
+            // IME never blocks fields (2.9, hardened 3.1): viewport-shrinking
+            // order (imePadding BEFORE verticalScroll — see avafliImeScrollable)
+            // so bring-into-view scrolls the focused field clear of the
+            // keyboard, and every field + the CTA stay reachable by scrolling.
+            .avafliImeScrollable(rememberScrollState())
             .padding(horizontal = 28.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -435,6 +440,9 @@ private fun AvafliClaimStep1(
             AvafliClaimStepField(
                 "Phone Number (optional)", form.phone,
                 keyboardType = KeyboardType.Phone,
+                // Last typed field of the step — Done drops the keyboard so
+                // the CONTINUE pill is in view.
+                imeAction = ImeAction.Done,
                 errorText = AvafliV2Strings.INVALID_PHONE.takeIf {
                     !AvafliFieldValidation.isValidOptionalPhone(form.phone)
                 },
@@ -493,7 +501,13 @@ private fun AvafliClaimStep2(
             AvafliClaimStepField("Apartment, Suite, etc. (optional)", form.apt) {
                 onForm(form.copy(apt = it))
             }
-            AvafliClaimStepField("City", form.city) { onForm(form.copy(city = it)) }
+            // City is the last plain text field before the State DROPDOWN —
+            // Next would land focus on a non-typing control, so Done closes
+            // the keyboard and leaves the dropdown tappable.
+            AvafliClaimStepField(
+                "City", form.city,
+                imeAction = ImeAction.Done,
+            ) { onForm(form.copy(city = it)) }
             // Weighted split (2.9 fix): the fixed-width zip box clipped on
             // narrow screens — both columns now share the row by weight.
             Row(
@@ -511,6 +525,7 @@ private fun AvafliClaimStep2(
                     AvafliClaimStepField(
                         "Zip Code", form.zip,
                         keyboardType = KeyboardType.Number,
+                        imeAction = ImeAction.Done,
                     ) { onForm(form.copy(zip = it.filter { c -> c.isDigit() }.take(5))) }
                 }
             }
@@ -760,9 +775,14 @@ internal fun AvafliV2ClaimShareScreen(
     val storyBringIntoView = remember {
         androidx.compose.foundation.relocation.BringIntoViewRequester()
     }
-    val storyFocusScope = rememberCoroutineScope()
 
-    Box(Modifier.fillMaxSize().background(AvafliV2Color.deepCharcoal)) {
+    // 3.1: a tap on empty background clears focus → keyboard dismisses.
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(AvafliV2Color.deepCharcoal)
+            .avafliClearFocusOnTap()
+    ) {
         // Same gold-sparkle backdrop as the stepped form.
         Image(
             painter = painterResource(R.drawable.avafli_winner_modal_bg),
@@ -821,14 +841,10 @@ internal fun AvafliV2ClaimShareScreen(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .padding(horizontal = 20.dp, vertical = 14.dp)
-                                .onFocusEvent { state ->
-                                    if (state.isFocused) {
-                                        storyFocusScope.launch {
-                                            kotlinx.coroutines.delay(Avafli_IME_SETTLE_MS)
-                                            storyBringIntoView.bringIntoView()
-                                        }
-                                    }
-                                },
+                                // Multiline story box: Return inserts newlines
+                                // (no ImeAction override); the shared helper
+                                // keeps the box above the keyboard.
+                                .avafliBringIntoViewOnFocus(storyBringIntoView),
                         )
                         if (story.isEmpty()) {
                             Text(

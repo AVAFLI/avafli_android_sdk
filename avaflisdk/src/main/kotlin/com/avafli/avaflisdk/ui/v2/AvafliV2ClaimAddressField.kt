@@ -13,6 +13,8 @@ import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -24,9 +26,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.onFocusEvent
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -81,6 +85,7 @@ internal fun AvafliClaimStepStreetField(
     var suppressQuery by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val bringIntoView = remember { BringIntoViewRequester() }
+    val focusManager = LocalFocusManager.current
 
     // Debounce by coroutine cancellation: every keystroke restarts this
     // effect, so only a ~300ms pause lets a request through — and a stale
@@ -124,18 +129,21 @@ internal fun AvafliClaimStepStreetField(
                     textStyle = AvafliV2Font.inter(20.sp, color = Color.White),
                     singleLine = true,
                     cursorBrush = SolidColor(Color.White),
+                    keyboardOptions = KeyboardOptions(
+                        autoCorrectEnabled = false,
+                        imeAction = ImeAction.Next,
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onNext = { focusManager.moveFocus(FocusDirection.Down) },
+                    ),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .onFocusEvent { state ->
-                            // Focus loss = the person tapped elsewhere →
-                            // dismiss (the query effect clears the list).
-                            focused = state.isFocused
-                            if (state.isFocused) {
-                                scope.launch {
-                                    delay(Avafli_IME_SETTLE_MS)
-                                    bringIntoView.bringIntoView()
-                                }
-                            }
+                        // Focus loss = the person tapped elsewhere → dismiss
+                        // (the query effect clears the list). While focused,
+                        // the shared helper keeps field + suggestion list
+                        // scrolled above the keyboard.
+                        .avafliBringIntoViewOnFocus(bringIntoView) { isFocused ->
+                            focused = isFocused
                         },
                 )
             }

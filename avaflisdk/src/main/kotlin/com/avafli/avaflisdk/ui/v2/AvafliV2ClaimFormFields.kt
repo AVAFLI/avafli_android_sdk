@@ -21,17 +21,17 @@ import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.onFocusEvent
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -46,12 +46,6 @@ import androidx.compose.ui.unit.sp
 // The stepped claim form's inputs, ported from iOS AvafliV2ClaimStepPage.swift:
 // labeled text field, locked field (winning email / Country), and the State
 // dropdown, all in the Figma claim-step styling.
-
-/**
- * Beat between a field gaining focus and the bring-into-view request, so the
- * IME inset has landed and the request targets the post-resize viewport.
- */
-internal const val Avafli_IME_SETTLE_MS = 180L
 
 /** Field styling from the claim-step frames: #212832 fill, #3D424B border, r10. */
 internal object AvafliClaimStepTheme {
@@ -83,6 +77,10 @@ internal fun AvafliClaimStepFieldLabel(text: String) {
  *
  * [errorText], when non-null, turns the border error-red and renders the
  * message inline under the box (Master Field List "User Message (UI)").
+ *
+ * [imeAction] wires the keyboard's action key: Next moves focus to the next
+ * field down (which itself scrolls clear of the IME via the shared
+ * bring-into-view-on-focus path); Done clears focus and closes the keyboard.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -90,15 +88,15 @@ internal fun AvafliClaimStepField(
     label: String,
     value: String,
     keyboardType: KeyboardType = KeyboardType.Text,
+    imeAction: ImeAction = ImeAction.Next,
     errorText: String? = null,
     onValueChange: (String) -> Unit,
 ) {
-    // IME never blocks fields (2.9): when this field gains focus, ask the
-    // enclosing scrollable (which carries imePadding) to scroll it into the
-    // visible area above the keyboard. The short delay lets the IME inset
-    // land first so the request targets the post-resize viewport.
+    // IME never blocks fields (2.9, hardened 3.1): when this field gains
+    // focus, ask the enclosing scrollable (whose viewport imePadding shrinks
+    // above the keyboard) to scroll it into the visible area above the IME.
     val bringIntoView = remember { BringIntoViewRequester() }
-    val focusScope = rememberCoroutineScope()
+    val focusManager = LocalFocusManager.current
     with(AvafliClaimStepTheme) {
         Column(modifier = Modifier.bringIntoViewRequester(bringIntoView)) {
             AvafliClaimStepFieldLabel(label)
@@ -120,17 +118,15 @@ internal fun AvafliClaimStepField(
                     keyboardOptions = KeyboardOptions(
                         keyboardType = keyboardType,
                         autoCorrectEnabled = false,
+                        imeAction = imeAction,
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onNext = { focusManager.moveFocus(FocusDirection.Down) },
+                        onDone = { focusManager.clearFocus() },
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .onFocusEvent { state ->
-                            if (state.isFocused) {
-                                focusScope.launch {
-                                    delay(Avafli_IME_SETTLE_MS)
-                                    bringIntoView.bringIntoView()
-                                }
-                            }
-                        },
+                        .avafliBringIntoViewOnFocus(bringIntoView),
                 )
             }
             if (errorText != null) {

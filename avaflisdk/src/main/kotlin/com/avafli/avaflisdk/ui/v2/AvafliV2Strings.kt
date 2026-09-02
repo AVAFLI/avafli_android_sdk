@@ -32,6 +32,11 @@ internal object AvafliV2Strings {
      *  code-error slot; the code screen stays up. */
     const val CODE_RESEND_FAILED = "Couldn't send a new code. Check your connection and try again."
 
+    /** Adoption code screen subtitle — names the typed email. */
+    fun adoptionSubtitle(email: String): String =
+        "This email is already part of an Avafli streak. Enter the 6-digit " +
+            "code we sent to $email to pick it up on this device."
+
     /** Adoption re-entry (2.9): subtitle on the code screen when a parked
      *  adoption resumes on a later open (the raw email is unknown here). */
     const val ADOPTION_RESTAGE_SUBTITLE =

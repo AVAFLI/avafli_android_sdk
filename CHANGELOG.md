@@ -5,6 +5,33 @@ will be documented in this file. Entries for 2.9.6 and earlier predate the
 rebrand and use the former WINR names.
 
 
+## Unreleased
+
+### Fixed
+
+- **Keyboard (IME) handling hardened on every text-input screen** (email
+  capture, adoption / email-verification OTP entry, all prize-claim form
+  steps incl. the Places address autocomplete, and the post-submit story
+  box), via a shared helper set (`AvafliV2ImeSupport.kt`):
+  - `imePadding()` now precedes `verticalScroll()` (viewport-shrinking
+    order). Previously the padding sat INSIDE the scrollable, so the scroll
+    viewport still extended under the keyboard and `bringIntoView()` treated
+    keyboard-covered fields as already visible — focused fields near the
+    bottom of the sheet could stay hidden behind the IME.
+  - Focused fields are re-scrolled above the keyboard as the IME inset
+    animates (not just once after a fixed delay), so the field lands clear
+    of the FINAL keyboard height; the address-autocomplete suggestion list
+    stays visible above the keyboard while typing.
+  - Keyboard action keys are wired: Next moves focus to the next field
+    (which scrolls itself clear), Done closes the keyboard (claim-form
+    fields, email capture, OTP entry).
+  - Tapping empty background now clears focus and dismisses the keyboard,
+    per Android convention, on every input screen.
+- **Copy: "part of a Avafli streak" → "part of an Avafli streak"** on the
+  adoption code-entry subtitle (now centralized as
+  `AvafliV2Strings.adoptionSubtitle` and pinned by a unit test).
+
+
 ## 3.1.0 — 2026-09-01
 
 ### Added
