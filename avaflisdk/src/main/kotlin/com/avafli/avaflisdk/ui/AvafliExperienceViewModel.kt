@@ -1329,7 +1329,21 @@ internal class AvafliExperienceViewModel(
                 claimRevealed = false,
                 preClaimTotalEntries = null,
             )
-            postDashboardNotice(AvafliV2Strings.ENTRY_NOT_RECORDED, retryable = true)
+            // "Check your connection" + TRY AGAIN is only true for failures a
+            // retry can fix (transport drops, 5xx outages). A structured 4xx
+            // backend rejection (giveaway ended/paused mid-session, upgrade-
+            // required, opt-out) can never succeed on retry — settle silently
+            // and re-load once so the drawer renders the truthful state (e.g.
+            // the friendly no-giveaway screen). Matches iOS.
+            val permanentRejection = e is AvafliError.ServerError && e.code in 400..499
+            if (permanentRejection) {
+                if (!didResyncAfterAlreadyClaimed) {
+                    didResyncAfterAlreadyClaimed = true
+                    loadInternal()
+                }
+            } else {
+                postDashboardNotice(AvafliV2Strings.ENTRY_NOT_RECORDED, retryable = true)
+            }
             return
         }
 
@@ -1407,8 +1421,13 @@ internal class AvafliExperienceViewModel(
                         ?: obj["error"]?.jsonObject?.get("code")
                         ?: obj["code"]
                         ?: obj["status"])?.jsonPrimitive?.contentOrNull
+                    // ONLY the backend's real already-claimed status. Matching
+                    // FAILED_PRECONDITION here fabricated a success ("already
+                    // entered today" + lastClaimDate persisted) for permanent
+                    // rejections: UPGRADE_REQUIRED, "Giveaway is not active",
+                    // opt-out — silently killing the user's streak.
                     code?.uppercase()?.let {
-                        it == "ALREADY_CLAIMED" || it == "FAILED_PRECONDITION"
+                        it == "ALREADY_CLAIMED" || it == "ALREADY_EXISTS"
                     } ?: false
                 } else false
             } catch (_: Exception) {

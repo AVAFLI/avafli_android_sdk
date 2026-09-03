@@ -204,6 +204,28 @@ class ExperienceErrorMessagingTest {
             assertNull(ui.dashboardNotice)
         }
 
+    // ── Backend 4xx rejection: never fabricate success, never blame the network ──
+
+    @Test
+    fun `a FAILED_PRECONDITION rejection is NOT recorded as already-claimed and shows no connection notice`() =
+        runTest(dispatcher) {
+            stubOpen()
+            coEvery { api.claimDailyEntries(any()) } throws AvafliError.ServerError(
+                400,
+                """{"error":{"status":"FAILED_PRECONDITION","message":"UPGRADE_REQUIRED: this Avafli SDK version is no longer supported (minimum 9.9.9). Update the Avafli SDK dependency and rebuild."}}""",
+            )
+
+            viewModel.load()
+            advanceUntilIdle()
+
+            val ui = viewModel.uiState.value
+            // The old classifier matched FAILED_PRECONDITION as "already claimed",
+            // persisting lastClaimDate and telling the user they had entered.
+            assertFalse(ui.claimedToday)
+            // And no "check your connection" for a rejection no retry can fix.
+            assertNull(ui.dashboardNotice)
+        }
+
     // ── Auto-claim transport failure: honest unclaimed state + retry ──
 
     @Test
