@@ -650,6 +650,6 @@ internal class AvafliApi(
     companion object {
         // Single source of truth for the wire-format sdk_version. Keep in sync
         // with the Maven publish version in avaflisdk/build.gradle.kts.
-        const val SDK_VERSION = "3.1.1"
+        const val SDK_VERSION = "3.1.2"
     }
 }
