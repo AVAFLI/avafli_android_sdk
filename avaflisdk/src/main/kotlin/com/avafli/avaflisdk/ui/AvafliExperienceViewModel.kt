@@ -229,6 +229,9 @@ internal class AvafliExperienceViewModel(
 ) : ViewModel() {
 
     companion object {
+        /** See [adoptionCodeIsStale]. */
+        internal const val ADOPTION_CODE_RESEND_COOLDOWN_MS = 10 * 60 * 1000L
+
         /**
          * Delay between staging the (predicted) grant and the celebration
          * firing — one composition beat, so the dashboard's first visible
@@ -283,6 +286,22 @@ internal class AvafliExperienceViewModel(
      * email capture.
      */
     private var adoptionPendingFlag = false
+
+    /**
+     * Cooldown between automatic code re-sends for a parked link: every open
+     * lands on the code screen, but the e-mail goes out at most once per
+     * window (the code itself lives 10 minutes). "Send a new code" always sends.
+     */
+    private val adoptionCodeSentAtKey = "winr_adoption_code_sent_at"
+
+    private fun adoptionCodeIsStale(): Boolean {
+        val last = preferencesStorage.getString(adoptionCodeSentAtKey)?.toLongOrNull() ?: 0L
+        return System.currentTimeMillis() - last >= ADOPTION_CODE_RESEND_COOLDOWN_MS
+    }
+
+    private fun markAdoptionCodeSent() {
+        preferencesStorage.putString(adoptionCodeSentAtKey, System.currentTimeMillis().toString())
+    }
 
     fun setAdoptionPending(pending: Boolean) {
         adoptionPendingFlag = pending
@@ -387,6 +406,23 @@ internal class AvafliExperienceViewModel(
         // Never stomp fresher truth.
         if (_uiState.value.screen !is ExperienceScreen.Loading) return
 
+        // A parked cross-device link OWNS this open: the code screen is the
+        // FIRST frame — never a cached dashboard that sits there for the
+        // network round-trips and reads as "day 1" to a person who then
+        // closes the sheet having seen no code prompt (while the code e-mail
+        // is already on its way). loadInternal re-affirms the screen and
+        // handles the cooled-down resend.
+        if (adoptionPendingFlag) {
+            cachedGiveaway?.let { activeGiveaway = it }
+            _uiState.value = _uiState.value.copy(
+                screen = ExperienceScreen.CodeEntry(email = "", restaged = true),
+                codeError = null,
+                giveaway = activeGiveaway,
+                sdkConfig = sdkConfig,
+            )
+            return
+        }
+
         val giveaway = cachedGiveaway ?: activeGiveaway ?: return
 
         // Day 1 / unconsented users must land on email capture, never on a
@@ -487,7 +523,10 @@ internal class AvafliExperienceViewModel(
             // Backend is the source of truth for email consent. If it confirms an
             // email on file, seed the local "submitted" flag so a user whose local
             // flag was lost (e.g. reinstall) isn't re-prompted for email.
-            if (response.emailConsentStatus == true) {
+            // ...unless a cross-device link is parked: the backend echoes the
+            // shell user's consent, and seeding the flag from it let the next
+            // open bypass the code screen into a cached dashboard (Sept 2026).
+            if (response.emailConsentStatus == true && response.adoptionPending != true) {
                 preferencesStorage.saveEmailSubmitted(true)
                 Avafli.noteEmailConsent()
             }
@@ -534,30 +573,44 @@ internal class AvafliExperienceViewModel(
             return
         }
 
-        // Email-capture gate: shown until the user completes the consent flow.
-        if (!preferencesStorage.isEmailSubmitted()) {
-            // Adoption re-entry (2.9): a parked verification-gated adoption
-            // resumes at the code screen, not email capture. Ask the backend
-            // to re-send a fresh code first; a failed restage degrades to the
-            // normal capture flow (retyping the email re-triggers the OTP).
-            if (adoptionPendingFlag) {
-                val sent = try {
-                    api.restageAdoption()
-                } catch (e: Exception) {
-                    logger.warn("restageAdoption failed — falling back to email capture: ${e.message}")
-                    false
-                }
-                if (sent) {
-                    _uiState.value = _uiState.value.copy(
-                        screen = ExperienceScreen.CodeEntry(email = "", restaged = true),
-                        codeError = null,
-                        giveaway = activeGiveaway,
-                        sdkConfig = sdkConfig,
-                    )
+        // Adoption re-entry (2.9; hardened Sept 2026): a parked verification-
+        // gated adoption resumes at the code screen — BEFORE the email gate,
+        // because an earlier open may have seeded the local flag from the
+        // backend's consent echo for the shell user. Screen first, then a
+        // cooled-down resend. A backend that reports nothing pending clears
+        // the flag and takes the normal path; a failed send keeps the code
+        // screen up ("Send a new code" re-attempts).
+        if (adoptionPendingFlag) {
+            _uiState.value = _uiState.value.copy(
+                screen = ExperienceScreen.CodeEntry(email = "", restaged = true),
+                codeError = null,
+                giveaway = activeGiveaway,
+                sdkConfig = sdkConfig,
+            )
+            if (!adoptionCodeIsStale()) return
+            val sent: Boolean? = try {
+                api.restageAdoption()
+            } catch (e: Exception) {
+                logger.warn("restageAdoption failed — code screen kept, resend available: ${e.message}")
+                null
+            }
+            when (sent) {
+                true -> {
+                    markAdoptionCodeSent()
                     analytics?.trackEvent("avafli_adoption_restaged")
                     return
                 }
+                null -> return
+                false -> {
+                    adoptionPendingFlag = false
+                    Avafli.clearAdoptionPending()
+                    // fall through to the normal gate below
+                }
             }
+        }
+
+        // Email-capture gate: shown until the user completes the consent flow.
+        if (!preferencesStorage.isEmailSubmitted()) {
             _uiState.value = _uiState.value.copy(
                 screen = ExperienceScreen.EmailCapture,
                 giveaway = activeGiveaway,
@@ -835,6 +888,7 @@ internal class AvafliExperienceViewModel(
                     // The merge is parked until the person proves the inbox is
                     // theirs. Raw email stays in view-model memory only.
                     pendingVerification = Triple(email, ageConfirmed, marketingConsent)
+                    markAdoptionCodeSent()
                     _uiState.value = _uiState.value.copy(
                         isSubmittingEmail = false,
                         codeError = null,
@@ -910,6 +964,7 @@ internal class AvafliExperienceViewModel(
                 // Adoption re-entry (2.9): the parked adoption is resolved.
                 adoptionPendingFlag = false
                 Avafli.clearAdoptionPending()
+                preferencesStorage.remove(adoptionCodeSentAtKey)
                 _uiState.value = _uiState.value.copy(isVerifyingCode = false)
                 loadInternal(claimBeforeDashboard = true)
             } catch (e: Exception) {
@@ -952,7 +1007,7 @@ internal class AvafliExperienceViewModel(
             viewModelScope.launch {
                 _uiState.value = _uiState.value.copy(codeError = null)
                 try {
-                    api.restageAdoption()
+                    api.restageAdoption().also { if (it) markAdoptionCodeSent() }
                 } catch (e: Exception) {
                     logger.error("Restage resend failed: ${e.message}", e)
                     _uiState.value = _uiState.value.copy(codeError = AvafliV2Strings.CODE_RESEND_FAILED)
