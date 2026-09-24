@@ -39,8 +39,9 @@ import java.util.TimeZone
 /**
  * Main public API for the Avafli SDK.
  * Singleton — initialize once via [configure]; the V2 experience then auto-opens
- * on the first app-open of each calendar day. Auto-open is the only way the
- * experience appears — there is no public launch API.
+ * on the first app-open of each calendar day. Publishers that need to control
+ * WHEN the drawer appears set [AvafliConfiguration.autoOpen] and/or call
+ * [present], [holdAutoOpen] and [releaseAutoOpen] — the default is unchanged.
  */
 object Avafli {
 
@@ -93,6 +94,42 @@ object Avafli {
     @Volatile
     private var registrationComplete: Boolean = false
 
+    /**
+     * Completes when the configure-time registration finishes (success or
+     * failure) so a publisher's [present] call can wait for it instead of
+     * racing `registerDevice`. Replaced on every [configure].
+     */
+    private var registrationGate: CompletableDeferred<Unit> = CompletableDeferred()
+
+    /**
+     * Presentation control (3.1.4): this session's `registerDevice` created the
+     * device's user record (`isNewUser: true`). [AvafliAutoOpen.RETURNING_USERS_ONLY]
+     * skips the auto-open for exactly this session. Absent flag → false (returning).
+     */
+    @Volatile
+    private var isNewUserSession: Boolean = false
+
+    /** [holdAutoOpen] is in effect — the once-a-day auto-open is deferred. */
+    @Volatile
+    private var autoOpenHeld: Boolean = false
+
+    /**
+     * The experience Activity is on screen (set on launch, cleared when it
+     * finishes) — a second [present] while open is a no-op.
+     */
+    @Volatile
+    private var experienceOnScreen: Boolean = false
+
+    /**
+     * Boot resilience (3.1.4): the configure-time status fetch / registration
+     * failed with a NETWORK-class error, so the next host-activity resume
+     * re-runs it (and the auto-open check) instead of staying dark until the
+     * next cold start. Nothing is marked or counted on a failed boot.
+     */
+    @Volatile
+    private var bootRefreshPending: Boolean = false
+    private var bootRetryJob: Job? = null
+
     private var currentActivity: WeakReference<Activity>? = null
     private var lifecycleCallbacksRegistered = false
 
@@ -102,12 +139,27 @@ object Avafli {
     private val suspendedJson = Json { ignoreUnknownKeys = true; isLenient = true }
 
     /**
+     * @internal JVM-unit-test seam: the storage + API layer that [configure]
+     * otherwise builds from the host Context (EncryptedSharedPreferences needs
+     * the Android Keystore). Never set in production.
+     */
+    internal class TestDependencies(
+        val secureStorage: SecureStorage,
+        val preferencesStorage: PreferencesStorage,
+        val api: AvafliApi,
+    )
+
+    internal var testDependencies: TestDependencies? = null
+
+    /**
      * Configure the Avafli SDK.
      *
      * This is the single entry point — call once at app launch. Registers the
-     * device, then auto-presents the experience (at most once per calendar day)
-     * per the V2 flow. Auto-open is ALWAYS on unless the server kill-switch
-     * (sdkConfig.experience.autoOpenEnabled) turns it off.
+     * device (always — DAU/MAU tracking does not depend on the presentation
+     * mode), then auto-presents the experience (at most once per calendar day)
+     * per the V2 flow and [AvafliConfiguration.autoOpen]. Auto-open is on
+     * unless the server kill-switch (sdkConfig.experience.autoOpenEnabled) or
+     * the effective auto-open mode turns it off.
      *
      * @param configuration A [AvafliConfiguration] with your API key, environment, and options.
      */
@@ -119,16 +171,22 @@ object Avafli {
 
         this.config = resolvedConfig
         this.logger = Logger(resolvedConfig.isDebug)
-        this.secureStorage = SecureStorage(appContext)
-        this.preferencesStorage = PreferencesStorage(appContext)
+        this.secureStorage = testDependencies?.secureStorage ?: SecureStorage(appContext)
+        this.preferencesStorage = testDependencies?.preferencesStorage ?: PreferencesStorage(appContext)
         this.networkClient = NetworkClient(resolvedConfig, secureStorage!!, logger!!)
-        this.api = AvafliApi(networkClient!!, logger!!)
+        this.api = testDependencies?.api ?: AvafliApi(networkClient!!, logger!!)
         this.pushManager = PushNotificationManager(api!!, logger!!)
 
         // Re-check suspension state on every configure — a previously suspended
         // publisher may have been re-enabled since the last launch.
         isSuspended = false
         registrationComplete = false
+        isNewUserSession = false
+        bootRefreshPending = false
+        // A present() parked on the previous gate re-checks and re-parks on
+        // the new one (registrationComplete is false again).
+        registrationGate.complete(Unit)
+        registrationGate = CompletableDeferred()
         // Restore the persisted RTD flag so an opted-out user stays suppressed
         // even before (or without) a network round-trip.
         cachedOptedOut = preferencesStorage?.isOptedOut() ?: false
@@ -179,6 +237,7 @@ object Avafli {
                 }
             }
             registrationComplete = true
+            registrationGate.complete(Unit)
             autoPresentIfEligible()
             // Launch trigger for the offline retry queue: a pending same-day
             // claim persisted before a kill retries now that the session is
@@ -215,15 +274,7 @@ object Avafli {
         val application = appContext as? Application ?: return
         lifecycleCallbacksRegistered = true
         application.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
-            override fun onActivityResumed(activity: Activity) {
-                if (activity is AvafliExperienceActivity) return
-                currentActivity = WeakReference(activity)
-                autoPresentIfEligible()
-                // Foreground trigger for the offline retry queue + buffered-
-                // analytics flush.
-                AvafliOfflineResilience.shared?.coordinator?.noteForeground()
-                AvafliOfflineResilience.shared?.flushAnalyticsBuffer()
-            }
+            override fun onActivityResumed(activity: Activity) = onHostActivityResumed(activity)
 
             override fun onActivityPaused(activity: Activity) {}
             override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
@@ -235,18 +286,71 @@ object Avafli {
     }
 
     /**
+     * A host (non-Avafli) Activity resumed. Split out of the lifecycle callback
+     * so JVM tests can drive it directly.
+     */
+    internal fun onHostActivityResumed(activity: Activity) {
+        if (activity is AvafliExperienceActivity) return
+        currentActivity = WeakReference(activity)
+        retryBootRefreshIfNeeded()
+        autoPresentIfEligible()
+        // Foreground trigger for the offline retry queue + buffered-
+        // analytics flush.
+        AvafliOfflineResilience.shared?.coordinator?.noteForeground()
+        AvafliOfflineResilience.shared?.flushAnalyticsBuffer()
+    }
+
+    /**
+     * Boot resilience (3.1.4): re-run the failed configure-time registration /
+     * status fetch on foreground, then the auto-open check. Single-flight, and
+     * only once the boot attempt itself has finished.
+     */
+    private fun retryBootRefreshIfNeeded() {
+        if (!bootRefreshPending || !registrationComplete) return
+        if (bootRetryJob?.isActive == true) return
+        val context = config?.context ?: return
+        bootRetryJob = scope.launch {
+            try {
+                registerDeviceIfNeeded(context)
+            } catch (e: AvafliError.ServiceUnavailable) {
+                // Same degrade as the configure path: suspended/revoked.
+                isSuspended = true
+                logger?.info("Publisher account suspended; Avafli experience unavailable")
+            } catch (e: Exception) {
+                logger?.warn("Boot refresh retry failed: ${e.message}")
+            }
+            autoPresentIfEligible()
+        }
+    }
+
+    /**
      * Presents the experience automatically, at most once per calendar day, when
      * all conditions allow. Called after registration completes and on each
      * activity resume. All short-circuits are silent by design:
      * - server kill-switch: sdkConfig.experience.autoOpenEnabled
+     * - effective auto-open mode (most restrictive of the server's
+     *   experience.autoOpenMode and [AvafliConfiguration.autoOpen]): NEVER
+     *   never auto-opens; RETURNING_USERS_ONLY skips the first-registration session
+     * - [holdAutoOpen] in effect (nothing is marked or counted while held)
      * - unregistered (no email) users: at most experience.unregisteredImpressionCap
      *   (default 3) auto-opens ever, then silence until registered
      * - opted-out (RTD) users never see it
      */
     private fun autoPresentIfEligible() {
-        if (config == null || !registrationComplete || isSuspended || cachedOptedOut) return
+        val currentConfig = config ?: return
+        if (!registrationComplete || isSuspended || cachedOptedOut) return
         val experience = cachedSdkConfig?.experience
         if (experience?.autoOpenEnabled == false) return
+        when (AvafliAutoOpen.effective(experience?.autoOpenEnabled, experience?.autoOpenMode, currentConfig.autoOpen)) {
+            AvafliAutoOpen.NEVER -> return
+            AvafliAutoOpen.RETURNING_USERS_ONLY -> if (isNewUserSession) {
+                logger?.debug("Auto-present skipped: first-registration session (returningUsersOnly)")
+                return
+            }
+            AvafliAutoOpen.ALWAYS -> Unit
+        }
+        if (autoOpenHeld) return
+        if (experienceOnScreen) return
         if (cachedGiveaway == null) return
         val prefs = preferencesStorage ?: return
 
@@ -283,16 +387,62 @@ object Avafli {
     }
 
     /**
-     * Presentation path used exclusively by the auto-open engine
-     * ([autoPresentIfEligible]). Not part of the public API — the experience is
-     * only ever opened by the SDK itself, at most once per calendar day.
+     * Defer the once-a-day auto-open. May be called before [configure] (e.g.
+     * from `Application.onCreate` ahead of an onboarding flow). While held,
+     * nothing is burned — no once-per-day mark, no impression — and [present]
+     * still works. Call [releaseAutoOpen] to let the auto-open run.
+     */
+    fun holdAutoOpen() {
+        autoOpenHeld = true
+        logger?.debug("Auto-open held")
+    }
+
+    /**
+     * Clear a [holdAutoOpen] and immediately re-run the auto-open eligibility
+     * check (which applies the effective auto-open mode, once-per-day mark and
+     * impression cap as usual). Safe before [configure]; idempotent.
+     */
+    fun releaseAutoOpen() {
+        autoOpenHeld = false
+        logger?.debug("Auto-open released")
+        autoPresentIfEligible()
+    }
+
+    /**
+     * Present the Avafli experience now — publisher-initiated (a button, a
+     * "rewards" screen, the end of onboarding). Pair with
+     * [AvafliConfiguration.autoOpen] `NEVER` / `RETURNING_USERS_ONLY` to take
+     * full control of when the drawer appears.
+     *
+     * Same guards as the auto-open: the SDK must be configured; opted-out (RTD)
+     * users, suspended publishers and a missing active giveaway decline
+     * (logged, [callback] gets a failure — never thrown). If the configure-time
+     * registration is still in flight, the call waits for it and then presents;
+     * if registration failed, it declines the same way. A second call while the
+     * experience is already on screen is a no-op ([callback] is not invoked).
+     *
+     * Explicit invocation bypasses the once-per-calendar-day mark and the
+     * unregistered impression cap, and does not count an impression. When the
+     * experience closes, the once-per-day mark is written so a later auto-open
+     * that same day does not pop again.
      *
      * @param activity The activity from which to present
      * @param callback Called with the result of the daily entry claim
      */
-    internal fun present(activity: Activity, callback: ((Result<DailyEntryGrant>) -> Unit)? = null) {
+    fun present(activity: Activity, callback: ((Result<DailyEntryGrant>) -> Unit)? = null) {
         if (config == null) {
             callback?.invoke(Result.failure(AvafliError.NotInitialized()))
+            return
+        }
+
+        // Never race registerDevice: park until the boot registration settles.
+        if (!registrationComplete) {
+            logger?.debug("present() before registration settled — waiting")
+            val gate = registrationGate
+            scope.launch {
+                gate.await()
+                present(activity, callback)
+            }
             return
         }
 
@@ -310,14 +460,45 @@ object Avafli {
             return
         }
 
+        if (experienceOnScreen) {
+            logger?.debug("present() ignored: experience already on screen")
+            return
+        }
+
+        // No giveaway (or registration failed and left us without one): decline.
+        if (cachedGiveaway == null) {
+            logger?.info("present() declined: no active giveaway")
+            callback?.invoke(Result.failure(AvafliError.NoGiveaway()))
+            return
+        }
+
+        if (activity.isFinishing || activity.isDestroyed) {
+            logger?.debug("present() ignored: activity is finishing")
+            callback?.invoke(Result.failure(AvafliError.Unknown("Activity is finishing")))
+            return
+        }
+
         this.pendingCallback = callback
 
         val intent = Intent(activity, AvafliExperienceActivity::class.java)
         activity.startActivity(intent)
+        // Flagged only once the launch is actually dispatched, so a throwing
+        // startActivity can never leave present() permanently blocked.
+        experienceOnScreen = true
         // The V2 drawer animates itself (slide-up spring inside a transparent
         // activity) — suppress the system activity transition.
         @Suppress("DEPRECATION")
         activity.overridePendingTransition(0, 0)
+    }
+
+    /**
+     * @internal The experience Activity finished. Writes the once-per-day mark
+     * (so a publisher-initiated open counts as today's open for the auto-open
+     * engine) and clears the on-screen flag.
+     */
+    internal fun noteExperienceClosed() {
+        experienceOnScreen = false
+        preferencesStorage?.saveLastAutoPresentDay(LocalDate.now().toString())
     }
 
     /**
@@ -541,6 +722,9 @@ object Avafli {
             PendingIntent.Kind.REGISTRATION -> try {
                 registerDeviceIfNeeded(context)
                 if (secureStorage?.getToken() != null) {
+                    // Boot resilience: the session is (re)established — run
+                    // the auto-open check the failed boot never reached.
+                    withContext(Dispatchers.Main) { autoPresentIfEligible() }
                     RetryOutcome.SUCCESS
                 } else {
                     RetryOutcome.RETRIABLE_FAILURE
@@ -623,6 +807,7 @@ object Avafli {
             // Fetch latest giveaway + sdkConfig + claim/consent status
             try {
                 val response = api?.getActiveGiveaway()
+                bootRefreshPending = false
                 cachedGiveaway = response?.giveaway
                 cachedSdkConfig = response?.sdkConfig ?: cachedSdkConfig
                 cachedEmailConsent = response?.emailConsentStatus
@@ -635,8 +820,10 @@ object Avafli {
             } catch (e: AvafliError) {
                 if (isSuspendedError(e)) throw AvafliError.ServiceUnavailable()
                 logger?.warn("Failed to refresh giveaway: ${e.message}")
+                noteBootRefreshFailure(e)
             } catch (e: Exception) {
                 logger?.warn("Failed to refresh giveaway: ${e.message}")
+                noteBootRefreshFailure(e)
             }
             return
         }
@@ -662,9 +849,11 @@ object Avafli {
             if (isSuspendedError(e)) {
                 throw AvafliError.ServiceUnavailable()
             }
+            noteBootRefreshFailure(e)
             throw e
         }
 
+        bootRefreshPending = false
         secureStorage?.saveToken(response.token)
         secureStorage?.saveRefreshToken(response.refreshToken)
         secureStorage?.saveUuid(response.uuid)
@@ -673,6 +862,8 @@ object Avafli {
         cachedSdkConfig = response.sdkConfig
         // Adoption re-entry (2.9): OPTIONAL flag — absent on older backends.
         response.adoptionPending?.let { cachedAdoptionPending = it }
+        // Presentation control (3.1.4): OPTIONAL — absent → returning user.
+        if (response.isNewUser == true) isNewUserSession = true
         if (response.optedOut == true) {
             cachedOptedOut = true
             preferencesStorage?.saveOptedOut(true)
@@ -685,6 +876,17 @@ object Avafli {
         logger?.debug("Registered uuid present: ${response.uuid.isNotEmpty()}")
         // Registration is definitively on the backend — drop any queued retry.
         AvafliOfflineResilience.shared?.coordinator?.clear(PendingIntent.Kind.REGISTRATION)
+    }
+
+    /**
+     * A NETWORK-class boot failure (offline / timeout) leaves the SDK without a
+     * giveaway; flag it so the next host-activity resume retries. Backend
+     * rejections are not retried — they would only be rejected again.
+     */
+    private fun noteBootRefreshFailure(e: Throwable) {
+        if (OfflineErrorClassifier.isRetriable(e) && cachedGiveaway == null) {
+            bootRefreshPending = true
+        }
     }
 
     /**
@@ -747,6 +949,36 @@ object Avafli {
         val msg = e.message ?: return false
         return msg.contains("suspended", ignoreCase = true) ||
             msg.contains("revoked", ignoreCase = true)
+    }
+
+    /** @internal Clears all singleton state between JVM unit tests. */
+    internal fun resetForTests() {
+        bootRetryJob?.cancel()
+        bootRetryJob = null
+        config = null
+        secureStorage = null
+        preferencesStorage = null
+        networkClient = null
+        api = null
+        logger = null
+        pushManager = null
+        cachedGiveaway = null
+        cachedSdkConfig = null
+        pendingCallback = null
+        isSuspended = false
+        cachedOptedOut = false
+        cachedEmailConsent = null
+        cachedAdoptionPending = false
+        registrationComplete = false
+        registrationGate.complete(Unit)
+        registrationGate = CompletableDeferred()
+        isNewUserSession = false
+        autoOpenHeld = false
+        experienceOnScreen = false
+        bootRefreshPending = false
+        currentActivity = null
+        testDependencies = null
+        AvafliOfflineResilience.resetForTests()
     }
 
     @Suppress("DEPRECATION")

@@ -5,8 +5,14 @@ import com.avafli.avaflisdk.AvafliError
 import com.avafli.avaflisdk.AvafliEnvironment
 import com.avafli.avaflisdk.services.Logger
 import com.avafli.avaflisdk.storage.SecureStorage
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
 import okhttp3.*
@@ -15,17 +21,26 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
 import java.util.Base64
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
 /**
  * OkHttp-based network client with automatic token refresh on 401.
+ *
+ * Token-refresh hardening (3.1.4, the Sept 24 cold-open failure): the JWT
+ * `exp` pre-check refreshes BEFORE a guaranteed-401 request, and refreshes
+ * are single-flight — concurrent callers (the post-configure status fetch,
+ * the drawer's own load, a push-token registration) share ONE in-flight
+ * refresh instead of racing the same refresh token to the endpoint.
+ *
+ * @param baseUrlOverride Test seam only: points requests at a MockWebServer
+ *   instead of [AvafliConfiguration.baseUrl].
  */
 internal class NetworkClient(
     private val config: AvafliConfiguration,
     private val secureStorage: SecureStorage,
-    private val logger: Logger
+    private val logger: Logger,
+    private val baseUrlOverride: String? = null,
 ) {
     private val json = Json {
         ignoreUnknownKeys = true
@@ -35,7 +50,14 @@ internal class NetworkClient(
 
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
 
-    private val isRefreshing = AtomicBoolean(false)
+    /**
+     * Single-flight refresh state: the one in-flight refresh (if any), guarded
+     * by [refreshMutex]. The refresh itself runs in [refreshScope] so a caller
+     * being cancelled mid-await never cancels the refresh other callers share.
+     */
+    private val refreshMutex = Mutex()
+    private var inFlightRefresh: Deferred<String>? = null
+    private val refreshScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     private val client: OkHttpClient by lazy {
         val builder = OkHttpClient.Builder()
@@ -86,7 +108,7 @@ internal class NetworkClient(
         } catch (e: AvafliError.ServerError) {
             if (e.code == 401) {
                 logger.debug("Received 401, attempting token refresh")
-                val newToken = refreshToken()
+                val newToken = refreshToken(rejectedToken = token)
                 executePost(endpoint, body, newToken)
             } else {
                 throw e
@@ -122,7 +144,7 @@ internal class NetworkClient(
         body: Map<String, JsonElement>,
         authToken: String?
     ): JsonObject = withContext(Dispatchers.IO) {
-        val url = "${config.baseUrl}/$endpoint"
+        val url = "${baseUrlOverride ?: config.baseUrl}/$endpoint"
         val wrappedBody = buildJsonObject {
             put("data", JsonObject(body))
         }
@@ -178,10 +200,12 @@ internal class NetworkClient(
      *
      * Verifies the token has three dot-separated segments and decodes the payload to
      * read `exp` (seconds since epoch). Returns true if the token is malformed or the
-     * expiry is in the past (with a small clock-skew leeway). This is NOT a signature
-     * check — the server remains the source of truth — it only avoids a doomed request.
+     * expiry is in the past or within [leewaySeconds] (60 s — covers clock skew plus
+     * the request's own latency, so a token that dies mid-flight is refreshed first).
+     * This is NOT a signature check — the server remains the source of truth — it
+     * only avoids a doomed request.
      */
-    private fun isJwtExpired(token: String, leewaySeconds: Long = 30): Boolean {
+    internal fun isJwtExpired(token: String, leewaySeconds: Long = EXPIRY_LEEWAY_SECONDS): Boolean {
         return try {
             val parts = token.split(".")
             if (parts.size != 3) return true
@@ -201,16 +225,33 @@ internal class NetworkClient(
     }
 
     /**
-     * Refresh the authentication token.
+     * Refresh the authentication token — single-flight.
+     *
+     * Every concurrent caller awaits the same [Deferred]; a new refresh starts
+     * only when none is in flight. [rejectedToken] is the token the caller just
+     * used: if the stored token already differs (another caller's refresh landed
+     * between our request and our 401) and still looks live, it is returned
+     * without another round trip.
      */
-    private suspend fun refreshToken(): String {
-        if (!isRefreshing.compareAndSet(false, true)) {
-            // Another coroutine is already refreshing, wait briefly
-            kotlinx.coroutines.delay(1000)
-            return secureStorage.getToken()
-                ?: throw AvafliError.TokenRefreshFailed()
+    private suspend fun refreshToken(rejectedToken: String? = null): String {
+        val deferred = refreshMutex.withLock {
+            // A completed Deferred is simply replaced — no explicit clearing
+            // step, so a cancelled awaiter can never leave stale state behind.
+            inFlightRefresh?.takeIf { it.isActive }?.let { return@withLock it }
+            if (rejectedToken != null) {
+                val current = secureStorage.getToken()
+                if (current != null && current != rejectedToken && !isJwtExpired(current)) {
+                    logger.debug("Token already refreshed by another caller; reusing it")
+                    return current
+                }
+            }
+            refreshScope.async { performRefresh() }.also { inFlightRefresh = it }
         }
+        return deferred.await()
+    }
 
+    /** The actual refresh round trip; runs at most once at a time (see [refreshToken]). */
+    private suspend fun performRefresh(): String {
         try {
             val refreshToken = secureStorage.getRefreshToken()
                 ?: throw AvafliError.TokenRefreshFailed()
@@ -235,13 +276,14 @@ internal class NetworkClient(
             logger.error("Token refresh failed: ${e.message}")
             secureStorage.clearTokens()
             throw AvafliError.TokenRefreshFailed()
-        } finally {
-            isRefreshing.set(false)
         }
     }
 
     companion object {
         private val geoJson = Json { ignoreUnknownKeys = true; isLenient = true }
+
+        /** Refresh when the token expires within this window (see [isJwtExpired]). */
+        internal const val EXPIRY_LEEWAY_SECONDS = 60L
 
         /**
          * Detect a backend geo-fence rejection from a callable error response.

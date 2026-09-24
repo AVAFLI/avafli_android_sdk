@@ -60,4 +60,12 @@ internal class AvafliExperienceActivity : ComponentActivity() {
             )
         }
     }
+
+    override fun onDestroy() {
+        // Only a real close (not a configuration-change recreate): writes the
+        // once-per-day mark so a publisher-initiated present() counts as
+        // today's open, and lets a later present() through again.
+        if (isFinishing) Avafli.noteExperienceClosed()
+        super.onDestroy()
+    }
 }

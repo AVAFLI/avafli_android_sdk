@@ -10,13 +10,17 @@ import android.content.Context
  * @param environment Target environment (default: Production)
  * @param user The authenticated user for this session
  * @param options Additional configuration options
+ * @param autoOpen When the SDK auto-opens the experience (default
+ *   [AvafliAutoOpen.ALWAYS] — once per calendar day, today's behavior). See
+ *   [AvafliAutoOpen]; registration/analytics run on [Avafli.configure] regardless.
  */
 data class AvafliConfiguration(
     val context: Context,
     val apiKey: String,
     val environment: AvafliEnvironment = AvafliEnvironment.Production,
     val user: AvafliUser,
-    val options: AvafliOptions = AvafliOptions()
+    val options: AvafliOptions = AvafliOptions(),
+    val autoOpen: AvafliAutoOpen = AvafliAutoOpen.ALWAYS
 ) {
     val baseUrl: String get() = environment.baseUrl
     val isDebug: Boolean get() = options.debugLogging

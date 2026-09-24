@@ -1,5 +1,6 @@
 package com.avafli.avaflisdk.network
 
+import com.avafli.avaflisdk.AvafliAutoOpen
 import com.avafli.avaflisdk.AvafliError
 import com.avafli.avaflisdk.domain.Giveaway
 import com.avafli.avaflisdk.domain.DailyEntryGrant
@@ -71,6 +72,9 @@ internal class AvafliApi(
             // verification-gated adoption and never entered the code. OPTIONAL
             // — absent on older backends.
             adoptionPending = response["adoptionPending"]?.jsonPrimitive?.booleanOrNull,
+            // Presentation control (3.1.4): true on the first-ever registration
+            // of this device. OPTIONAL — absent on older backends (→ returning).
+            isNewUser = response["isNewUser"]?.jsonPrimitive?.booleanOrNull,
         )
     }
 
@@ -379,6 +383,14 @@ internal class AvafliApi(
          * backends.
          */
         val adoptionPending: Boolean? = null,
+        /**
+         * Presentation control (3.1.4). True when this call created the device's
+         * user record (first-ever registration); drives
+         * [com.avafli.avaflisdk.AvafliAutoOpen.RETURNING_USERS_ONLY]. OPTIONAL —
+         * absent on older backends, in which case the device is treated as
+         * returning (auto-open proceeds).
+         */
+        val isNewUser: Boolean? = null,
     )
 
     data class GetActiveGiveawayResponse(
@@ -506,6 +518,9 @@ internal class AvafliApi(
         val experience = obj["experience"]?.jsonObject?.let {
             ExperienceConfig(
                 autoOpenEnabled = it["autoOpenEnabled"]?.jsonPrimitive?.booleanOrNull,
+                // Unknown values → null (treated as `always`) so a future mode
+                // string never disables auto-open on an older SDK.
+                autoOpenMode = AvafliAutoOpen.fromWire(it["autoOpenMode"]?.jsonPrimitive?.contentOrNull),
                 unregisteredImpressionCap = it["unregisteredImpressionCap"]?.jsonPrimitive?.intOrNull,
                 requireDismissClick = it["requireDismissClick"]?.jsonPrimitive?.booleanOrNull,
                 winnerBannerEnabled = it["winnerBannerEnabled"]?.jsonPrimitive?.booleanOrNull
@@ -650,6 +665,6 @@ internal class AvafliApi(
     companion object {
         // Single source of truth for the wire-format sdk_version. Keep in sync
         // with the Maven publish version in avaflisdk/build.gradle.kts.
-        const val SDK_VERSION = "3.1.2"
+        const val SDK_VERSION = "3.1.4"
     }
 }

@@ -5,6 +5,44 @@ will be documented in this file. Entries for 2.9.6 and earlier predate the
 rebrand and use the former WINR names.
 
 
+## 3.1.4 — 2026-09-24
+
+### Added
+
+- **Publisher presentation control.** The default is unchanged (register on
+  `configure()`, auto-open once per calendar day when eligible), and device
+  registration / analytics run on `configure()` in every mode.
+  - `AvafliConfiguration.autoOpen: AvafliAutoOpen` — `ALWAYS` (default),
+    `RETURNING_USERS_ONLY` (skip the auto-open for the session in which the
+    device registered for the first time — `registerDevice.isNewUser`; absent
+    on older backends → treated as returning), `NEVER` (the publisher calls
+    `present()`).
+  - Server-side `sdkConfig.experience.autoOpenMode` (`always` /
+    `returningUsersOnly` / `never`; unknown values ignored). Effective mode =
+    most restrictive of the server kill switch, the server mode and the client
+    mode.
+  - `Avafli.present(activity, callback?)` is now public: publisher-initiated
+    open with the auto-open's guards, waits for an in-flight registration,
+    bypasses the once-per-day mark and the impression cap without counting an
+    impression, and writes the once-per-day mark on close.
+  - `Avafli.holdAutoOpen()` / `Avafli.releaseAutoOpen()` — defer the
+    once-a-day auto-open (nothing burned while held; `present()` still works)
+    and re-run the eligibility check on release. Safe before `configure()`.
+
+### Fixed
+
+- **Token refresh is single-flight.** Concurrent authed calls with a dead
+  token (cold open after days away) shared a 1-second sleep instead of the
+  refresh itself, so parallel `refreshToken` calls could race the same
+  refresh token. Callers now await one in-flight refresh; the JWT `exp`
+  pre-check window is 60 s.
+- **Boot resilience.** If the configure-time status fetch / registration
+  fails with a network error, the next host-activity resume re-runs it and
+  the auto-open check (previously the drawer stayed dark until the next cold
+  start). Nothing is marked or counted on a failed boot.
+- Wire `sdk_version` (`AvafliApi.SDK_VERSION`) and the Maven publish version
+  were stuck at 3.1.2; both now track the release (3.1.4).
+
 ## 3.1.3 — 2026-09-06
 
 ### Fixed

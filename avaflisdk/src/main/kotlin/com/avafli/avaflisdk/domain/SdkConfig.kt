@@ -1,5 +1,7 @@
 package com.avafli.avaflisdk.domain
 
+import com.avafli.avaflisdk.AvafliAutoOpen
+
 /**
  * Server-driven SDK configuration returned by registerDevice / getActiveGiveaway.
  * Contains branding overrides and copy text that the backend controls.
@@ -51,6 +53,13 @@ data class SdkConfig(
 data class ExperienceConfig(
     /** Auto-present the experience on the first app-open of the day (default true). */
     val autoOpenEnabled: Boolean? = null,
+    /**
+     * Server-side auto-open mode (`always` / `returningUsersOnly` / `never`),
+     * combined with the client's [com.avafli.avaflisdk.AvafliConfiguration.autoOpen]
+     * by taking the most restrictive. Absent/unknown → treated as `always`.
+     * [autoOpenEnabled] `== false` remains the hard kill switch.
+     */
+    val autoOpenMode: AvafliAutoOpen? = null,
     /**
      * How many times an unregistered (no-email) user sees the auto-presented
      * experience before it goes quiet (default 3 — MVP decision).

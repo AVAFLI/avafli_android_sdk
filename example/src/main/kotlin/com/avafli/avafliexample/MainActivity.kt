@@ -23,7 +23,9 @@ import com.avafli.avaflisdk.AvafliUser
  *
  * Integration is configure-only: the V2 experience AUTO-OPENS on the first
  * app-open of each calendar day — the `Avafli.configure(...)` call below is the
- * entire integration. There is no manual launch API.
+ * entire integration. Publishers that need control over WHEN it opens set
+ * `AvafliConfiguration.autoOpen` and call `Avafli.present(activity)` (see the
+ * README's "Controlling when the drawer opens").
  *
  * To demo the auto-open again, clear the app's data (Settings > Apps > Avafli
  * Example > Storage > Clear data) and relaunch.
