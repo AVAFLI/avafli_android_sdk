@@ -133,7 +133,7 @@ dependencies {
 
 ## Configuration
 
-Initialize the SDK with your user and environment settings:
+Initialize the SDK with your API key and user:
 
 ```kotlin
 val config = AvafliConfiguration(
@@ -163,7 +163,6 @@ Avafli.configure(config)
 | --------- | ---- | -------- | ----------- |
 | `context` | `Context` | ✅ | Application or Activity context |
 | `apiKey` | `String` | ✅ | Your Avafli API key from the dashboard |
-| `environment` | `AvafliEnvironment` | — | `.Production` (default) |
 | `user` | `AvafliUser` | ✅ | The authenticated user |
 | `options` | `AvafliOptions?` | — | Optional behavior toggles |
 | `autoOpen` | `AvafliAutoOpen` | — | `ALWAYS` (default), `RETURNING_USERS_ONLY`, or `NEVER` — see [Controlling when the drawer opens](#controlling-when-the-drawer-opens) |
