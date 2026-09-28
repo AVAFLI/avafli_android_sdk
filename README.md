@@ -31,6 +31,7 @@ Avafli lets you add daily-entry sweepstakes and prize experiences to your app in
 
 ```kotlin
 import com.avafli.avaflisdk.Avafli
+import com.avafli.avaflisdk.AvafliAutoOpen
 import com.avafli.avaflisdk.AvafliConfiguration
 import com.avafli.avaflisdk.AvafliOptions
 import com.avafli.avaflisdk.AvafliUser
@@ -38,6 +39,7 @@ import com.avafli.avaflisdk.AvafliUser
 val config = AvafliConfiguration(
     context = applicationContext,
     apiKey = "YOUR_API_KEY",  // debug builds: use your avafli_test_ sandbox key
+    autoOpen = AvafliAutoOpen.ALWAYS,  // or RETURNING_USERS_ONLY / NEVER
     user = AvafliUser(
         id = "user_123",              // only id is required — pass whatever identity you have
         firstName = "Jane",
@@ -52,7 +54,7 @@ val config = AvafliConfiguration(
 )
 Avafli.configure(config)
 
-// Done — the experience auto-opens once per day. No further calls needed.
+// Done — auto-opens once a day. To open it yourself: Avafli.present()
 // Push reminders: forward your FCM token from your FirebaseMessagingService:
 //   Avafli.onNewToken(token)
 ```
@@ -137,6 +139,7 @@ Initialize the SDK with your user and environment settings:
 val config = AvafliConfiguration(
     context = applicationContext,
     apiKey = "avafli_live_xxxxxxxxxx",
+    autoOpen = AvafliAutoOpen.ALWAYS,  // or RETURNING_USERS_ONLY / NEVER
     environment = AvafliEnvironment.Production,
     user = AvafliUser(
         id = "user_abc123",
