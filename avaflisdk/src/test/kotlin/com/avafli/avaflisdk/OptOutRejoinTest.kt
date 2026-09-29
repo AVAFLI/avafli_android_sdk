@@ -51,6 +51,7 @@ class OptOutRejoinTest {
         const val KEY_OPTED_OUT = "winr_opted_out_$PKG"
         const val KEY_OPTED_OUT_UNTIL = "winr_opted_out_until_$PKG"
         const val KEY_LAST_AUTO_PRESENT = "winr_last_auto_present_$PKG"
+        const val KEY_LAST_CLAIM_AUTO_PRESENT = "winr_last_claim_auto_present_$PKG"
         const val KEY_IMPRESSIONS = "winr_unregistered_impressions_$PKG"
         const val KEY_ADOPTION_STAMP = "winr_adoption_code_sent_at"
     }
@@ -159,6 +160,7 @@ class OptOutRejoinTest {
         prefs.saveTotalEntries(150)
         prefs.saveCompletedDays(listOf(true, true, true, true, true, false, false))
         prefs.saveLastAutoPresentDay("2026-09-28")
+        prefs.saveLastClaimAutoPresentAt(now - agoMs)
         prefs.saveUnregisteredImpressions(2)
         prefs.putString(KEY_ADOPTION_STAMP, "1759168800000")
         // An opted-out device with a live token refreshes status, as today.
@@ -219,6 +221,7 @@ class OptOutRejoinTest {
         assertNull(sharedPrefs.all["total_entries"])
         assertNull(sharedPrefs.all["completed_days"])
         assertNull(sharedPrefs.all[KEY_LAST_AUTO_PRESENT])
+        assertNull(sharedPrefs.all[KEY_LAST_CLAIM_AUTO_PRESENT])
         assertNull(sharedPrefs.all[KEY_IMPRESSIONS])
         assertNull(sharedPrefs.all[KEY_ADOPTION_STAMP])
         assertNull(sharedPrefs.all["winr_offline_pending_intents_$PKG"])

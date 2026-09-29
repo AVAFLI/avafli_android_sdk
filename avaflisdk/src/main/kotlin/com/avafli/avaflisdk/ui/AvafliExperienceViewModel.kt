@@ -547,6 +547,13 @@ internal class AvafliExperienceViewModel(
         try {
             val response = api.getActiveGiveaway()
 
+            // Keeps the SDK's pending-claim flag on the latest status, so the
+            // auto-open reopens the drawer for a waiting claim and stops once
+            // it is submitted (or was rejected as not this person's).
+            Avafli.notePrizeClaimPending(
+                response.prizeClaim?.isPending == true && !suppressWinnerClaim,
+            )
+
             // RTD: an opted-out person never sees the experience content.
             if (response.optedOut == true) {
                 setScreen(ExperienceScreen.NoActiveGiveaway)
@@ -2026,6 +2033,8 @@ internal class AvafliExperienceViewModel(
                 )
                 // 2.9: the share step comes AFTER submit — the claim is safely
                 // in, so abandoning the share screen loses nothing.
+                // The claim is in — nothing is pending any more.
+                Avafli.notePrizeClaimPending(false)
                 _uiState.value = _uiState.value.copy(
                     isSubmittingClaim = false,
                     submittedClaimForm = form,

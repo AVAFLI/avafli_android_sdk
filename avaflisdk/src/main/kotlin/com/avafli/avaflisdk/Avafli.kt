@@ -61,6 +61,13 @@ object Avafli {
      */
     internal const val OPT_OUT_RECHECK_FLOOR_MS = 15 * 60 * 1000L
 
+    /**
+     * Pending prize claim (3.2.0): the least time between two auto-opens made
+     * on host-activity resume because a claim is waiting. A cold start
+     * ([configure]) always gets one.
+     */
+    internal const val CLAIM_REOPEN_INTERVAL_MS = 30 * 60 * 1000L
+
     private var config: AvafliConfiguration? = null
     private var secureStorage: SecureStorage? = null
     private var preferencesStorage: PreferencesStorage? = null
@@ -109,6 +116,25 @@ object Avafli {
      */
     @Volatile
     private var cachedAdoptionPending: Boolean = false
+
+    /**
+     * Pending prize claim (3.2.0): the latest registerDevice / getActiveGiveaway
+     * response carried `prizeClaim.status == "pending"`. While true the
+     * auto-open is not held back by the once-per-day mark, the unregistered
+     * impression cap or RETURNING_USERS_ONLY — a winner who closed the drawer
+     * can always get back to their claim. Cleared by any later response
+     * without a pending claim.
+     */
+    @Volatile
+    private var cachedClaimPending: Boolean = false
+
+    /**
+     * This launch still owes the winner its pending-claim auto-open: set by
+     * [configure], spent when that open is presented. Until then the
+     * 30-minute throttle does not apply.
+     */
+    @Volatile
+    private var claimOpenOwedThisLaunch: Boolean = false
 
     /** Registration finished (success or failure) — auto-present waits for it. */
     @Volatile
@@ -203,6 +229,7 @@ object Avafli {
         registrationComplete = false
         isNewUserSession = false
         bootRefreshPending = false
+        claimOpenOwedThisLaunch = true
         // A present() parked on the previous gate re-checks and re-parks on
         // the new one (registrationComplete is false again).
         registrationGate.complete(Unit)
@@ -380,6 +407,7 @@ object Avafli {
         }
         cachedOptedOut = false
         cachedGiveaway = null
+        cachedClaimPending = false
         cachedEmailConsent = null
         cachedAdoptionPending = false
         isNewUserSession = false
@@ -448,15 +476,24 @@ object Avafli {
      * - unregistered (no email) users: at most experience.unregisteredImpressionCap
      *   (default 3) auto-opens ever, then silence until registered
      * - opted-out (RTD) users never see it (until the 24-hour block lifts)
+     *
+     * Pending prize claim (3.2.0): while the latest status response carries a
+     * pending claim, the once-per-day mark, the unregistered impression cap
+     * (nothing is counted) and RETURNING_USERS_ONLY no longer hold the drawer
+     * back. Everything else above still does — NEVER included: that publisher
+     * owns the timing and opens the winner flow with [present]. So it is not
+     * a nag, such an open happens once per cold start, and on resume only
+     * [CLAIM_REOPEN_INTERVAL_MS] after the last one.
      */
     private fun autoPresentIfEligible() {
         val currentConfig = config ?: return
         if (!registrationComplete || isSuspended || cachedOptedOut) return
+        val claimPending = cachedClaimPending
         val experience = cachedSdkConfig?.experience
         if (experience?.autoOpenEnabled == false) return
         when (AvafliAutoOpen.effective(experience?.autoOpenEnabled, experience?.autoOpenMode, currentConfig.autoOpen)) {
             AvafliAutoOpen.NEVER -> return
-            AvafliAutoOpen.RETURNING_USERS_ONLY -> if (isNewUserSession) {
+            AvafliAutoOpen.RETURNING_USERS_ONLY -> if (isNewUserSession && !claimPending) {
                 logger?.debug("Auto-present skipped: first-registration session (returningUsersOnly)")
                 return
             }
@@ -467,9 +504,19 @@ object Avafli {
         if (cachedGiveaway == null) return
         val prefs = preferencesStorage ?: return
 
+        // Pending claim: due on this launch's first chance, then again once
+        // the throttle has run out (its own timestamp, never the daily mark).
+        val now = nowMs()
+        val claimOpenDue = claimPending && (
+            claimOpenOwedThisLaunch ||
+                prefs.getLastClaimAutoPresentAt().let { last ->
+                    last == null || now < last || now - last >= CLAIM_REOPEN_INTERVAL_MS
+                }
+            )
+
         // Once per calendar day (mark keyed by package name inside prefs).
         val today = LocalDate.now().toString()
-        if (prefs.getLastAutoPresentDay() == today) return
+        if (!claimOpenDue && prefs.getLastAutoPresentDay() == today) return
 
         // Unregistered users (no confirmed email) see the auto-open at most N
         // times (default 3 per the MVP decision), then the SDK goes quiet until
@@ -477,7 +524,8 @@ object Avafli {
         // BELOW, once presentation is certain, so an unavailable/finishing
         // Activity never burns an impression the user never actually saw.
         // Mirrors web/Flutter: check first, then count.
-        val unregistered = cachedEmailConsent != true
+        // A winner is never capped or counted while their claim is pending.
+        val unregistered = cachedEmailConsent != true && !claimPending
         if (unregistered) {
             val cap = experience?.unregisteredImpressionCap ?: 3
             if (prefs.getUnregisteredImpressions() >= cap) {
@@ -495,7 +543,13 @@ object Avafli {
             prefs.saveUnregisteredImpressions(prefs.getUnregisteredImpressions() + 1)
         }
         prefs.saveLastAutoPresentDay(today)
-        logger?.info("Auto-presenting Avafli experience (first open of the day)")
+        if (claimOpenDue) {
+            prefs.saveLastClaimAutoPresentAt(now)
+            claimOpenOwedThisLaunch = false
+            logger?.info("Auto-presenting Avafli experience (prize claim pending)")
+        } else {
+            logger?.info("Auto-presenting Avafli experience (first open of the day)")
+        }
         present(activity)
     }
 
@@ -762,6 +816,15 @@ object Avafli {
         cachedEmailConsent = true
     }
 
+    /**
+     * Pending prize claim (3.2.0): the experience's own status fetch (or a
+     * submitted claim) updates the flag, so the auto-open stops reopening the
+     * drawer the moment the claim is no longer pending.
+     */
+    internal fun notePrizeClaimPending(pending: Boolean) {
+        cachedClaimPending = pending
+    }
+
     /** Adoption re-entry (2.9): whether a parked adoption awaits its code. */
     internal fun isAdoptionPending(): Boolean = cachedAdoptionPending
 
@@ -929,6 +992,7 @@ object Avafli {
                 val response = api?.getActiveGiveaway()
                 bootRefreshPending = false
                 cachedGiveaway = response?.giveaway
+                cachedClaimPending = response?.prizeClaim?.isPending == true
                 cachedSdkConfig = response?.sdkConfig ?: cachedSdkConfig
                 cachedEmailConsent = response?.emailConsentStatus
                 response?.adoptionPending?.let { cachedAdoptionPending = it }
@@ -978,6 +1042,7 @@ object Avafli {
         secureStorage?.saveUuid(response.uuid)
 
         cachedGiveaway = response.giveaway
+        cachedClaimPending = response.prizeClaim?.isPending == true
         cachedSdkConfig = response.sdkConfig
         // Adoption re-entry (2.9): OPTIONAL flag — absent on older backends.
         response.adoptionPending?.let { cachedAdoptionPending = it }
@@ -1084,6 +1149,8 @@ object Avafli {
         logger = null
         pushManager = null
         cachedGiveaway = null
+        cachedClaimPending = false
+        claimOpenOwedThisLaunch = false
         cachedSdkConfig = null
         pendingCallback = null
         isSuspended = false

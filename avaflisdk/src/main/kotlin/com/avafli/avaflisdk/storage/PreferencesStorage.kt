@@ -84,6 +84,19 @@ internal class PreferencesStorage(context: Context) : OfflineStateStore {
     }
 
     /**
+     * Pending prize claim (3.2.0): epoch ms of the last auto-open made because
+     * a claim was waiting. Its own key — the throttle between those opens
+     * never reads or writes the once-per-day mark above.
+     */
+    fun saveLastClaimAutoPresentAt(atMs: Long) {
+        prefs.edit().putLong("${KEY_LAST_CLAIM_AUTO_PRESENT}_$packageName", atMs).apply()
+    }
+
+    fun getLastClaimAutoPresentAt(): Long? {
+        return prefs.getLong("${KEY_LAST_CLAIM_AUTO_PRESENT}_$packageName", 0L).takeIf { it > 0L }
+    }
+
+    /**
      * RTD opt-out — while set, the experience is silenced on this device. Since
      * 3.2.0 the block lifts at [getOptedOutUntil] (24 hours after the deletion).
      */
@@ -121,6 +134,7 @@ internal class PreferencesStorage(context: Context) : OfflineStateStore {
             .remove(KEY_TOTAL_ENTRIES)
             .remove(KEY_COMPLETED_DAYS)
             .remove("${KEY_LAST_AUTO_PRESENT}_$packageName")
+            .remove("${KEY_LAST_CLAIM_AUTO_PRESENT}_$packageName")
             .remove("${KEY_UNREGISTERED_IMPRESSIONS}_$packageName")
             .remove(KEY_ADOPTION_CODE_SENT_AT)
             .apply()
@@ -153,6 +167,7 @@ internal class PreferencesStorage(context: Context) : OfflineStateStore {
         private const val KEY_EMAIL_SUBMITTED = "email_submitted"
         private const val KEY_COMPLETED_DAYS = "completed_days"
         private const val KEY_LAST_AUTO_PRESENT = "winr_last_auto_present"
+        private const val KEY_LAST_CLAIM_AUTO_PRESENT = "winr_last_claim_auto_present"
         private const val KEY_UNREGISTERED_IMPRESSIONS = "winr_unregistered_impressions"
         private const val KEY_OPTED_OUT = "winr_opted_out"
         private const val KEY_OPTED_OUT_UNTIL = "winr_opted_out_until"

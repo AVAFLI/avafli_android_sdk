@@ -47,6 +47,22 @@ rebrand and use the former WINR names.
     cleared, the device id is kept, and the device registers afresh.
   - Before that moment nothing changes. If the server still reports the
     opt-out, its time is adopted and the next attempt waits for it.
+- **Winners can always reopen a pending claim.** The auto-open gated on the
+  once-per-day mark alone, so a winner who closed the drawer could not get
+  back to their claim until the next calendar day. While the latest
+  `registerDevice` / `getActiveGiveaway` response carries a pending
+  `prizeClaim`:
+  - the auto-open bypasses the once-per-day mark, the unregistered impression
+    cap (no impression is counted) and `RETURNING_USERS_ONLY` (client and
+    server);
+  - it still respects `holdAutoOpen()`, the opt-out, a suspended account, the
+    `autoOpenEnabled` kill switch and `NEVER` (client or server) — a publisher
+    on `NEVER` opens the winner flow with `Avafli.present(activity)`, which
+    lands on the winner splash;
+  - so it is not a nag, it opens once per app launch, and on return to the
+    foreground only if 30 minutes have passed since the last such open (its
+    own timestamp; the daily mark is not used for the throttle).
+  - Once the claim is submitted, the normal once-per-day rules apply again.
 
 ### Changed
 
