@@ -1,5 +1,7 @@
 package com.avafli.avaflisdk.ui.v2
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -15,8 +17,17 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.autofill.AutofillNode
+import androidx.compose.ui.autofill.AutofillType
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalAutofill
+import androidx.compose.ui.platform.LocalAutofillTree
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -43,6 +54,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import com.avafli.avaflisdk.R
 import com.avafli.avaflisdk.domain.Giveaway
 import com.avafli.avaflisdk.domain.AvafliFieldValidation
+import kotlinx.coroutines.delay
 
 // New-user capture ("VISIT. EARN. WIN."), ported from iOS AvafliV2CaptureView.
 
@@ -463,11 +475,15 @@ private fun ConsentCheckbox(accent: Color, checked: Boolean, text: String, onTog
 
 /**
  * Verification code entry — one numeric field, auto-submits at 6 digits.
- * Shared by two flows:
- *  - adoption OTP (typed email matches an EXISTING account); and
+ * Shared by three flows:
+ *  - adoption OTP (typed email matches an EXISTING account);
  *  - soft email verification (2.7.0), via the dashboard "Verify your email"
  *    chip, which overrides [title]/[subtitle] and supplies [onCancel] to make
- *    the screen dismissible (it gates nothing).
+ *    the screen dismissible (it gates nothing); and
+ *  - the winner's email-ownership code before the claim form (3.2.0), which
+ *    adds the inline send status, the resend countdown, the contact line and
+ *    a back chevron. Those parameters all default to "off", so the first two
+ *    flows render exactly as before.
  */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
@@ -488,8 +504,38 @@ internal fun AvafliV2CodeEntryScreen(
     subtitle: String? = null,
     /** When set, renders a dismiss control (soft-verification is not a gate). */
     onCancel: (() -> Unit)? = null,
+    /** When set, the header's "?" becomes a back chevron (system back follows it). */
+    onBack: (() -> Unit)? = null,
+    /** Neutral inline line under the field ("Sending your code…", "Code sent", a notice). */
+    statusText: String? = null,
+    /** Inline send failure (error styling); [onRetry] adds the retry action beside it. */
+    sendErrorText: String? = null,
+    onRetry: (() -> Unit)? = null,
+    /** Epoch ms at which "Send a new code" re-enables — a live countdown until then. */
+    resendAvailableAtMs: Long? = null,
+    /** Bumped by the caller to clear the field (a wrong or replaced code). Focus is kept. */
+    fieldResetSignal: Int = 0,
+    /** Shows the "Can't get to this email?" contact line (mailto). */
+    showContactHelp: Boolean = false,
+    /** Marks the field as a one-time code for the platform's autofill. */
+    oneTimeCode: Boolean = false,
 ) {
     var code by remember { mutableStateOf("") }
+    LaunchedEffect(fieldResetSignal) {
+        if (fieldResetSignal > 0) code = ""
+    }
+    // Live resend countdown: whole seconds left until resendAvailableAtMs.
+    var resendSecondsLeft by remember { mutableIntStateOf(0) }
+    LaunchedEffect(resendAvailableAtMs) {
+        while (true) {
+            val leftMs = (resendAvailableAtMs ?: 0L) - System.currentTimeMillis()
+            resendSecondsLeft = ((leftMs + 999) / 1000).toInt().coerceAtLeast(0)
+            if (leftMs <= 0) break
+            delay(leftMs % 1000 + 1)
+        }
+    }
+    val resendEnabled = resendSecondsLeft <= 0
+    if (onBack != null) androidx.activity.compose.BackHandler(onBack = onBack)
     // IME never blocks fields (2.9): scroll the code box above the keyboard
     // when it gains focus.
     val bringIntoView = remember {
@@ -519,6 +565,8 @@ internal fun AvafliV2CodeEntryScreen(
         ) {
             AvafliV2Header(
                 logoUrl = logoUrl,
+                showsBack = onBack != null,
+                onBack = { onBack?.invoke() },
                 onInfo = onInfo,
                 onClose = onClose,
                 modifier = Modifier.padding(top = 18.dp),
@@ -581,8 +629,49 @@ internal fun AvafliV2CodeEntryScreen(
                             ),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .avafliBringIntoViewOnFocus(bringIntoView),
+                                .avafliBringIntoViewOnFocus(bringIntoView)
+                                .then(
+                                    if (oneTimeCode) {
+                                        Modifier.avafliOneTimeCodeAutofill { filled ->
+                                            val digits = filled.filter { it.isDigit() }.take(6)
+                                            code = digits
+                                            if (digits.length == 6 && !isVerifying) onSubmit(digits)
+                                        }
+                                    } else Modifier
+                                ),
                         )
+                    }
+                }
+
+                if (statusText != null) {
+                    Text(
+                        statusText,
+                        style = AvafliV2Font.inter(13.sp, color = Color.White.copy(alpha = 0.75f)),
+                        textAlign = TextAlign.Center,
+                    )
+                }
+
+                if (sendErrorText != null) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        Text(
+                            sendErrorText,
+                            style = AvafliV2Font.inter(13.sp, color = Color(0xFFFF6B63)),
+                            textAlign = TextAlign.Center,
+                        )
+                        if (onRetry != null) {
+                            Text(
+                                AvafliV2Strings.CLAIM_CODE_RETRY,
+                                style = AvafliV2Font.inter(14.sp, FontWeight.Bold, color = Color(0xFF7FB0FF))
+                                    .copy(textDecoration = TextDecoration.Underline),
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .clickable { onRetry() }
+                                    .padding(6.dp),
+                            )
+                        }
                     }
                 }
 
@@ -607,19 +696,30 @@ internal fun AvafliV2CodeEntryScreen(
                 Row(
                     modifier = Modifier
                         .clip(RoundedCornerShape(6.dp))
-                        .clickable { onResend() }
+                        .clickable(enabled = resendEnabled) { onResend() }
+                        .alpha(if (resendEnabled) 1f else 0.5f)
                         .padding(6.dp),
                 ) {
                     Text(
                         "Didn't get it? ",
                         style = AvafliV2Font.inter(14.sp, color = Color.White.copy(alpha = 0.65f)),
                     )
-                    Text(
-                        "Send a new code",
-                        style = AvafliV2Font.inter(14.sp, FontWeight.Bold, color = Color(0xFF7FB0FF))
-                            .copy(textDecoration = TextDecoration.Underline),
-                    )
+                    if (resendEnabled) {
+                        Text(
+                            "Send a new code",
+                            style = AvafliV2Font.inter(14.sp, FontWeight.Bold, color = Color(0xFF7FB0FF))
+                                .copy(textDecoration = TextDecoration.Underline),
+                        )
+                    } else {
+                        // Cooling down: the action reads as a countdown, not a link.
+                        Text(
+                            AvafliV2Strings.claimCodeResendCountdown(resendSecondsLeft),
+                            style = AvafliV2Font.inter(14.sp, FontWeight.Bold, color = Color(0xFF7FB0FF)),
+                        )
+                    }
                 }
+
+                if (showContactHelp) ContactHelpLine()
 
                 // Soft-verification only: a dismiss control back to the dashboard.
                 // Adoption OTP omits this — that flow completes a required merge.
@@ -643,4 +743,70 @@ internal fun AvafliV2CodeEntryScreen(
             }
         }
     }
+}
+
+/**
+ * "Can't get to this email? Contact info@avafli.com" — the address opens the
+ * person's mail app. A device with no mail app simply does nothing.
+ */
+@Composable
+private fun ContactHelpLine() {
+    val context = LocalContext.current
+    Text(
+        buildAnnotatedString {
+            append(AvafliV2Strings.CLAIM_CODE_HELP_PREFIX)
+            withLink(
+                LinkAnnotation.Clickable(
+                    "support",
+                    TextLinkStyles(
+                        style = SpanStyle(
+                            color = Color(0xFF7FB0FF),
+                            textDecoration = TextDecoration.Underline,
+                        ),
+                    ),
+                ) {
+                    try {
+                        context.startActivity(
+                            Intent(
+                                Intent.ACTION_SENDTO,
+                                Uri.parse("mailto:${AvafliV2Strings.SUPPORT_EMAIL}"),
+                            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                        )
+                    } catch (_: Exception) {
+                        // No mail app — the address is still on screen to copy.
+                    }
+                },
+            ) {
+                append(AvafliV2Strings.SUPPORT_EMAIL)
+            }
+        },
+        style = AvafliV2Font.inter(13.sp, color = Color.White.copy(alpha = 0.65f), textAlign = TextAlign.Center),
+    )
+}
+
+/**
+ * Tells the platform's autofill that this field takes a one-time code
+ * (`AUTOFILL_HINT_SMS_OTP`), so a code the keyboard or an autofill service
+ * offers can be filled in one tap. Purely additive: with no autofill service
+ * the field behaves exactly as without it.
+ */
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+private fun Modifier.avafliOneTimeCodeAutofill(onFill: (String) -> Unit): Modifier {
+    val autofill = LocalAutofill.current
+    // The node outlives recompositions; always call the latest handler.
+    val currentOnFill by rememberUpdatedState(onFill)
+    val node = remember {
+        AutofillNode(listOf(AutofillType.SmsOtpCode), onFill = { currentOnFill(it) })
+    }
+    LocalAutofillTree.current += node
+    return this
+        .onGloballyPositioned { node.boundingBox = it.boundsInWindow() }
+        .onFocusChanged { state ->
+            // requestAutofillForNode needs the bounds; they arrive with layout.
+            if (node.boundingBox == null) return@onFocusChanged
+            autofill?.run {
+                if (state.isFocused) requestAutofillForNode(node) else cancelAutofillForNode(node)
+            }
+        }
 }

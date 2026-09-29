@@ -7,6 +7,7 @@ import com.avafli.avaflisdk.AvafliError
 import com.avafli.avaflisdk.AvafliUser
 import com.avafli.avaflisdk.domain.DailyEntryGrant
 import com.avafli.avaflisdk.domain.AvafliFieldValidation
+import com.avafli.avaflisdk.domain.ClaimVerificationBlock
 import com.avafli.avaflisdk.domain.Giveaway
 import com.avafli.avaflisdk.domain.PrizeClaimBlock
 import com.avafli.avaflisdk.domain.PrizeClaimForm
@@ -14,6 +15,7 @@ import com.avafli.avaflisdk.domain.SdkConfig
 import com.avafli.avaflisdk.domain.StreakEngine
 import com.avafli.avaflisdk.domain.StreakState
 import com.avafli.avaflisdk.network.AvafliApi
+import com.avafli.avaflisdk.network.NetworkClient
 import com.avafli.avaflisdk.services.Logger
 import com.avafli.avaflisdk.services.analytics.AnalyticsAdapter
 import com.avafli.avaflisdk.storage.PreferencesStorage
@@ -31,7 +33,9 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import java.time.Instant
 import java.time.LocalDate
+import java.time.OffsetDateTime
 import java.util.TimeZone
 
 // ── V2 state machine (mirrors iOS AvafliExperienceViewModel) ──
@@ -141,6 +145,12 @@ internal sealed class OptOutPhase {
 /** Sub-screen of the winner claim flow (`screen is WinnerClaim`). */
 internal sealed class WinnerClaimStep {
     object Splash : WinnerClaimStep()
+
+    /**
+     * 3.2.0: the six-digit email-ownership code, between the splash and the
+     * form — shown only while `prizeClaim.verification.required` is true.
+     */
+    object Code : WinnerClaimStep()
     object Form : WinnerClaimStep()
 
     /**
@@ -150,6 +160,29 @@ internal sealed class WinnerClaimStep {
      */
     data class Share(val claimNumber: String, val submittedAt: String) : WinnerClaimStep()
     data class Confirmation(val claimNumber: String, val submittedAt: String) : WinnerClaimStep()
+}
+
+/**
+ * The claim code's send call, as the code screen shows it inline (3.2.0).
+ * Memory only — the server holds the real state.
+ */
+internal sealed class ClaimCodeSend {
+    /** Nothing to say (also: a live code was re-used, `sent: false`). */
+    object Idle : ClaimCodeSend()
+    object Sending : ClaimCodeSend()
+
+    /** This call put a code in the inbox. */
+    object Sent : ClaimCodeSend()
+
+    /**
+     * Inline failure; the code field stays usable. [retryable] adds the retry
+     * action, which re-attempts the same kind of send ([resend]).
+     */
+    data class Failed(
+        val message: String,
+        val retryable: Boolean,
+        val resend: Boolean = false,
+    ) : ClaimCodeSend()
 }
 
 internal data class ExperienceUiState(
@@ -219,6 +252,28 @@ internal data class ExperienceUiState(
     val claimSubmitError: String? = null,
     /** The submitted form, kept for the confirmation screen's winner card. */
     val submittedClaimForm: PrizeClaimForm? = null,
+
+    // ── Winner claim: email-ownership code (3.2.0) ──
+    //
+    // Everything here is view-model memory. Nothing about this step is ever
+    // persisted: the next open reads `prizeClaim.verification` and resumes
+    // from that. The code check itself reuses isVerifyingCode / codeError.
+
+    /** Inline state of the send call ("Sending your code…", "Code sent", failure). */
+    val claimCodeSend: ClaimCodeSend = ClaimCodeSend.Idle,
+    /** Neutral inline notice (the backend replaced a dead code; cooldown) — not an error. */
+    val claimCodeInfo: String? = null,
+    /** Epoch ms at which "Send a new code" re-enables; null → enabled now. */
+    val claimCodeResendAtMs: Long? = null,
+    /** Bumped to make the code screen clear its field (wrong or replaced code). */
+    val claimCodeFieldReset: Int = 0,
+    /** The brief "Email verified ✓" beat before the claim form opens. */
+    val claimCodeVerified: Boolean = false,
+    /**
+     * What the person had typed when the backend answered
+     * `claim_verification_required` — the form reopens with it after the code.
+     */
+    val claimFormDraft: PrizeClaimForm? = null,
 )
 
 internal class AvafliExperienceViewModel(
@@ -248,7 +303,25 @@ internal class AvafliExperienceViewModel(
          * dismisses itself (opt-out success).
          */
         internal const val OPT_OUT_SUCCESS_HOLD_MS = 1_400L
+
+        /** The backend's resend cooldown (claimverify.ts CLAIM_RESEND_COOLDOWN_MS). */
+        internal const val CLAIM_CODE_RESEND_COOLDOWN_MS = 60 * 1000L
+
+        /** How long "Email verified ✓" holds before the claim form opens. */
+        internal const val CLAIM_CODE_VERIFIED_HOLD_MS = 900L
+
+        // `details.reason` values (claimverify.ts ClaimVerificationReason).
+        private const val REASON_VERIFICATION_REQUIRED = "claim_verification_required"
+        private const val REASON_CODE_MISMATCH = "code_mismatch"
+        private const val REASON_FRESH_CODE_SENT = "fresh_code_sent"
+        private const val REASON_RESEND_COOLDOWN = "resend_cooldown"
+        private const val REASON_SEND_LIMIT = "send_limit"
+        private const val REASON_SEND_FAILED = "send_failed"
+        private const val REASON_NO_EMAIL_ON_FILE = "no_email_on_file"
     }
+
+    /** Wall clock — a seam so tests can move time past the resend cooldown. */
+    internal var nowMs: () -> Long = { System.currentTimeMillis() }
 
     private val _uiState = MutableStateFlow(ExperienceUiState())
     val uiState: StateFlow<ExperienceUiState> = _uiState.asStateFlow()
@@ -292,7 +365,7 @@ internal class AvafliExperienceViewModel(
      * lands on the code screen, but the e-mail goes out at most once per
      * window (the code itself lives 10 minutes). "Send a new code" always sends.
      */
-    private val adoptionCodeSentAtKey = "winr_adoption_code_sent_at"
+    private val adoptionCodeSentAtKey = PreferencesStorage.KEY_ADOPTION_CODE_SENT_AT
 
     private fun adoptionCodeIsStale(): Boolean {
         val last = preferencesStorage.getString(adoptionCodeSentAtKey)?.toLongOrNull() ?: 0L
@@ -1183,7 +1256,8 @@ internal class AvafliExperienceViewModel(
 
     /**
      * DELETE MY DATA tapped (initial attempt or retry after failure): performs
-     * the RTD opt-out against the backend, persists the local silence flags,
+     * the RTD opt-out against the backend, persists the local silence flag
+     * and the moment it lifts (3.2.0: 24 hours on),
      * and lands on [OptOutPhase.Done] — the V2 root then holds the success copy
      * for [OPT_OUT_SUCCESS_HOLD_MS] and dismisses the whole experience.
      * Failure keeps the confirmation up with [AvafliV2Strings.OPT_OUT_FAILED]; we
@@ -1200,9 +1274,11 @@ internal class AvafliExperienceViewModel(
                 val ok = api.optOut()
                 if (!ok) throw IllegalStateException("optOut returned success=false")
                 preferencesStorage.saveOptedOut(true)
+                // 24-hour rejoin (3.2.0): the block lifts a day from now.
+                preferencesStorage.saveOptedOutUntil(nowMs() + Avafli.OPT_OUT_BLOCK_MS)
                 Avafli.noteOptedOut()
                 analytics?.trackEvent("avafli_opted_out")
-                logger.info("User opted out of Avafli (RTD) — experience permanently silenced")
+                logger.info("User opted out of Avafli (RTD) — experience silenced for 24 hours")
                 _uiState.value = _uiState.value.copy(optOutPhase = OptOutPhase.Done)
             } catch (e: Exception) {
                 logger.error("Opt-out failed: ${e.message}", e)
@@ -1517,11 +1593,357 @@ internal class AvafliExperienceViewModel(
         }
     }
 
-    /** Splash CONTINUE → the claim form. */
+    /**
+     * Splash CONTINUE → the claim form, or (3.2.0) the email-ownership code
+     * first when the block says it is required. An absent block is an older
+     * backend or the platform flag off — straight to the form, as before.
+     */
     fun winnerClaimContinue() {
-        if (_uiState.value.screen !is ExperienceScreen.WinnerClaim) return
+        val screen = _uiState.value.screen as? ExperienceScreen.WinnerClaim ?: return
+        if (screen.claim.verification?.required == true) {
+            openClaimCodeStep()
+            return
+        }
         _uiState.value = _uiState.value.copy(winnerClaimStep = WinnerClaimStep.Form)
     }
+
+    // ── Winner claim: email-ownership code (3.2.0) ──
+    //
+    // The server holds all state. Opening the step asks the backend for a
+    // code (idempotent — a live one is re-used), and every answer carries the
+    // verification block this screen then renders from.
+
+    /** One send at a time — a Back/CONTINUE bounce must not double-send. */
+    private var claimCodeSendInFlight = false
+
+    /**
+     * Shows the code screen — painted at once from the block in hand — and
+     * makes the idempotent send call behind it.
+     */
+    private fun openClaimCodeStep() {
+        val screen = _uiState.value.screen as? ExperienceScreen.WinnerClaim ?: return
+        _uiState.value = _uiState.value.copy(
+            winnerClaimStep = WinnerClaimStep.Code,
+            isVerifyingCode = false,
+            codeError = null,
+            claimCodeInfo = null,
+            claimCodeVerified = false,
+            claimCodeSend = if (claimCodeSendInFlight) ClaimCodeSend.Sending else ClaimCodeSend.Idle,
+            claimCodeResendAtMs = resendAtFrom(screen.claim.verification),
+        )
+        requestClaimCode(resend = false)
+    }
+
+    /** Back from the code screen → the splash. Sends and invalidates nothing. */
+    fun claimCodeBack() {
+        if (_uiState.value.winnerClaimStep != WinnerClaimStep.Code) return
+        if (_uiState.value.claimCodeVerified) return
+        _uiState.value = _uiState.value.copy(winnerClaimStep = WinnerClaimStep.Splash)
+    }
+
+    /** "Send a new code" — ignored until the cooldown has run out. */
+    fun resendClaimCode() {
+        if (_uiState.value.winnerClaimStep != WinnerClaimStep.Code) return
+        val resendAt = _uiState.value.claimCodeResendAtMs
+        if (resendAt != null && nowMs() < resendAt) return
+        requestClaimCode(resend = true)
+    }
+
+    /** Retry beside an inline send failure — re-attempts the send that failed. */
+    fun retryClaimCodeSend() {
+        if (_uiState.value.winnerClaimStep != WinnerClaimStep.Code) return
+        val failed = _uiState.value.claimCodeSend as? ClaimCodeSend.Failed ?: return
+        if (!failed.retryable) return
+        requestClaimCode(resend = failed.resend)
+    }
+
+    private fun requestClaimCode(resend: Boolean) {
+        val screen = _uiState.value.screen as? ExperienceScreen.WinnerClaim ?: return
+        if (claimCodeSendInFlight) return
+        claimCodeSendInFlight = true
+        _uiState.value = _uiState.value.copy(
+            claimCodeSend = ClaimCodeSend.Sending,
+            claimCodeInfo = null,
+        )
+        viewModelScope.launch {
+            try {
+                val response = api.sendClaimVerificationCode(screen.claim.giveawayId, resend)
+                claimCodeSendInFlight = false
+                val block = response.verification
+                if (block != null && !block.required) {
+                    // Proven in the meantime (another device, an earlier
+                    // code) — nothing to enter.
+                    claimInboxProven(block, celebrate = false)
+                    return@launch
+                }
+                adoptClaimVerification(block)
+                _uiState.value = _uiState.value.copy(
+                    // A re-used live code (`sent: false`) says nothing extra.
+                    claimCodeSend = if (response.sent) ClaimCodeSend.Sent else ClaimCodeSend.Idle,
+                    claimCodeResendAtMs = resendAtFrom(block),
+                    codeError = if (response.sent) null else _uiState.value.codeError,
+                )
+            } catch (e: Exception) {
+                claimCodeSendInFlight = false
+                logger.error("Claim code send failed: ${e.message}", e)
+                handleClaimCodeSendFailure(e, resend)
+            }
+        }
+    }
+
+    private suspend fun handleClaimCodeSendFailure(e: Exception, resend: Boolean) {
+        if (leftClaimCodeStep(e)) return
+        val error = NetworkClient.callableError(e)
+        val retryAt = error?.detailInt("retryAfterSeconds")
+            ?.takeIf { it > 0 }
+            ?.let { nowMs() + it * 1000L }
+        _uiState.value = when (error?.reason) {
+            // Not a failure to fix — the countdown on the button is the way on.
+            REASON_RESEND_COOLDOWN -> _uiState.value.copy(
+                claimCodeSend = ClaimCodeSend.Idle,
+                claimCodeInfo = AvafliV2Strings.CLAIM_CODE_COOLDOWN,
+                claimCodeResendAtMs = retryAt ?: (nowMs() + CLAIM_CODE_RESEND_COOLDOWN_MS),
+            )
+            REASON_SEND_LIMIT -> _uiState.value.copy(
+                claimCodeSend = ClaimCodeSend.Failed(
+                    error.message.orFallback(AvafliV2Strings.CLAIM_CODE_SEND_LIMIT),
+                    retryable = false,
+                ),
+                claimCodeResendAtMs = retryAt ?: _uiState.value.claimCodeResendAtMs,
+            )
+            REASON_NO_EMAIL_ON_FILE -> _uiState.value.copy(
+                claimCodeSend = ClaimCodeSend.Failed(
+                    error.message.orFallback(AvafliV2Strings.CLAIM_NO_EMAIL_ON_FILE),
+                    retryable = false,
+                ),
+            )
+            REASON_SEND_FAILED -> _uiState.value.copy(
+                claimCodeSend = ClaimCodeSend.Failed(
+                    error.message.orFallback(AvafliV2Strings.CLAIM_CODE_SEND_FAILED),
+                    retryable = true,
+                    resend = resend,
+                ),
+            )
+            else -> _uiState.value.copy(
+                claimCodeSend = ClaimCodeSend.Failed(
+                    if (e is AvafliError.NetworkError) AvafliV2Strings.CLAIM_CODE_NETWORK
+                    else AvafliV2Strings.CLAIM_CODE_SEND_FAILED,
+                    retryable = true,
+                    resend = resend,
+                ),
+            )
+        }
+    }
+
+    /**
+     * Check the six-digit claim code. Approved → a brief confirmation, then
+     * the claim form. Every failure leaves a way on: the tries left, the fresh
+     * code the backend already sent, the resend countdown, or a retry.
+     */
+    fun submitClaimCode(code: String) {
+        val screen = _uiState.value.screen as? ExperienceScreen.WinnerClaim ?: return
+        if (_uiState.value.winnerClaimStep != WinnerClaimStep.Code) return
+        if (_uiState.value.isVerifyingCode || _uiState.value.claimCodeVerified) return
+        _uiState.value = _uiState.value.copy(
+            isVerifyingCode = true,
+            codeError = null,
+            claimCodeInfo = null,
+            // "Code sent" has done its job once a code is being checked.
+            claimCodeSend = _uiState.value.claimCodeSend
+                .takeUnless { it is ClaimCodeSend.Sent } ?: ClaimCodeSend.Idle,
+        )
+        viewModelScope.launch {
+            try {
+                val response = api.confirmClaimVerificationCode(screen.claim.giveawayId, code)
+                if (!response.verified) {
+                    // Envelope said not-verified without throwing — a plain
+                    // mismatch, never a silent success.
+                    _uiState.value = _uiState.value.copy(
+                        isVerifyingCode = false,
+                        codeError = AvafliV2Strings.CODE_MISMATCH,
+                        claimCodeFieldReset = _uiState.value.claimCodeFieldReset + 1,
+                    )
+                    return@launch
+                }
+                claimInboxProven(
+                    response.verification ?: ClaimVerificationBlock(required = false),
+                    celebrate = true,
+                )
+            } catch (e: Exception) {
+                logger.error("Claim code check failed: ${e.message}", e)
+                handleClaimCodeCheckFailure(e)
+            }
+        }
+    }
+
+    private suspend fun handleClaimCodeCheckFailure(e: Exception) {
+        _uiState.value = _uiState.value.copy(isVerifyingCode = false)
+        if (leftClaimCodeStep(e)) return
+        val error = NetworkClient.callableError(e)
+        val ui = _uiState.value
+        val retryAt = error?.detailInt("retryAfterSeconds")
+            ?.takeIf { it > 0 }
+            ?.let { nowMs() + it * 1000L }
+        _uiState.value = when (error?.reason) {
+            REASON_CODE_MISMATCH -> ui.copy(
+                codeError = AvafliV2Strings.claimCodeMismatch(error.detailInt("attemptsRemaining")),
+                claimCodeFieldReset = ui.claimCodeFieldReset + 1,
+            )
+            // The code was dead and the backend has ALREADY sent a new one —
+            // a notice, not an error; the countdown restarts from its block.
+            REASON_FRESH_CODE_SENT -> {
+                val block = AvafliApi.parseClaimVerification(error.detailObject("verification"))
+                adoptClaimVerification(block)
+                _uiState.value.copy(
+                    claimCodeInfo = error.message.orFallback(AvafliV2Strings.CLAIM_CODE_FRESH_SENT),
+                    claimCodeSend = ClaimCodeSend.Idle,
+                    claimCodeResendAtMs = resendAtFrom(block)
+                        ?: (nowMs() + CLAIM_CODE_RESEND_COOLDOWN_MS),
+                    claimCodeFieldReset = ui.claimCodeFieldReset + 1,
+                )
+            }
+            // The code was dead and its replacement could not go out yet.
+            REASON_RESEND_COOLDOWN -> ui.copy(
+                claimCodeInfo = AvafliV2Strings.CLAIM_CODE_COOLDOWN,
+                claimCodeSend = ClaimCodeSend.Idle,
+                claimCodeResendAtMs = retryAt ?: (nowMs() + CLAIM_CODE_RESEND_COOLDOWN_MS),
+                claimCodeFieldReset = ui.claimCodeFieldReset + 1,
+            )
+            REASON_SEND_LIMIT -> ui.copy(
+                claimCodeSend = ClaimCodeSend.Failed(
+                    error.message.orFallback(AvafliV2Strings.CLAIM_CODE_SEND_LIMIT),
+                    retryable = false,
+                ),
+                claimCodeResendAtMs = retryAt ?: ui.claimCodeResendAtMs,
+                claimCodeFieldReset = ui.claimCodeFieldReset + 1,
+            )
+            REASON_SEND_FAILED -> ui.copy(
+                claimCodeSend = ClaimCodeSend.Failed(
+                    error.message.orFallback(AvafliV2Strings.CLAIM_CODE_SEND_FAILED),
+                    retryable = true,
+                    resend = true,
+                ),
+                claimCodeFieldReset = ui.claimCodeFieldReset + 1,
+            )
+            REASON_NO_EMAIL_ON_FILE -> ui.copy(
+                claimCodeSend = ClaimCodeSend.Failed(
+                    error.message.orFallback(AvafliV2Strings.CLAIM_NO_EMAIL_ON_FILE),
+                    retryable = false,
+                ),
+            )
+            else -> when {
+                error?.status == "INVALID_ARGUMENT" -> ui.copy(
+                    codeError = AvafliV2Strings.CLAIM_CODE_INVALID,
+                    claimCodeFieldReset = ui.claimCodeFieldReset + 1,
+                )
+                // Transport failure, or anything unrecognized: what they
+                // typed stays in the field and VERIFY tries it again.
+                e is AvafliError.NetworkError -> ui.copy(codeError = AvafliV2Strings.CLAIM_CODE_NETWORK)
+                else -> ui.copy(codeError = AvafliV2Strings.CLAIM_CODE_FAILED)
+            }
+        }
+    }
+
+    /**
+     * Failures that end the code step altogether. Returns true when [e] was
+     * one (the screen has already moved on).
+     *
+     * A claim that expired, was withdrawn, or is not this person's has no
+     * code to enter: fall back to the dashboard the same way a rejected
+     * submit does, with the backend's own sentence as the notice so the
+     * person learns why.
+     */
+    private suspend fun leftClaimCodeStep(e: Exception): Boolean {
+        when (e) {
+            is AvafliError.GeoBlocked -> {
+                setScreen(ExperienceScreen.GeoBlocked)
+                return true
+            }
+            is AvafliError.TokenRefreshFailed -> {
+                setScreen(ExperienceScreen.SessionExpired)
+                return true
+            }
+            else -> Unit
+        }
+        val error = NetworkClient.callableError(e) ?: return false
+        if (error.reason != null) return false
+        val claimGone = error.status == "FAILED_PRECONDITION" ||
+            error.message?.contains("Not the winner") == true
+        if (!claimGone) return false
+
+        logger.info("Prize claim no longer open (${error.message}) — falling back to dashboard")
+        suppressWinnerClaim = true
+        _uiState.value = _uiState.value.copy(
+            screen = ExperienceScreen.Loading,
+            winnerClaimStep = WinnerClaimStep.Splash,
+            claimCodeSend = ClaimCodeSend.Idle,
+            claimCodeInfo = null,
+            claimCodeResendAtMs = null,
+            codeError = null,
+        )
+        loadInternal()
+        val reason = error.message?.takeIf { it.isNotBlank() && it != "Not the winner" }
+        if (reason != null && _uiState.value.screen is ExperienceScreen.Streak) {
+            postDashboardNotice(reason, retryable = false)
+        }
+        return true
+    }
+
+    /**
+     * The inbox is proven. Updates the in-memory block so the rest of the
+     * session never re-asks, then opens the form — after the brief
+     * confirmation when the person just entered the code ([celebrate]).
+     */
+    private suspend fun claimInboxProven(block: ClaimVerificationBlock, celebrate: Boolean) {
+        adoptClaimVerification(block.copy(required = false))
+        _uiState.value = _uiState.value.copy(
+            isVerifyingCode = false,
+            codeError = null,
+            claimCodeInfo = null,
+            claimCodeSend = ClaimCodeSend.Idle,
+            claimCodeResendAtMs = null,
+            claimCodeVerified = celebrate,
+        )
+        if (celebrate) delay(CLAIM_CODE_VERIFIED_HOLD_MS)
+        // Only from the code screen: a person who went Back to the splash
+        // meanwhile reaches the form on their next CONTINUE.
+        val ui = _uiState.value
+        _uiState.value = if (
+            ui.screen is ExperienceScreen.WinnerClaim && ui.winnerClaimStep == WinnerClaimStep.Code
+        ) {
+            ui.copy(winnerClaimStep = WinnerClaimStep.Form, claimCodeVerified = false)
+        } else {
+            ui.copy(claimCodeVerified = false)
+        }
+    }
+
+    /** Replaces the in-memory `prizeClaim.verification` with the backend's latest. */
+    private fun adoptClaimVerification(block: ClaimVerificationBlock?) {
+        block ?: return
+        val screen = _uiState.value.screen as? ExperienceScreen.WinnerClaim ?: return
+        _uiState.value = _uiState.value.copy(
+            screen = ExperienceScreen.WinnerClaim(screen.claim.copy(verification = block)),
+        )
+    }
+
+    /**
+     * When "Send a new code" re-enables, from the block's `resendAvailableAt`.
+     * Null → now. The backend's cooldown is 60 seconds, so a device clock
+     * that disagrees with the server can never stretch the wait beyond that.
+     */
+    private fun resendAtFrom(block: ClaimVerificationBlock?): Long? {
+        val at = block?.resendAvailableAt?.let(::parseIsoMs) ?: return null
+        val now = nowMs()
+        if (at <= now) return null
+        return minOf(at, now + CLAIM_CODE_RESEND_COOLDOWN_MS)
+    }
+
+    private fun parseIsoMs(iso: String): Long? =
+        runCatching { Instant.parse(iso).toEpochMilli() }.getOrNull()
+            ?: runCatching { OffsetDateTime.parse(iso).toInstant().toEpochMilli() }.getOrNull()
+
+    private fun String?.orFallback(fallback: String): String =
+        this?.takeIf { it.isNotBlank() } ?: fallback
 
     /** DONE on the post-submit share screen → the confirmation card (2.9). */
     fun winnerShareDone() {
@@ -1573,6 +1995,9 @@ internal class AvafliExperienceViewModel(
      * SUBMIT on the claim form. Success → confirmation screen. A backend
      * "Not the winner"/"Already submitted" rejection falls back to the normal
      * dashboard silently (logged); transport failures surface inline.
+     *
+     * 3.2.0: `claim_verification_required` (the state changed underneath us)
+     * keeps the typed form in memory and detours through the code screen.
      */
     fun submitPrizeClaim(form: PrizeClaimForm) {
         val screen = _uiState.value.screen as? ExperienceScreen.WinnerClaim ?: return
@@ -1604,6 +2029,7 @@ internal class AvafliExperienceViewModel(
                 _uiState.value = _uiState.value.copy(
                     isSubmittingClaim = false,
                     submittedClaimForm = form,
+                    claimFormDraft = null,
                     winnerClaimStep = WinnerClaimStep.Share(
                         claimNumber = response.claimNumber,
                         submittedAt = response.submittedAt,
@@ -1617,6 +2043,24 @@ internal class AvafliExperienceViewModel(
                     ),
                 )
             } catch (e: Exception) {
+                if (NetworkClient.callableError(e)?.reason == REASON_VERIFICATION_REQUIRED) {
+                    // The inbox still has to be proven. Nothing typed is
+                    // lost: the form reopens from this draft after the code.
+                    logger.info("Prize claim needs the email code first — showing the code screen")
+                    val current = _uiState.value.screen as? ExperienceScreen.WinnerClaim ?: screen
+                    _uiState.value = _uiState.value.copy(
+                        isSubmittingClaim = false,
+                        claimFormDraft = form,
+                        screen = ExperienceScreen.WinnerClaim(
+                            current.claim.copy(
+                                verification = (current.claim.verification ?: ClaimVerificationBlock())
+                                    .copy(required = true),
+                            ),
+                        ),
+                    )
+                    openClaimCodeStep()
+                    return@launch
+                }
                 val message = e.message ?: ""
                 if (message.contains("Not the winner") || message.contains("Already submitted")) {
                     // Stale/duplicate winner state — never trap the user in the

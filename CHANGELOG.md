@@ -5,6 +5,58 @@ will be documented in this file. Entries for 2.9.6 and earlier predate the
 rebrand and use the former WINR names.
 
 
+## 3.2.0 — 2026-09-29
+
+### Added
+
+- **Prize claims: a 6-digit code before the claim form.** Official Rules §7:
+  nobody receives a prize until they prove they control the inbox on file. A
+  winner now enters a six-digit code emailed to their registered address
+  between the winner splash and the claim form; people who proved the inbox
+  earlier skip it. Nothing for the host app to do.
+  - Driven by the new optional `prizeClaim.verification` block. When the block
+    is absent (older backend, or the platform flag is off) the flow is exactly
+    what it was.
+  - The server holds all state — the SDK persists nothing about this step. A
+    winner who closes the drawer, kills the app, switches device or reinstalls
+    resumes where they were (live code still valid, a fresh code if it
+    expired, or the form if already verified).
+  - Reuses the cross-device code screen: numeric field, paste, auto-submit on
+    the sixth digit, one-time-code autofill hint, "Send a new code" with a
+    live countdown, and a "Can't get to this email? Contact info@avafli.com"
+    line. Back returns to the splash and sends nothing.
+  - Every failure has a way on: tries left after a wrong code, the fresh code
+    the server already sent when one expired or ran out of tries, a retry when
+    a send fails, the countdown when a limit is hit.
+  - `submitPrizeClaim` now sends `supportsClaimVerification: true`. If the
+    server answers `claim_verification_required`, everything typed into the
+    form is kept in memory through the code screen and back.
+  - New callables: `sendClaimVerificationCode`, `confirmClaimVerificationCode`.
+- **Rejoin 24 hours after "Delete my data".** Deleting still erases the
+  person's data and forfeits entries and streaks; for 24 hours that email and
+  that device cannot register. After 24 hours the person may join again as a
+  brand-new participant.
+  - The SDK stores when the block lifts (`optedOutUntil` from the server, or
+    the deletion moment + 24 h when the SDK performed it). An opt-out cached
+    by an earlier version has no time: it is stamped on first sight and lifts
+    24 hours later.
+  - On `configure()` and on return to the foreground, a block that has run out
+    is lifted: the opt-out and every piece of the old session (auth token,
+    refresh token, user id, email-submitted flag, streak, once-per-day
+    auto-open mark, impression counter, adoption stamp, queued retries) are
+    cleared, the device id is kept, and the device registers afresh.
+  - Before that moment nothing changes. If the server still reports the
+    opt-out, its time is adopted and the next attempt waits for it.
+
+### Changed
+
+- The delete confirmation now reads: "This permanently erases your
+  information and ends your participation. Entries and streaks are forfeited
+  and cannot be restored. You can join again as a new participant after 24
+  hours."
+- `PrizeClaimBlock` gains `verification: ClaimVerificationBlock?` (new public
+  type, default `null`).
+
 ## 3.1.4 — 2026-09-24
 
 ### Added

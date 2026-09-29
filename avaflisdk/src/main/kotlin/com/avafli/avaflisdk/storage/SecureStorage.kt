@@ -56,6 +56,19 @@ internal class SecureStorage(context: Context) {
             .apply()
     }
 
+    /**
+     * 24-hour rejoin (3.2.0): drops the deleted profile's session — auth
+     * token, refresh token and user id — so the next registration starts a
+     * new one. The guest id is not part of the session and is kept.
+     */
+    fun clearSession() {
+        prefs.edit()
+            .remove(KEY_TOKEN)
+            .remove(KEY_REFRESH_TOKEN)
+            .remove(KEY_UUID)
+            .apply()
+    }
+
     fun clearAll() {
         prefs.edit().clear().apply()
     }

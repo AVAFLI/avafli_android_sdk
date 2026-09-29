@@ -45,8 +45,9 @@ sealed class AvafliError(message: String, cause: Throwable? = null) : Exception(
     class ServiceUnavailable : AvafliError("The Avafli experience is no longer available.")
 
     /**
-     * The user opted out (RTD — Right To Delete). The experience is permanently
-     * silenced on this device — it is never presented again.
+     * The user opted out (RTD — Right To Delete). The experience is silenced
+     * on this device; 24 hours after the deletion the person may join again as
+     * a brand-new participant.
      */
     class OptedOut : AvafliError("The user has opted out of the Avafli experience.")
 

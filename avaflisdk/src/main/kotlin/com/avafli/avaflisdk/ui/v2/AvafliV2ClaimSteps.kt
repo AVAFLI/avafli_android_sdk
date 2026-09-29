@@ -38,6 +38,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -107,6 +108,12 @@ internal fun AvafliV2ClaimStepsFlow(
     placesApiKey: String?,
     claim: PrizeClaimBlock,
     prefill: PrizeClaimForm,
+    /**
+     * 3.2.0: [prefill] is a draft the person already completed (submit was
+     * answered with `claim_verification_required` and they have since entered
+     * the code) — reopen on the review screen instead of step 1.
+     */
+    resumeAtReview: Boolean = false,
     isSubmitting: Boolean,
     submitError: String?,
     onSubmit: (PrizeClaimForm) -> Unit,
@@ -116,7 +123,18 @@ internal fun AvafliV2ClaimStepsFlow(
     // when the user navigates back and forth.
     var form by remember { mutableStateOf(prefill) }
     var photo by remember { mutableStateOf<ImageBitmap?>(null) }
-    var step by remember { mutableStateOf(AvafliClaimFlowStep.One) }
+    var step by remember {
+        mutableStateOf(
+            if (resumeAtReview && prefill.isValid) AvafliClaimFlowStep.Review
+            else AvafliClaimFlowStep.One
+        )
+    }
+    // A resumed draft carries its photo as base64 only — rebuild the preview.
+    LaunchedEffect(Unit) {
+        val encoded = prefill.photoBase64 ?: return@LaunchedEffect
+        if (photo != null) return@LaunchedEffect
+        photo = withContext(Dispatchers.IO) { AvafliClaimPhoto.decodeBase64(encoded) }?.asImageBitmap()
+    }
 
     // Street-field address autocomplete (2.9): present only when the
     // publisher configured a Places key — otherwise the address step is

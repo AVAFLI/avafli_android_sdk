@@ -33,7 +33,9 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.lang.ref.WeakReference
+import java.time.Instant
 import java.time.LocalDate
+import java.time.OffsetDateTime
 import java.util.TimeZone
 
 /**
@@ -47,6 +49,17 @@ object Avafli {
 
     /** Request code for the Android 13+ POST_NOTIFICATIONS runtime prompt. */
     private const val REQUEST_CODE_POST_NOTIFICATIONS = 0x7717
+
+    /** 24-hour rejoin (3.2.0): how long "Delete my data" blocks this device. */
+    internal const val OPT_OUT_BLOCK_MS = 24 * 60 * 60 * 1000L
+
+    /**
+     * When the server still reports the block after the local time passed
+     * (clock skew, sweep lag), the next attempt waits at least this long —
+     * a server time that is already behind this device's clock can never
+     * turn every foreground into a registration attempt.
+     */
+    internal const val OPT_OUT_RECHECK_FLOOR_MS = 15 * 60 * 1000L
 
     private var config: AvafliConfiguration? = null
     private var secureStorage: SecureStorage? = null
@@ -68,11 +81,18 @@ object Avafli {
     private var isSuspended: Boolean = false
 
     /**
-     * RTD opt-out — from the backend or the persisted local flag. Once true the
-     * experience is never presented.
+     * RTD opt-out — from the backend or the persisted local flag. While true the
+     * experience is never presented. Since 3.2.0 the block lifts 24 hours after
+     * the deletion (see [liftOptOutIfDue]).
      */
     @Volatile
     private var cachedOptedOut: Boolean = false
+
+    /** Single-flight guard for the foreground rejoin (see [rejoinIfOptOutLapsed]). */
+    private var rejoinJob: Job? = null
+
+    /** Wall clock — a seam so tests can move time past the 24-hour block. */
+    internal var nowMs: () -> Long = { System.currentTimeMillis() }
 
     /**
      * Backend truth for whether this person has confirmed email + consent
@@ -205,6 +225,10 @@ object Avafli {
         // Next-launch flush of analytics buffered during a previous offline run.
         offline.flushAnalyticsBuffer()
 
+        // 24-hour rejoin (3.2.0): a block that has run out is lifted BEFORE
+        // the registration below, which then starts a brand-new participant.
+        liftOptOutIfDue()
+
         // Auto-present on activity resumes too (covers the "app stayed in memory
         // overnight" case — a new day should re-open the experience).
         registerLifecycleCallbacks(appContext)
@@ -293,6 +317,7 @@ object Avafli {
         if (activity is AvafliExperienceActivity) return
         currentActivity = WeakReference(activity)
         retryBootRefreshIfNeeded()
+        rejoinIfOptOutLapsed()
         autoPresentIfEligible()
         // Foreground trigger for the offline retry queue + buffered-
         // analytics flush.
@@ -323,6 +348,94 @@ object Avafli {
         }
     }
 
+    // ── 24-hour rejoin after "Delete my data" (3.2.0) ──
+
+    /**
+     * Lifts a local opt-out whose 24 hours have passed: clears the flag and
+     * every piece of the deleted profile's session (tokens, user id,
+     * email-submitted flag, streak, once-per-day mark, impression counter,
+     * adoption stamp, queued retries, in-memory caches) and keeps the device
+     * id. The next registration then mints a brand-new participant, who sees
+     * the normal email capture under the normal rules.
+     *
+     * Before that moment this changes nothing. An opt-out cached before 3.2.0
+     * has no stored time: it is stamped "now + 24 hours" here and lifts then.
+     *
+     * @return true when the opt-out was lifted by this call.
+     */
+    private fun liftOptOutIfDue(): Boolean {
+        if (!cachedOptedOut) return false
+        val prefs = preferencesStorage ?: return false
+        val now = nowMs()
+        val until = prefs.getOptedOutUntil()?.takeIf { it > 0L }
+            ?: (now + OPT_OUT_BLOCK_MS).also { prefs.saveOptedOutUntil(it) }
+        if (now < until) return false
+
+        logger?.info("Opt-out block has lifted — rejoining as a new participant")
+        secureStorage?.clearSession()
+        prefs.clearForRejoin()
+        AvafliOfflineResilience.shared?.coordinator?.let {
+            it.clear(PendingIntent.Kind.CLAIM)
+            it.clear(PendingIntent.Kind.REGISTRATION)
+        }
+        cachedOptedOut = false
+        cachedGiveaway = null
+        cachedEmailConsent = null
+        cachedAdoptionPending = false
+        isNewUserSession = false
+        return true
+    }
+
+    /**
+     * Foreground half of the rejoin: the app stayed in memory past the 24
+     * hours, so there is no `configure()` to lift the block. Single-flight;
+     * a no-op (no network, nothing presented) until the time has passed.
+     */
+    private fun rejoinIfOptOutLapsed() {
+        if (!cachedOptedOut || !registrationComplete) return
+        if (rejoinJob?.isActive == true) return
+        if (!liftOptOutIfDue()) return
+        val context = config?.context ?: return
+        rejoinJob = scope.launch {
+            try {
+                registerDeviceIfNeeded(context)
+            } catch (e: AvafliError.ServiceUnavailable) {
+                // Same degrade as the configure path: suspended/revoked.
+                isSuspended = true
+                logger?.info("Publisher account suspended; Avafli experience unavailable")
+            } catch (e: Exception) {
+                logger?.warn("Registration after the opt-out lifted failed: ${e.message}")
+                if (OfflineErrorClassifier.isRetriable(e)) {
+                    AvafliOfflineResilience.shared?.coordinator?.enqueue(PendingIntent.Kind.REGISTRATION)
+                }
+            }
+            autoPresentIfEligible()
+        }
+    }
+
+    /**
+     * The backend reports this person as opted out. Caches the flag and the
+     * moment it lifts: the server's `optedOutUntil` when it sent one (never
+     * sooner than [OPT_OUT_RECHECK_FLOOR_MS] from now, so a rejoin attempt
+     * that was answered "still opted out" is retried after that time, once —
+     * never in a loop), else the time already stored, else 24 hours from now.
+     */
+    private fun noteServerOptOut(optedOutUntil: String?) {
+        cachedOptedOut = true
+        val prefs = preferencesStorage ?: return
+        prefs.saveOptedOut(true)
+        val now = nowMs()
+        val serverUntil = optedOutUntil?.let { iso ->
+            runCatching { Instant.parse(iso).toEpochMilli() }.getOrNull()
+                ?: runCatching { OffsetDateTime.parse(iso).toInstant().toEpochMilli() }.getOrNull()
+        }
+        val until = when {
+            serverUntil != null -> maxOf(serverUntil, now + OPT_OUT_RECHECK_FLOOR_MS)
+            else -> prefs.getOptedOutUntil()?.takeIf { it > now } ?: (now + OPT_OUT_BLOCK_MS)
+        }
+        prefs.saveOptedOutUntil(until)
+    }
+
     /**
      * Presents the experience automatically, at most once per calendar day, when
      * all conditions allow. Called after registration completes and on each
@@ -334,7 +447,7 @@ object Avafli {
      * - [holdAutoOpen] in effect (nothing is marked or counted while held)
      * - unregistered (no email) users: at most experience.unregisteredImpressionCap
      *   (default 3) auto-opens ever, then silence until registered
-     * - opted-out (RTD) users never see it
+     * - opted-out (RTD) users never see it (until the 24-hour block lifts)
      */
     private fun autoPresentIfEligible() {
         val currentConfig = config ?: return
@@ -453,7 +566,8 @@ object Avafli {
             return
         }
 
-        // RTD: an opted-out person never sees the experience again.
+        // RTD: an opted-out person does not see the experience (the block
+        // lifts 24 hours after the deletion, on configure / foreground).
         if (cachedOptedOut) {
             logger?.info("Avafli present suppressed: user opted out (RTD)")
             callback?.invoke(Result.failure(AvafliError.OptedOut()))
@@ -511,11 +625,6 @@ object Avafli {
     internal fun isServiceAvailable(): Boolean = !isSuspended && !cachedOptedOut
 
     /**
-     * Right-To-Delete opt-out: tombstones the person on the backend (identity-wide,
-     * PII anonymized, email suppressed) and permanently silences the experience on
-     * this device. Wire this to the opt-out action in your privacy-policy flow.
-     */
-    /**
      * @internal Records the RTD flag in the in-process cache when the opt-out
      * was performed elsewhere (the in-experience "Privacy choices" flow calls
      * the backend and persists the preference itself) so [isServiceAvailable]
@@ -525,13 +634,23 @@ object Avafli {
         cachedOptedOut = true
     }
 
+    /**
+     * Right-To-Delete opt-out: erases the person on the backend (identity-wide,
+     * PII anonymized; entries and streaks are forfeited and cannot be restored)
+     * and silences the experience on this device. For 24 hours that email and
+     * this device cannot register; after that the person may join again as a
+     * brand-new participant with no connection to the old profile. Wire this to
+     * the opt-out action in your privacy-policy flow.
+     */
     suspend fun optOut(): Result<Unit> {
         val currentApi = api ?: return Result.failure(AvafliError.NotInitialized())
         return try {
             currentApi.optOut()
             cachedOptedOut = true
             preferencesStorage?.saveOptedOut(true)
-            logger?.info("User opted out of Avafli (RTD) — experience permanently silenced")
+            // 24-hour rejoin (3.2.0): the block lifts a day from now.
+            preferencesStorage?.saveOptedOutUntil(nowMs() + OPT_OUT_BLOCK_MS)
+            logger?.info("User opted out of Avafli (RTD) — experience silenced for 24 hours")
             Result.success(Unit)
         } catch (e: Exception) {
             logger?.error("Opt-out failed: ${e.message}", e)
@@ -604,7 +723,8 @@ object Avafli {
     //
     // Use `optOut()` instead. It is the correct erasure: identity-wide, PII scrubbed
     // everywhere including prize claims, tombstoned so it survives a reinstall, and
-    // the experience stays permanently silenced on the device.
+    // the email and device stay blocked for 24 hours (3.2.0) — long enough that
+    // delete -> re-register can never farm a second entry the same day.
 
     // --- Internal API for Activity/ViewModel ---
 
@@ -813,8 +933,7 @@ object Avafli {
                 cachedEmailConsent = response?.emailConsentStatus
                 response?.adoptionPending?.let { cachedAdoptionPending = it }
                 if (response?.optedOut == true) {
-                    cachedOptedOut = true
-                    preferencesStorage?.saveOptedOut(true)
+                    noteServerOptOut(response.optedOutUntil)
                 }
                 prewarmPublisherArt()
             } catch (e: AvafliError) {
@@ -865,8 +984,7 @@ object Avafli {
         // Presentation control (3.1.4): OPTIONAL — absent → returning user.
         if (response.isNewUser == true) isNewUserSession = true
         if (response.optedOut == true) {
-            cachedOptedOut = true
-            preferencesStorage?.saveOptedOut(true)
+            noteServerOptOut(response.optedOutUntil)
         }
 
         prewarmPublisherArt()
@@ -955,6 +1073,9 @@ object Avafli {
     internal fun resetForTests() {
         bootRetryJob?.cancel()
         bootRetryJob = null
+        rejoinJob?.cancel()
+        rejoinJob = null
+        nowMs = { System.currentTimeMillis() }
         config = null
         secureStorage = null
         preferencesStorage = null

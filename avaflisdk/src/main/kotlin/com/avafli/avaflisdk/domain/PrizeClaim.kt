@@ -31,9 +31,34 @@ data class PrizeClaimBlock(
     val claimNumber: String? = null,
     /** ISO date, when submitted. */
     val submittedAt: String? = null,
+    /**
+     * Email-ownership step (3.2.0), present only while `status == "pending"`.
+     * Absent on older backends or when the platform flag is off — the claim
+     * form then opens directly, exactly as before.
+     */
+    val verification: ClaimVerificationBlock? = null,
 ) {
     val isPending: Boolean get() = status == "pending"
 }
+
+/**
+ * FIXED API contract, mirroring `ClaimVerificationBlock` in the backend's
+ * types.ts (3.2.0): the state of the six-digit code a winner enters before the
+ * claim form opens. The SERVER holds this state — the SDK persists none of it,
+ * so closing the drawer, killing the app or switching device resumes from
+ * whatever the next `prizeClaim` block says.
+ */
+@Serializable
+data class ClaimVerificationBlock(
+    /** False → the inbox is already proven; go straight to the claim form. */
+    val required: Boolean = false,
+    /** ISO date. Present = a live code exists. */
+    val codeSentAt: String? = null,
+    /** ISO date — `codeSentAt` + 10 minutes. */
+    val codeExpiresAt: String? = null,
+    /** ISO date — `codeSentAt` + 60 seconds. */
+    val resendAvailableAt: String? = null,
+)
 
 /**
  * The claim form's field values. Kept as a plain value type so validation is

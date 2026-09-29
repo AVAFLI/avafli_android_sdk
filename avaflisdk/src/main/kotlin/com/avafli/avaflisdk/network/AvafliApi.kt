@@ -63,6 +63,7 @@ internal class AvafliApi(
             streakDay = response["streakDay"]?.jsonPrimitive?.intOrNull,
             totalEntries = response["totalEntries"]?.jsonPrimitive?.intOrNull,
             optedOut = response["optedOut"]?.jsonPrimitive?.booleanOrNull,
+            optedOutUntil = response["optedOutUntil"]?.jsonPrimitive?.contentOrNull,
             prizeClaim = (response["prizeClaim"] as? JsonObject)?.let { parsePrizeClaim(it) },
             // Soft email verification (2.7.0): explicit `false` means the person
             // typed a brand-new email that hasn't been confirmed. Absent/null for
@@ -96,6 +97,7 @@ internal class AvafliApi(
             totalEntries = response["totalEntries"]?.jsonPrimitive?.intOrNull,
             emailConsentStatus = response["emailConsentStatus"]?.jsonPrimitive?.booleanOrNull,
             optedOut = response["optedOut"]?.jsonPrimitive?.booleanOrNull,
+            optedOutUntil = response["optedOutUntil"]?.jsonPrimitive?.contentOrNull,
             prizeClaim = (response["prizeClaim"] as? JsonObject)?.let { parsePrizeClaim(it) },
             // Soft email verification (2.7.0): explicit `false` → unverified.
             emailVerified = response["emailVerified"]?.jsonPrimitive?.booleanOrNull,
@@ -139,6 +141,10 @@ internal class AvafliApi(
             put("zip", JsonPrimitive(zip))
             put("country", JsonPrimitive(country))
             put("promoConsentGranted", JsonPrimitive(promoConsentGranted))
+            // 3.2.0: this build knows the email-ownership step, so the backend
+            // may answer `claim_verification_required` instead of accepting an
+            // unverified claim. ALWAYS sent.
+            put("supportsClaimVerification", JsonPrimitive(true))
             phone?.takeIf { it.isNotEmpty() }?.let { put("phone", JsonPrimitive(it)) }
             apt?.takeIf { it.isNotEmpty() }?.let { put("apt", JsonPrimitive(it)) }
             photoBase64?.let { put("photoBase64", JsonPrimitive(it)) }
@@ -150,6 +156,53 @@ internal class AvafliApi(
         return SubmitPrizeClaimResponse(
             claimNumber = response["claimNumber"]?.jsonPrimitive?.contentOrNull ?: "",
             submittedAt = response["submittedAt"]?.jsonPrimitive?.contentOrNull ?: "",
+        )
+    }
+
+    /**
+     * Claim email-ownership step (3.2.0): sends — or re-uses — the six-digit
+     * code for [giveawayId]'s pending claim. Without [resend] the backend
+     * sends only when no live code exists (idempotent: called every time the
+     * code screen opens); with it, a new code always goes out, subject to the
+     * cooldown and hourly limit. Field names are a FIXED contract with
+     * functions/src/claimverify.ts. Failures THROW; the machine-readable
+     * cause is read with [NetworkClient.callableError].
+     */
+    suspend fun sendClaimVerificationCode(
+        giveawayId: String,
+        resend: Boolean = false,
+    ): SendClaimCodeResponse {
+        val body = buildMap<String, JsonElement> {
+            put("giveawayId", JsonPrimitive(giveawayId))
+            if (resend) put("resend", JsonPrimitive(true))
+        }
+        val response = networkClient.authenticatedPost("sendClaimVerificationCode", body)
+        return SendClaimCodeResponse(
+            sent = response["sent"]?.jsonPrimitive?.booleanOrNull ?: false,
+            verification = parseClaimVerification(response["verification"]),
+        )
+    }
+
+    /**
+     * Claim email-ownership step (3.2.0): checks the six-digit [code]. Returns
+     * the block the backend answered with (`required == false` once proven);
+     * a wrong, expired or spent code THROWS with `details.reason`
+     * `code_mismatch` / `fresh_code_sent`.
+     */
+    suspend fun confirmClaimVerificationCode(
+        giveawayId: String,
+        code: String,
+    ): ConfirmClaimCodeResponse {
+        val response = networkClient.authenticatedPost(
+            "confirmClaimVerificationCode",
+            mapOf(
+                "giveawayId" to JsonPrimitive(giveawayId),
+                "code" to JsonPrimitive(code),
+            ),
+        )
+        return ConfirmClaimCodeResponse(
+            verified = response["verified"]?.jsonPrimitive?.booleanOrNull ?: false,
+            verification = parseClaimVerification(response["verification"]),
         )
     }
 
@@ -364,6 +417,11 @@ internal class AvafliApi(
         /** True when this device/person has opted out (RTD) — never auto-present. */
         val optedOut: Boolean? = null,
         /**
+         * 24-hour rejoin (3.2.0): ISO date at which the opt-out block lifts,
+         * sent alongside `optedOut: true`. Absent on older backends.
+         */
+        val optedOutUntil: String? = null,
+        /**
          * Present only when this person is the drawn winner of one of this
          * publisher's giveaways (winner prize-claim flow).
          */
@@ -402,6 +460,8 @@ internal class AvafliApi(
         val emailConsentStatus: Boolean? = null,
         /** True when this person has opted out (RTD) — the SDK must never auto-present. */
         val optedOut: Boolean? = null,
+        /** 24-hour rejoin (3.2.0): ISO date at which the opt-out block lifts. */
+        val optedOutUntil: String? = null,
         /**
          * Present only when this person is the drawn winner of one of this
          * publisher's giveaways and the winner record is still claimable.
@@ -422,6 +482,19 @@ internal class AvafliApi(
         val claimNumber: String,
         /** ISO date. */
         val submittedAt: String,
+    )
+
+    /** Result of [sendClaimVerificationCode]. */
+    data class SendClaimCodeResponse(
+        /** True when this call put a code in the inbox; false when a live one was re-used. */
+        val sent: Boolean,
+        val verification: ClaimVerificationBlock? = null,
+    )
+
+    /** Result of [confirmClaimVerificationCode]. */
+    data class ConfirmClaimCodeResponse(
+        val verified: Boolean,
+        val verification: ClaimVerificationBlock? = null,
     )
 
     /**
@@ -467,7 +540,13 @@ internal class AvafliApi(
     }
 
     private fun parsePrizeClaim(obj: JsonObject): PrizeClaimBlock? = try {
-        json.decodeFromJsonElement(PrizeClaimBlock.serializer(), obj)
+        // The verification sub-block (3.2.0) is parsed on its own so a
+        // malformed one can never cost the winner their whole claim block —
+        // it degrades to "absent" and the backend's submit gate catches up.
+        json.decodeFromJsonElement(
+            PrizeClaimBlock.serializer(),
+            JsonObject(obj.filterKeys { it != "verification" }),
+        ).copy(verification = parseClaimVerification(obj["verification"]))
     } catch (e: Exception) {
         logger.warn("Failed to parse prizeClaim block: ${e.message}")
         null
@@ -665,6 +744,22 @@ internal class AvafliApi(
     companion object {
         // Single source of truth for the wire-format sdk_version. Keep in sync
         // with the Maven publish version in avaflisdk/build.gradle.kts.
-        const val SDK_VERSION = "3.1.4"
+        const val SDK_VERSION = "3.2.0"
+
+        private val verificationJson = Json { ignoreUnknownKeys = true; isLenient = true }
+
+        /**
+         * The `verification` block of a `prizeClaim` block, a send/confirm
+         * response, or a `fresh_code_sent` error's details (3.2.0). Null for
+         * an absent, `null` or malformed block — which reads as today's flow.
+         */
+        internal fun parseClaimVerification(element: JsonElement?): ClaimVerificationBlock? {
+            val obj = element as? JsonObject ?: return null
+            return try {
+                verificationJson.decodeFromJsonElement(ClaimVerificationBlock.serializer(), obj)
+            } catch (_: Exception) {
+                null
+            }
+        }
     }
 }

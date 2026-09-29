@@ -338,8 +338,13 @@ private fun DrawerContent(
             appName = ui.sdkConfig?.appName,
             shareUrl = ui.sdkConfig?.shareUrl,
             placesApiKey = ui.sdkConfig?.placesApiKey,
+            rulesUrl = rulesUrl,
             claimFormPrefill = viewModel.claimFormPrefill(),
             onContinue = { viewModel.winnerClaimContinue() },
+            onCodeSubmit = { viewModel.submitClaimCode(it) },
+            onCodeResend = { viewModel.resendClaimCode() },
+            onCodeSendRetry = { viewModel.retryClaimCodeSend() },
+            onCodeBack = { viewModel.claimCodeBack() },
             onSubmit = { form -> viewModel.submitPrizeClaim(form) },
             // Post-submit story attach (2.9): fire-and-forget on BOTH exits —
             // a typed story is never lost to a swipe-away.

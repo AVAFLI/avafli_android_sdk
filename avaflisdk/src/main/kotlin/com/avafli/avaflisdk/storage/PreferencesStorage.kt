@@ -83,13 +83,47 @@ internal class PreferencesStorage(context: Context) : OfflineStateStore {
         return prefs.getInt("${KEY_UNREGISTERED_IMPRESSIONS}_$packageName", 0)
     }
 
-    /** RTD opt-out — once set, the experience is permanently silenced on this device. */
+    /**
+     * RTD opt-out — while set, the experience is silenced on this device. Since
+     * 3.2.0 the block lifts at [getOptedOutUntil] (24 hours after the deletion).
+     */
     fun saveOptedOut(optedOut: Boolean) {
         prefs.edit().putBoolean("${KEY_OPTED_OUT}_$packageName", optedOut).apply()
     }
 
     fun isOptedOut(): Boolean {
         return prefs.getBoolean("${KEY_OPTED_OUT}_$packageName", false)
+    }
+
+    /** 24-hour rejoin (3.2.0): epoch ms at which the opt-out block lifts. */
+    fun saveOptedOutUntil(untilMs: Long) {
+        prefs.edit().putLong("${KEY_OPTED_OUT_UNTIL}_$packageName", untilMs).apply()
+    }
+
+    /** Null when no time was ever stored (an opt-out cached before 3.2.0). */
+    fun getOptedOutUntil(): Long? {
+        return prefs.getLong("${KEY_OPTED_OUT_UNTIL}_$packageName", 0L).takeIf { it > 0L }
+    }
+
+    /**
+     * 24-hour rejoin (3.2.0): the block has lifted. Clears the opt-out and
+     * every piece of the deleted profile's session held here — the person
+     * comes back as a brand-new participant. (Tokens and the user id live in
+     * SecureStorage; the device id is not stored and does not change.)
+     */
+    fun clearForRejoin() {
+        prefs.edit()
+            .remove("${KEY_OPTED_OUT}_$packageName")
+            .remove("${KEY_OPTED_OUT_UNTIL}_$packageName")
+            .remove(KEY_EMAIL_SUBMITTED)
+            .remove(KEY_STREAK_DAY)
+            .remove(KEY_LAST_CLAIM_DATE)
+            .remove(KEY_TOTAL_ENTRIES)
+            .remove(KEY_COMPLETED_DAYS)
+            .remove("${KEY_LAST_AUTO_PRESENT}_$packageName")
+            .remove("${KEY_UNREGISTERED_IMPRESSIONS}_$packageName")
+            .remove(KEY_ADOPTION_CODE_SENT_AT)
+            .apply()
     }
 
     // ── OfflineStateStore (offline retry queue + analytics buffer) ──
@@ -121,5 +155,9 @@ internal class PreferencesStorage(context: Context) : OfflineStateStore {
         private const val KEY_LAST_AUTO_PRESENT = "winr_last_auto_present"
         private const val KEY_UNREGISTERED_IMPRESSIONS = "winr_unregistered_impressions"
         private const val KEY_OPTED_OUT = "winr_opted_out"
+        private const val KEY_OPTED_OUT_UNTIL = "winr_opted_out_until"
+
+        /** The cross-device link code's last-sent stamp (written by the experience). */
+        internal const val KEY_ADOPTION_CODE_SENT_AT = "winr_adoption_code_sent_at"
     }
 }

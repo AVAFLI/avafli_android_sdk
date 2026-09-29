@@ -279,8 +279,56 @@ internal class NetworkClient(
         }
     }
 
+    /**
+     * A callable error body, parsed: `{"error":{"status","message","details"}}`.
+     * [details] carries the machine-readable fields the backend attaches to an
+     * HttpsError ([reason] plus e.g. `attemptsRemaining`, `retryAfterSeconds`).
+     */
+    internal data class CallableError(
+        val httpCode: Int,
+        /** Callable status, upper-cased ("FAILED_PRECONDITION", …). */
+        val status: String?,
+        val message: String?,
+        val details: JsonObject?,
+    ) {
+        /** `details.reason` — the machine-readable cause, when the backend sent one. */
+        val reason: String? get() = details?.get("reason")?.let { (it as? JsonPrimitive)?.contentOrNull }
+
+        fun detailInt(key: String): Int? = (details?.get(key) as? JsonPrimitive)?.intOrNull
+
+        fun detailObject(key: String): JsonObject? = details?.get(key) as? JsonObject
+    }
+
     companion object {
         private val geoJson = Json { ignoreUnknownKeys = true; isLenient = true }
+
+        /**
+         * Surfaces a callable error's `details` (3.2.0 — the claim
+         * email-ownership step reads `details.reason` and its fields). A
+         * [AvafliError.ServerError] already carries the raw response body in
+         * its message; this only parses it, so nothing changes for callers
+         * that match on the message. Null for anything that is not a server
+         * error with a JSON `error` object.
+         */
+        internal fun callableError(e: Throwable): CallableError? {
+            if (e !is AvafliError.ServerError) return null
+            return try {
+                val body = e.message ?: return null
+                val start = body.indexOf('{')
+                if (start < 0) return null
+                val error = geoJson.parseToJsonElement(body.substring(start))
+                    .jsonObject["error"] as? JsonObject ?: return null
+                CallableError(
+                    httpCode = e.code,
+                    status = ((error["status"] ?: error["code"]) as? JsonPrimitive)
+                        ?.contentOrNull?.uppercase(),
+                    message = (error["message"] as? JsonPrimitive)?.contentOrNull,
+                    details = error["details"] as? JsonObject,
+                )
+            } catch (_: Exception) {
+                null
+            }
+        }
 
         /** Refresh when the token expires within this window (see [isJwtExpired]). */
         internal const val EXPIRY_LEEWAY_SECONDS = 60L

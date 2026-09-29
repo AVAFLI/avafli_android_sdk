@@ -75,6 +75,76 @@ internal object AvafliV2Strings {
     /** Transport-level prize-claim submit failure, inline on the review screen. */
     const val CLAIM_SUBMIT_FAILED = "Something went wrong. Please check your connection and try again."
 
+    // ── Winner claim: email-ownership code (3.2.0) ──
+    //
+    // The six-digit code a winner enters before the claim form opens. Reuses
+    // the code-entry screen; "Send a new code" and "Email verified ✓" are the
+    // strings that screen and [EMAIL_VERIFIED] already carry.
+
+    /** Code screen subtitle — names the MASKED address (the SDK never holds the raw one). */
+    fun claimCodeSubtitle(maskedEmail: String?): String =
+        maskedEmail?.takeIf { it.isNotBlank() }
+            ?.let { "Enter the 6-digit code we sent to $it" }
+            ?: "Enter the 6-digit code we sent to your email."
+
+    /** Inline status while the send call is in flight. */
+    const val CLAIM_CODE_SENDING = "Sending your code…"
+
+    /** Inline status when this open (or "Send a new code") put a code in the inbox. */
+    const val CLAIM_CODE_SENT = "Code sent"
+
+    /** The resend action while it is cooling down — a live countdown. */
+    fun claimCodeResendCountdown(secondsLeft: Int): String {
+        val s = secondsLeft.coerceAtLeast(0)
+        return "Send a new code in ${s / 60}:${(s % 60).toString().padStart(2, '0')}"
+    }
+
+    /** Where the help line's mailto link goes. */
+    const val SUPPORT_EMAIL = "info@avafli.com"
+
+    /** Help line under the code screen's actions; [SUPPORT_EMAIL] is the link. */
+    const val CLAIM_CODE_HELP_PREFIX = "Can't get to this email? Contact "
+
+    /** Wrong code. Falls back to [CODE_MISMATCH] when the backend sent no count. */
+    fun claimCodeMismatch(attemptsRemaining: Int?): String = when {
+        attemptsRemaining == null || attemptsRemaining < 0 -> CODE_MISMATCH
+        attemptsRemaining == 1 -> "That code didn't match. 1 try left."
+        else -> "That code didn't match. $attemptsRemaining tries left."
+    }
+
+    /** Transport failure on the code screen (send or check) — what they typed is kept. */
+    const val CLAIM_CODE_NETWORK =
+        "We couldn't reach the server. Check your connection and try again."
+
+    /** The code could not be sent (fallback for the backend's own wording). */
+    const val CLAIM_CODE_SEND_FAILED =
+        "We couldn't send your code just now. Please try again in a minute."
+
+    /** "Send a new code" tapped inside the 60-second cooldown. */
+    const val CLAIM_CODE_COOLDOWN = "Please wait a moment before requesting another code."
+
+    /** Hourly send limit reached (fallback for the backend's own wording). */
+    const val CLAIM_CODE_SEND_LIMIT =
+        "You've requested several codes. Please try again in a little while, " +
+            "or contact info@avafli.com."
+
+    /** The backend replaced a dead code (fallback for its own wording) — a notice, not an error. */
+    const val CLAIM_CODE_FRESH_SENT = "We sent you a new code. Check your email."
+
+    /** The account has no address to send to (fallback for the backend's own wording). */
+    const val CLAIM_NO_EMAIL_ON_FILE =
+        "We don't have an email on file for this account. Contact info@avafli.com " +
+            "to claim your prize."
+
+    /** The typed value was not a code the backend could check. */
+    const val CLAIM_CODE_INVALID = "Enter the 6-digit code from the email we sent."
+
+    /** Anything else went wrong checking the code — what they typed is kept. */
+    const val CLAIM_CODE_FAILED = "Something went wrong. Please try again."
+
+    /** Retry action beside an inline send failure. */
+    const val CLAIM_CODE_RETRY = "Try again"
+
     // ── Dashboard notices ──
 
     /** Transient notice when the backend rejects a claim as already-claimed
@@ -118,8 +188,9 @@ internal object AvafliV2Strings {
 
     const val OPT_OUT_TITLE = "Delete my data & stop participating"
     const val OPT_OUT_BODY =
-        "This permanently deletes your Avafli data, ends your giveaway participation, " +
-            "and cannot be undone. You can also email info@avafli.com."
+        "This permanently erases your information and ends your participation. " +
+            "Entries and streaks are forfeited and cannot be restored. " +
+            "You can join again as a new participant after 24 hours."
     const val OPT_OUT_CONFIRM = "DELETE MY DATA"
     const val OPT_OUT_CANCEL = "Cancel"
 

@@ -54,6 +54,14 @@ internal object AvafliClaimPhoto {
         return Base64.encodeToString(data, Base64.NO_WRAP)
     }
 
+    /** The preview for an already-encoded photo ([base64Jpeg]'s output). Null on failure. */
+    fun decodeBase64(encoded: String): Bitmap? = try {
+        val data = Base64.decode(encoded, Base64.NO_WRAP)
+        BitmapFactory.decodeByteArray(data, 0, data.size)
+    } catch (_: Exception) {
+        null
+    }
+
     fun downscaled(bitmap: Bitmap, longEdge: Int): Bitmap {
         val longest = max(bitmap.width, bitmap.height)
         if (longest <= longEdge || longest <= 0) return bitmap

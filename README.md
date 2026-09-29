@@ -19,7 +19,7 @@ Avafli lets you add daily-entry sweepstakes and prize experiences to your app in
 - **Email capture** — The SDK captures an email through its own opt-in screen, with an UNCHECKED-by-default marketing-consent tick and a publisher-configurable age gate
 - **Cross-device verified adoption** — When a typed email matches an existing account, the SDK confirms a 6-digit code before merging the streak across devices
 - **Soft email verification** — A brand-new typed email shows a persistent, dismissible "Verify your email" chip; it never blocks play, only prize-draw eligibility
-- **Winner claim flow** — "WE HAVE A WINNER!" banner and an in-drawer prize-claim flow (name, shipping address incl. DC, optional photo, claim number)
+- **Winner claim flow** — "WE HAVE A WINNER!" banner and an in-drawer prize-claim flow (6-digit email code, name, shipping address incl. DC, optional photo, claim number)
 - **Visit mode** — A never-resetting streak variant for low-frequency apps
 - **Push reminders** — Drive re-engagement with daily nudges (FCM); requests POST_NOTIFICATIONS on Android 13+
 - **Server-driven branding** — Logo, prize image, and primary color update without app releases
@@ -59,7 +59,7 @@ Avafli.configure(config)
 //   Avafli.onNewToken(token)
 ```
 
-> **Auto-open:** After `configure()`, the SDK presents the experience automatically once per calendar day (after registration and on activity resumes — a new day re-opens it even if the app stayed in memory). It can be disabled remotely via the dashboard's `experience.autoOpenEnabled` kill switch; unregistered users see at most 3 auto-opens until they submit an email, and RTD opted-out users never see it. To decide when/how the drawer appears yourself, see [Controlling when the drawer opens](#controlling-when-the-drawer-opens).
+> **Auto-open:** After `configure()`, the SDK presents the experience automatically once per calendar day (after registration and on activity resumes — a new day re-opens it even if the app stayed in memory). It can be disabled remotely via the dashboard's `experience.autoOpenEnabled` kill switch; unregistered users see at most 3 auto-opens until they submit an email, and RTD opted-out users do not see it. To decide when/how the drawer appears yourself, see [Controlling when the drawer opens](#controlling-when-the-drawer-opens).
 
 ### Identity — pass what you have, the SDK captures the rest
 
@@ -125,7 +125,7 @@ In your app-level `build.gradle.kts`:
 
 ```kotlin
 dependencies {
-    implementation("com.github.AVAFLI:avafli_android_sdk:v3.1.4")
+    implementation("com.github.AVAFLI:avafli_android_sdk:v3.2.0")
 }
 ```
 
@@ -275,6 +275,10 @@ Two verification paths run from that screen:
 
 When one of your users is drawn as a giveaway winner, the drawer automatically opens on a winner splash instead of the dashboard, then walks them through a prize-claim form (name, shipping address, optional photo) and a confirmation with their claim number. This requires no integration work — the flow appears only for the drawn winner and disappears once their claim is submitted.
 
+### Prize claims
+
+Before the claim form opens, a winner enters a **6-digit code** sent to the email address on their account — proof that they control that inbox. Winners who proved it earlier (for example through the cross-device code) skip the step. The state lives on the server, so a winner who closes the drawer, restarts the app or switches device picks up exactly where they left off. There is nothing for the host app to do.
+
 ## Push Notifications
 
 Drive re-engagement with daily reminders. Publishers forward their FCM token to Avafli:
@@ -360,16 +364,26 @@ experience — no integration required.
 // From your delete-account flow (optOut is a suspend function)
 lifecycleScope.launch {
     Avafli.optOut()
-        .onSuccess { /* Avafli data erased, experience silenced */ }
+        .onSuccess { /* Avafli data erased, experience silenced for 24 hours */ }
         .onFailure { error -> /* Handle error */ }
 }
 ```
 
-The erasure is identity-wide (one call covers all of the person's devices),
-includes prize-claim records, and permanently silences the experience on the
-device — it survives a reinstall. De-identified entry records are retained as
-the legally required evidence that drawings were fair (GDPR Art. 17(3)): the
-person is erased, the proof is kept.
+The erasure is identity-wide (one call covers all of the person's devices)
+and includes prize-claim records. Entries and streaks are forfeited and cannot
+be restored. De-identified entry records are retained as the legally required
+evidence that drawings were fair (GDPR Art. 17(3)): the person is erased, the
+proof is kept.
+
+### Delete my data: rejoining after 24 hours
+
+For 24 hours after a deletion, that email and that device cannot register, and
+the experience stays silent on the device (this survives a reinstall). After
+24 hours the person may join again as a **brand-new participant** with no
+connection to the old profile: on the next `configure()` or return to the
+foreground the SDK clears what it held for the old profile, registers the
+device afresh, and the person sees the normal email-capture flow. There is
+nothing for the host app to do.
 
 ## API Reference
 
@@ -381,7 +395,7 @@ person is erased, the proof is kept.
 | `Avafli.present(activity, callback?)` | `Unit` | Open the experience now (publisher-initiated); see [Controlling when the drawer opens](#controlling-when-the-drawer-opens) |
 | `Avafli.holdAutoOpen()` | `Unit` | Defer the once-a-day auto-open (safe before `configure()`) |
 | `Avafli.releaseAutoOpen()` | `Unit` | Clear the hold and re-run the auto-open check |
-| `Avafli.optOut()` | `suspend Result<Unit>` | RTD opt-out — permanently silence the experience |
+| `Avafli.optOut()` | `suspend Result<Unit>` | RTD opt-out — erase the person's data and silence the experience (they may rejoin as a new participant after 24 hours) |
 
 ### Push Notifications
 
