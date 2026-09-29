@@ -98,6 +98,13 @@ internal sealed class ExperienceScreen {
      */
     object SessionExpired : ExperienceScreen()
 
+    /**
+     * The drawer was opened for a pending prize claim with no active giveaway
+     * and the status fetch failed: there is nothing cached to fall back on, so
+     * say so and offer RETRY — never an empty dashboard.
+     */
+    object Offline : ExperienceScreen()
+
     data class Error(val message: String) : ExperienceScreen()
 }
 
@@ -252,6 +259,12 @@ internal data class ExperienceUiState(
     val claimSubmitError: String? = null,
     /** The submitted form, kept for the confirmation screen's winner card. */
     val submittedClaimForm: PrizeClaimForm? = null,
+    /**
+     * The winner flow ended with no active giveaway to go back to (the claim
+     * turned out to be unavailable): the root dismisses the whole drawer
+     * rather than painting a dashboard or an empty state behind it.
+     */
+    val dismissRequested: Boolean = false,
 
     // ── Winner claim: email-ownership code (3.2.0) ──
     //
@@ -378,6 +391,16 @@ internal class AvafliExperienceViewModel(
 
     fun setAdoptionPending(pending: Boolean) {
         adoptionPendingFlag = pending
+    }
+
+    /**
+     * The SDK opened the drawer knowing a prize claim is pending (possibly
+     * with no active giveaway). Only consulted when the status fetch fails.
+     */
+    private var prizeClaimPendingFlag = false
+
+    fun setPrizeClaimPending(pending: Boolean) {
+        prizeClaimPendingFlag = pending
     }
 
     init {
@@ -568,11 +591,14 @@ internal class AvafliExperienceViewModel(
             }
 
             // Check if backend returned no active giveaway. (A pending prize
-            // claim can outlive its giveaway — the winner flow still shows.)
-            if (response.giveaway == null && pendingPrizeClaim == null) {
+            // claim outlives its giveaway — a giveaway has ended by the time
+            // its winner is drawn — and the winner flow still shows.)
+            if (response.giveaway == null) {
                 activeGiveaway = null
-                setScreen(ExperienceScreen.NoActiveGiveaway)
-                return
+                if (pendingPrizeClaim == null) {
+                    setScreen(ExperienceScreen.NoActiveGiveaway)
+                    return
+                }
             }
 
             response.giveaway?.let {
@@ -626,6 +652,13 @@ internal class AvafliExperienceViewModel(
         } catch (e: Exception) {
             // Offline fallback: use the cached giveaway.
             if (activeGiveaway == null) activeGiveaway = cachedGiveaway
+            // Opened for a pending claim with no giveaway at all: there is
+            // nothing to fall back on. Retry state, never a blank dashboard.
+            if (activeGiveaway == null && prizeClaimPendingFlag) {
+                logger.info("Status fetch failed with a claim pending and no giveaway — showing retry")
+                setScreen(ExperienceScreen.Offline)
+                return
+            }
             logger.debug("Using cached giveaway (offline): ${e.message}")
         }
 
@@ -647,7 +680,10 @@ internal class AvafliExperienceViewModel(
                 "avafli_winner_claim_shown",
                 mapOf("giveaway_id" to claim.giveawayId),
             )
-            if (backendClaimedToday != true && preferencesStorage.isEmailSubmitted()) {
+            // (Nothing to claim into when no giveaway is running.)
+            if (backendClaimedToday != true && activeGiveaway != null &&
+                preferencesStorage.isEmailSubmitted()
+            ) {
                 silentDailyClaim()
             }
             return
@@ -1523,6 +1559,47 @@ internal class AvafliExperienceViewModel(
         claimDailyEntries(auto = true)
     }
 
+    /** RETRY on the offline state: fetch the status again. */
+    fun retryAfterOffline() {
+        if (_uiState.value.screen !is ExperienceScreen.Offline) return
+        viewModelScope.launch {
+            setScreen(ExperienceScreen.Loading)
+            loadInternal()
+        }
+    }
+
+    /**
+     * Leaves the winner flow because the claim is not (or no longer) this
+     * person's to make. With a giveaway running that is the normal dashboard,
+     * reloaded; with none there is nothing behind the winner flow, so the
+     * drawer is dismissed as it stands — no dashboard, no empty state.
+     *
+     * @return true when the drawer is being dismissed.
+     */
+    private suspend fun leaveWinnerFlow(): Boolean {
+        suppressWinnerClaim = true
+        Avafli.notePrizeClaimPending(false)
+        if (activeGiveaway == null) {
+            _uiState.value = _uiState.value.copy(
+                isSubmittingClaim = false,
+                isVerifyingCode = false,
+                dismissRequested = true,
+            )
+            return true
+        }
+        _uiState.value = _uiState.value.copy(
+            isSubmittingClaim = false,
+            screen = ExperienceScreen.Loading,
+            winnerClaimStep = WinnerClaimStep.Splash,
+            claimCodeSend = ClaimCodeSend.Idle,
+            claimCodeInfo = null,
+            claimCodeResendAtMs = null,
+            codeError = null,
+        )
+        loadInternal()
+        return false
+    }
+
     /**
      * RETRY on the session-expired state: re-registers the device (the expired
      * session's tokens are already cleared, so registration mints fresh ones
@@ -1878,17 +1955,8 @@ internal class AvafliExperienceViewModel(
             error.message?.contains("Not the winner") == true
         if (!claimGone) return false
 
-        logger.info("Prize claim no longer open (${error.message}) — falling back to dashboard")
-        suppressWinnerClaim = true
-        _uiState.value = _uiState.value.copy(
-            screen = ExperienceScreen.Loading,
-            winnerClaimStep = WinnerClaimStep.Splash,
-            claimCodeSend = ClaimCodeSend.Idle,
-            claimCodeInfo = null,
-            claimCodeResendAtMs = null,
-            codeError = null,
-        )
-        loadInternal()
+        logger.info("Prize claim no longer open (${error.message}) — leaving the winner flow")
+        if (leaveWinnerFlow()) return true
         val reason = error.message?.takeIf { it.isNotBlank() && it != "Not the winner" }
         if (reason != null && _uiState.value.screen is ExperienceScreen.Streak) {
             postDashboardNotice(reason, retryable = false)
@@ -2074,13 +2142,8 @@ internal class AvafliExperienceViewModel(
                 if (message.contains("Not the winner") || message.contains("Already submitted")) {
                     // Stale/duplicate winner state — never trap the user in the
                     // claim flow. Fall back to the normal dashboard silently.
-                    logger.info("Prize claim rejected ($message) — falling back to dashboard")
-                    suppressWinnerClaim = true
-                    _uiState.value = _uiState.value.copy(
-                        isSubmittingClaim = false,
-                        screen = ExperienceScreen.Loading,
-                    )
-                    loadInternal()
+                    logger.info("Prize claim rejected ($message) — leaving the winner flow")
+                    leaveWinnerFlow()
                     return@launch
                 }
                 logger.error("Prize claim submit failed: ${e.message}", e)

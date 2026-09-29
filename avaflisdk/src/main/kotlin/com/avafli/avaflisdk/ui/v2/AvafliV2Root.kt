@@ -165,6 +165,11 @@ internal fun AvafliV2ExperienceRoot(
                         onCancel = { viewModel.cancelOptOut() },
                     )
                 }
+                // The winner flow ended with no giveaway behind it: close the
+                // drawer as it stands.
+                LaunchedEffect(ui.dismissRequested) {
+                    if (ui.dismissRequested) onDismiss()
+                }
                 LaunchedEffect(ui.optOutPhase) {
                     if (ui.optOutPhase == OptOutPhase.Done) {
                         delay(AvafliExperienceViewModel.OPT_OUT_SUCCESS_HOLD_MS)
@@ -209,6 +214,12 @@ private fun DrawerContent(
         is ExperienceScreen.SessionExpired -> SessionExpiredState(
             accent = accent,
             onRetry = { viewModel.retryAfterSessionExpiry() },
+            onDismiss = onDismiss,
+        )
+
+        is ExperienceScreen.Offline -> OfflineState(
+            accent = accent,
+            onRetry = { viewModel.retryAfterOffline() },
             onDismiss = onDismiss,
         )
 
@@ -405,6 +416,20 @@ private fun SessionExpiredState(accent: Color, onRetry: () -> Unit, onDismiss: (
         accent = accent,
         headline = AvafliV2Strings.SESSION_EXPIRED,
         body = null,
+        primaryTitle = AvafliV2Strings.RETRY,
+        onPrimary = onRetry,
+        secondaryTitle = AvafliV2Strings.CLOSE,
+        onSecondary = onDismiss,
+    )
+}
+
+/** Status fetch failed with nothing cached to show — RETRY fetches again. */
+@Composable
+private fun OfflineState(accent: Color, onRetry: () -> Unit, onDismiss: () -> Unit) {
+    StatusState(
+        accent = accent,
+        headline = AvafliV2Strings.OFFLINE_HEADLINE,
+        body = AvafliV2Strings.OFFLINE_BODY,
         primaryTitle = AvafliV2Strings.RETRY,
         onPrimary = onRetry,
         secondaryTitle = AvafliV2Strings.CLOSE,

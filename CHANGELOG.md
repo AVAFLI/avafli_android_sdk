@@ -63,6 +63,24 @@ rebrand and use the former WINR names.
     foreground only if 30 minutes have passed since the last such open (its
     own timestamp; the daily mark is not used for the throttle).
   - Once the claim is submitted, the normal once-per-day rules apply again.
+- **A pending claim opens without an active giveaway.** A giveaway has ended
+  by the time its winner is drawn, so the status response is normally
+  `{ giveaway: null, prizeClaim: {...} }` — and both the auto-open and
+  `present()` declined on the missing giveaway, leaving that winner with no
+  way to the claim.
+  - With a pending claim, the auto-open and `Avafli.present(activity)` open
+    the drawer on the winner splash even when no giveaway is running. Every
+    other rule (hold, opt-out, suspension, kill switch, `NEVER`, throttle)
+    still applies.
+  - Leaving the winner flow with no giveaway behind it closes the drawer —
+    including when the claim turns out to be expired or unavailable. No
+    dashboard or empty state is painted behind the winner flow. With a
+    giveaway running, behaviour is unchanged.
+  - Opened for a pending claim while offline with nothing cached: a retry
+    state ("We couldn't reach the server." / RETRY) instead of a blank
+    dashboard.
+  - No pending claim and no giveaway: unchanged (nothing opens; `present()`
+    reports `NoGiveaway`).
 
 ### Changed
 

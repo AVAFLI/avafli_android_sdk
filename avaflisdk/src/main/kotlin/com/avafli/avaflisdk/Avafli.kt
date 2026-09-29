@@ -501,7 +501,9 @@ object Avafli {
         }
         if (autoOpenHeld) return
         if (experienceOnScreen) return
-        if (cachedGiveaway == null) return
+        // A winner's giveaway has usually ENDED by the time they are drawn:
+        // a pending claim opens the drawer with no active giveaway at all.
+        if (cachedGiveaway == null && !claimPending) return
         val prefs = preferencesStorage ?: return
 
         // Pending claim: due on this launch's first chance, then again once
@@ -583,7 +585,8 @@ object Avafli {
      *
      * Same guards as the auto-open: the SDK must be configured; opted-out (RTD)
      * users, suspended publishers and a missing active giveaway decline
-     * (logged, [callback] gets a failure — never thrown). If the configure-time
+     * (logged, [callback] gets a failure — never thrown). A pending prize claim
+     * needs no active giveaway: the drawer opens on the winner splash. If the configure-time
      * registration is still in flight, the call waits for it and then presents;
      * if registration failed, it declines the same way. A second call while the
      * experience is already on screen is a no-op ([callback] is not invoked).
@@ -633,8 +636,10 @@ object Avafli {
             return
         }
 
-        // No giveaway (or registration failed and left us without one): decline.
-        if (cachedGiveaway == null) {
+        // No giveaway (or registration failed and left us without one): decline
+        // — unless a prize claim is pending, which needs no active giveaway
+        // (the winner flow reads everything from the prizeClaim block).
+        if (cachedGiveaway == null && !cachedClaimPending) {
             logger?.info("present() declined: no active giveaway")
             callback?.invoke(Result.failure(AvafliError.NoGiveaway()))
             return
@@ -824,6 +829,9 @@ object Avafli {
     internal fun notePrizeClaimPending(pending: Boolean) {
         cachedClaimPending = pending
     }
+
+    /** Whether the latest status response carried a pending prize claim. */
+    internal fun isPrizeClaimPending(): Boolean = cachedClaimPending
 
     /** Adoption re-entry (2.9): whether a parked adoption awaits its code. */
     internal fun isAdoptionPending(): Boolean = cachedAdoptionPending

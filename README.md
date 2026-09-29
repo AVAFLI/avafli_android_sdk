@@ -283,6 +283,8 @@ Before the claim form opens, a winner enters a **6-digit code** sent to the emai
 
 A winner who closes the drawer can always get back to their claim. While a claim is pending, the auto-open is not held back by the once-per-day mark, the unregistered impression cap (no impression is counted) or `RETURNING_USERS_ONLY`: the drawer opens on every app launch, and when the app returns to the foreground if at least 30 minutes have passed since it last opened for the claim. `holdAutoOpen()`, the opt-out, a suspended account and the `autoOpenEnabled` kill switch still apply. With `autoOpen = NEVER` (client or server) nothing opens by itself — call `Avafli.present(activity)`, which lands on the winner splash while a claim is pending. Once the claim is submitted the normal once-per-day rules apply again.
 
+A pending claim needs no active giveaway. A giveaway has ended by the time its winner is drawn, so unless the next one is already running the winner arrives with a claim and nothing else: the drawer still opens (automatically, or through `Avafli.present(activity)`) on the winner splash, and closing or finishing the winner flow closes the drawer. Without a pending claim, no active giveaway still means nothing opens and `present()` reports `AvafliError.NoGiveaway`.
+
 ## Push Notifications
 
 Drive re-engagement with daily reminders. Publishers forward their FCM token to Avafli:

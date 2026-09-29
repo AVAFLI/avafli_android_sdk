@@ -45,6 +45,10 @@ internal class AvafliExperienceActivity : ComponentActivity() {
         // the load resume at the code screen (restageAdoption) instead of
         // email capture.
         viewModel.setAdoptionPending(Avafli.isAdoptionPending())
+        // A pending prize claim can open the drawer with no active giveaway;
+        // the load needs to know so an offline open shows the retry state
+        // instead of an empty dashboard.
+        viewModel.setPrizeClaimPending(Avafli.isPrizeClaimPending())
         // Always fetches fresh status from the backend; the cached giveaway is
         // the offline fallback only.
         viewModel.load(Avafli.getCachedGiveaway())

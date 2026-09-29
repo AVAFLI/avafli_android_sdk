@@ -166,6 +166,11 @@ internal object AvafliV2Strings {
         "This promotion is only available to users located in the United States. " +
             "Please check your location settings or try again from an eligible location."
 
+    // ── Offline (opened for a pending claim, status fetch failed) ──
+
+    const val OFFLINE_HEADLINE = "We couldn't reach the server."
+    const val OFFLINE_BODY = "Check your connection and try again."
+
     // ── Session expired ──
 
     const val SESSION_EXPIRED = "Your session has expired. Please try again."
