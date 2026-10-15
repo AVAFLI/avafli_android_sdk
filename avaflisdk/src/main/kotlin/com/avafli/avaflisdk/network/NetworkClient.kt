@@ -10,6 +10,7 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -23,6 +24,7 @@ import java.util.Base64
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import kotlin.random.Random
 
 /**
  * OkHttp-based network client with automatic token refresh on 401.
@@ -33,14 +35,29 @@ import kotlin.coroutines.resumeWithException
  * the drawer's own load, a push-token registration) share ONE in-flight
  * refresh instead of racing the same refresh token to the endpoint.
  *
+ * Infrastructure refusals (3.2.1, RESILIENCE_SPEC): when a traffic step
+ * outruns warm Cloud Run instances the platform answers 429 or 5xx with a
+ * plain-text body ("The request was aborted because there was no available
+ * instance.") — no callable JSON. Those are retried in [executePost] with
+ * exponential backoff + full jitter (1/2/4/8 s base, 250 ms floor, `Retry-After`
+ * honoured up to 10 s). A non-2xx whose body IS a callable error is an app
+ * error (our own rate limiters, cooldowns, geo, consent, already-claimed) and
+ * is surfaced at once — including our own 429s. Idempotency is server-side
+ * (claims dedup per day; reads are pure), so the retry is safe.
+ *
  * @param baseUrlOverride Test seam only: points requests at a MockWebServer
  *   instead of [AvafliConfiguration.baseUrl].
+ * @param backoffSleep Test seam only: the suspend function that waits between
+ *   infra-refusal retries. Production uses [delay]; tests record the schedule
+ *   instead of sleeping.
  */
 internal class NetworkClient(
     private val config: AvafliConfiguration,
     private val secureStorage: SecureStorage,
     private val logger: Logger,
     private val baseUrlOverride: String? = null,
+    private val backoffSleep: suspend (delayMs: Long) -> Unit = { delay(it) },
+    private val jitterRandom: Random = Random.Default,
 ) {
     private val json = Json {
         ignoreUnknownKeys = true
@@ -162,6 +179,48 @@ internal class NetworkClient(
         }
 
         val request = requestBuilder.build()
+        executeWithInfraRetry(request, url, endpoint)
+    }
+
+    /**
+     * Bounded retry for infrastructure refusals only. App errors (callable
+     * JSON body, any status), other 4xx, transport failures and 401 all leave
+     * on the first attempt exactly as before 3.2.1.
+     */
+    private suspend fun executeWithInfraRetry(request: Request, url: String, endpoint: String): JsonObject {
+        var retries = 0
+        while (true) {
+            try {
+                val result = executeOnce(request, url)
+                if (retries > 0) {
+                    logger.debug("$INFRA_RETRY_LOG_PREFIX $endpoint recovered on attempt ${retries + 1}")
+                }
+                return result
+            } catch (refusal: InfraRefusal) {
+                if (retries >= INFRA_RETRY_BASE_DELAYS_MS.size) {
+                    logger.debug(
+                        "$INFRA_RETRY_LOG_PREFIX $endpoint gave up after $retries retries " +
+                            "(status ${refusal.error.code})"
+                    )
+                    throw refusal.error
+                }
+                val delayMs = infraRetryDelayMs(retries, refusal.retryAfterSeconds, jitterRandom)
+                retries++
+                logger.debug(
+                    "$INFRA_RETRY_LOG_PREFIX $endpoint status ${refusal.error.code}, " +
+                        "retry $retries/${INFRA_RETRY_BASE_DELAYS_MS.size} in $delayMs ms"
+                )
+                backoffSleep(delayMs)
+            }
+        }
+    }
+
+    /**
+     * One request/response round trip. Throws [InfraRefusal] (private, caught
+     * by [executePost]'s loop) for a retryable platform refusal and the public
+     * [AvafliError] types for everything else.
+     */
+    private suspend fun executeOnce(request: Request, url: String): JsonObject {
         logger.debug("POST $url")
 
         try {
@@ -179,13 +238,19 @@ internal class NetworkClient(
                 if (isGeoFenceRejection(response.code, responseBody)) {
                     throw AvafliError.GeoBlocked()
                 }
-                throw AvafliError.ServerError(response.code, responseBody)
+                val error = AvafliError.ServerError(response.code, responseBody)
+                if (isInfraRefusal(response.code, responseBody)) {
+                    throw InfraRefusal(error, parseRetryAfterSeconds(response.header("Retry-After")))
+                }
+                throw error
             }
 
             val jsonResponse = json.parseToJsonElement(responseBody).jsonObject
 
             // Firebase callable returns {result: {...}} wrapper
-            jsonResponse["result"]?.jsonObject ?: jsonResponse
+            return jsonResponse["result"]?.jsonObject ?: jsonResponse
+        } catch (e: InfraRefusal) {
+            throw e
         } catch (e: AvafliError) {
             throw e
         } catch (e: IOException) {
@@ -194,6 +259,16 @@ internal class NetworkClient(
             throw AvafliError.Unknown("Unexpected error: ${e.message}", e)
         }
     }
+
+    /**
+     * A platform refusal worth retrying. Carries the [AvafliError.ServerError]
+     * that is surfaced unchanged once the schedule is exhausted — callers keep
+     * seeing the SDK's existing server-error type.
+     */
+    private class InfraRefusal(
+        val error: AvafliError.ServerError,
+        val retryAfterSeconds: Long?,
+    ) : Exception("infra refusal ${error.code}")
 
     /**
      * Lightweight JWT structure + `exp` pre-check.
@@ -332,6 +407,69 @@ internal class NetworkClient(
 
         /** Refresh when the token expires within this window (see [isJwtExpired]). */
         internal const val EXPIRY_LEEWAY_SECONDS = 60L
+
+        // ── Infrastructure-refusal retry schedule (RESILIENCE_SPEC) ──
+
+        /** Base delays per retry: 4 retries, ≈15 s worst case. */
+        internal val INFRA_RETRY_BASE_DELAYS_MS = longArrayOf(1_000L, 2_000L, 4_000L, 8_000L)
+
+        /** Added to every jittered delay so a retry never fires immediately. */
+        internal const val INFRA_RETRY_JITTER_FLOOR_MS = 250L
+
+        /** A `Retry-After` header is honoured up to this long. */
+        internal const val INFRA_RETRY_AFTER_CAP_MS = 10_000L
+
+        /** Statuses the platform uses when it refuses a request for lack of capacity. */
+        private val INFRA_REFUSAL_STATUSES = setOf(429, 500, 502, 503, 504)
+
+        internal const val INFRA_RETRY_LOG_PREFIX = "Infra refusal:"
+
+        /**
+         * True for a 429/500/502/503/504 whose body is NOT a callable error —
+         * plain text ("The request was aborted because there was no available
+         * instance."), HTML or empty. A callable JSON body on the same status
+         * (our own RESOURCE_EXHAUSTED rate limiter, a resend cooldown) is an
+         * app error and is never retried here.
+         */
+        internal fun isInfraRefusal(httpCode: Int, body: String): Boolean {
+            if (httpCode !in INFRA_REFUSAL_STATUSES) return false
+            return !isCallableErrorBody(body)
+        }
+
+        /** `{"error":{...}}` — the Firebase callable error envelope. */
+        internal fun isCallableErrorBody(body: String): Boolean {
+            val start = body.indexOf('{')
+            if (start < 0) return false
+            return try {
+                val root = geoJson.parseToJsonElement(body.substring(start)) as? JsonObject
+                    ?: return false
+                root["error"] is JsonObject
+            } catch (_: Exception) {
+                false
+            }
+        }
+
+        /**
+         * The wait before retry number `retryIndex + 1`: `random(0, base) + 250 ms`
+         * (full jitter), or a `Retry-After` value when the server sent one —
+         * clamped to the same 250 ms floor and a 10 s cap.
+         */
+        internal fun infraRetryDelayMs(
+            retryIndex: Int,
+            retryAfterSeconds: Long?,
+            random: Random = Random.Default,
+        ): Long {
+            if (retryAfterSeconds != null) {
+                return (retryAfterSeconds * 1_000L)
+                    .coerceIn(INFRA_RETRY_JITTER_FLOOR_MS, INFRA_RETRY_AFTER_CAP_MS)
+            }
+            val base = INFRA_RETRY_BASE_DELAYS_MS[retryIndex.coerceIn(0, INFRA_RETRY_BASE_DELAYS_MS.lastIndex)]
+            return random.nextLong(0L, base + 1L) + INFRA_RETRY_JITTER_FLOOR_MS
+        }
+
+        /** Integer-seconds `Retry-After` only; an HTTP-date form is treated as absent. */
+        internal fun parseRetryAfterSeconds(header: String?): Long? =
+            header?.trim()?.toLongOrNull()?.takeIf { it >= 0 }
 
         /**
          * Detect a backend geo-fence rejection from a callable error response.

@@ -5,6 +5,32 @@ will be documented in this file. Entries for 2.9.6 and earlier predate the
 rebrand and use the former WINR names.
 
 
+## 3.2.1 — 2026-10-15
+
+### Changed
+
+- **Infrastructure refusals are retried instead of surfaced.** When a traffic
+  step outruns warm backend instances the platform refuses the overflow at
+  once with HTTP 429 or 5xx and a plain-text body ("The request was aborted
+  because there was no available instance.") — instances arrive within
+  ~10–30 s. The SDK now classifies every non-2xx response: a body that is a
+  callable error (`{"error":{…}}`) is an app error and is surfaced exactly as
+  before (our own rate limiters, resend cooldowns, geo, consent,
+  already-claimed — including our own 429s); a 429/500/502/503/504 with a
+  non-callable body (plain text, HTML, empty) is an infrastructure refusal and
+  is retried with exponential backoff and full jitter — base delays 1 s, 2 s,
+  4 s, 8 s (4 retries, ≈15 s worst case), each `random(0, base)` + a 250 ms
+  floor, a `Retry-After` header honoured up to 10 s. Retrying is safe:
+  idempotency is server-side (claims dedup per day; reads are pure).
+  - Unchanged: the 401 refresh-once path, transport failures
+    (`AvafliError.NetworkError`), other 4xx, and the final error type once the
+    schedule is exhausted (`AvafliError.ServerError`).
+  - The offline queue's transport-only classifier is unchanged — an exhausted
+    infrastructure refusal is still NOT queued (the server answered; it was
+    just busy).
+  - Each retry is logged at debug level with the status, attempt and delay.
+  - Nothing for the host app to do.
+
 ## 3.2.0 — 2026-09-29
 
 ### Added
