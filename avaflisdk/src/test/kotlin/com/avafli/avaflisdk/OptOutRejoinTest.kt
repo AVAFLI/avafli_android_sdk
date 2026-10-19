@@ -466,7 +466,7 @@ class OptOutRejoinTest {
 }
 
 /** A plain in-memory [SharedPreferences] — enough for [PreferencesStorage]. */
-private class InMemorySharedPreferences : SharedPreferences {
+internal class InMemorySharedPreferences : SharedPreferences {
 
     private val values = mutableMapOf<String, Any?>()
 

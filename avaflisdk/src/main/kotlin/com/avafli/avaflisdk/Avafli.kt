@@ -822,6 +822,33 @@ object Avafli {
     }
 
     /**
+     * 3.2.2: reconciles identity-scoped local state with what the server just
+     * said about THIS account — see [IdentityReconcile] for the rules and the
+     * field report behind them.
+     */
+    private fun reconcileLocalIdentity(
+        isNewUser: Boolean?,
+        emailConsentStatus: Boolean?,
+        adoptionPending: Boolean?,
+        optedOut: Boolean?,
+    ) {
+        when (IdentityReconcile.plan(isNewUser, emailConsentStatus, adoptionPending, optedOut)) {
+            IdentityReconcile.Plan.LEAVE_ALONE -> Unit
+            IdentityReconcile.Plan.DROP_ACCOUNT_STATE -> {
+                preferencesStorage?.clearForServerReset()
+                clearOfflineClaimRetry()
+                cachedEmailConsent = emailConsentStatus ?: false
+                logger?.info("Fresh account from the server — stale local identity state dropped")
+            }
+            IdentityReconcile.Plan.DROP_EMAIL_FLAG -> {
+                preferencesStorage?.saveEmailSubmitted(false)
+                cachedEmailConsent = false
+                logger?.info("Server reports no email on file — stale local email flag dropped")
+            }
+        }
+    }
+
+    /**
      * Pending prize claim (3.2.0): the experience's own status fetch (or a
      * submitted claim) updates the flag, so the auto-open stops reopening the
      * drawer the moment the claim is no longer pending.
@@ -1007,6 +1034,14 @@ object Avafli {
                 if (response?.optedOut == true) {
                     noteServerOptOut(response.optedOutUntil)
                 }
+                // 3.2.2: an explicit "no email on file" drops the stale local flag
+                // (the status call never mints a user).
+                reconcileLocalIdentity(
+                    isNewUser = null,
+                    emailConsentStatus = response?.emailConsentStatus,
+                    adoptionPending = response?.adoptionPending,
+                    optedOut = response?.optedOut,
+                )
                 prewarmPublisherArt()
             } catch (e: AvafliError) {
                 if (isSuspendedError(e)) throw AvafliError.ServiceUnavailable()
@@ -1059,6 +1094,13 @@ object Avafli {
         if (response.optedOut == true) {
             noteServerOptOut(response.optedOutUntil)
         }
+        // 3.2.2: the server's identity answer outranks anything cached here.
+        reconcileLocalIdentity(
+            isNewUser = response.isNewUser,
+            emailConsentStatus = response.emailConsentStatus,
+            adoptionPending = response.adoptionPending,
+            optedOut = response.optedOut,
+        )
 
         prewarmPublisherArt()
 

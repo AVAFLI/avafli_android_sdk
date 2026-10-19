@@ -124,6 +124,25 @@ internal class PreferencesStorage(context: Context) : OfflineStateStore {
      * comes back as a brand-new participant. (Tokens and the user id live in
      * SecureStorage; the device id is not stored and does not change.)
      */
+    /**
+     * 3.2.2: the server minted a FRESH user for this device (the account the
+     * cached state described was deleted or reset server-side). Drops every
+     * identity-scoped key — email flag, streak snapshot, claim stamps, adoption
+     * code stamp — and nothing else: the once-a-day auto-open mark, the
+     * unregistered-impression counter and the opt-out keys are not identity
+     * state. See [com.avafli.avaflisdk.IdentityReconcile].
+     */
+    fun clearForServerReset() {
+        prefs.edit()
+            .remove(KEY_EMAIL_SUBMITTED)
+            .remove(KEY_STREAK_DAY)
+            .remove(KEY_LAST_CLAIM_DATE)
+            .remove(KEY_TOTAL_ENTRIES)
+            .remove(KEY_COMPLETED_DAYS)
+            .remove(KEY_ADOPTION_CODE_SENT_AT)
+            .apply()
+    }
+
     fun clearForRejoin() {
         prefs.edit()
             .remove("${KEY_OPTED_OUT}_$packageName")

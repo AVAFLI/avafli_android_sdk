@@ -76,6 +76,11 @@ internal class AvafliApi(
             // Presentation control (3.1.4): true on the first-ever registration
             // of this device. OPTIONAL — absent on older backends (→ returning).
             isNewUser = response["isNewUser"]?.jsonPrimitive?.booleanOrNull,
+            // 3.2.2: whether the backend has an email on file (and no adoption is
+            // parked). The backend has always sent it; an explicit `false` drops
+            // a stale local "email submitted" flag. OPTIONAL — absent on older
+            // backends, which leaves local state alone.
+            emailConsentStatus = response["emailConsentStatus"]?.jsonPrimitive?.booleanOrNull,
         )
     }
 
@@ -449,6 +454,13 @@ internal class AvafliApi(
          * returning (auto-open proceeds).
          */
         val isNewUser: Boolean? = null,
+        /**
+         * 3.2.2: whether the backend has an email on file for this user (and no
+         * adoption is parked). An explicit `false` means the local "email
+         * submitted" flag is stale and is dropped; absent (older backend) leaves
+         * local state alone.
+         */
+        val emailConsentStatus: Boolean? = null,
     )
 
     data class GetActiveGiveawayResponse(
@@ -744,7 +756,7 @@ internal class AvafliApi(
     companion object {
         // Single source of truth for the wire-format sdk_version. Keep in sync
         // with the Maven publish version in avaflisdk/build.gradle.kts.
-        const val SDK_VERSION = "3.2.1"
+        const val SDK_VERSION = "3.2.2"
 
         private val verificationJson = Json { ignoreUnknownKeys = true; isLenient = true }
 

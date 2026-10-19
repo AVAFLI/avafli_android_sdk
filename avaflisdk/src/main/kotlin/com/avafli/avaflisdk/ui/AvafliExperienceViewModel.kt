@@ -3,6 +3,7 @@ package com.avafli.avaflisdk.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.avafli.avaflisdk.Avafli
+import com.avafli.avaflisdk.IdentityReconcile
 import com.avafli.avaflisdk.AvafliError
 import com.avafli.avaflisdk.AvafliUser
 import com.avafli.avaflisdk.domain.DailyEntryGrant
@@ -635,6 +636,19 @@ internal class AvafliExperienceViewModel(
             if (response.emailConsentStatus == true && response.adoptionPending != true) {
                 preferencesStorage.saveEmailSubmitted(true)
                 Avafli.noteEmailConsent()
+            } else if (IdentityReconcile.plan(
+                    isNewUser = null,
+                    emailConsentStatus = response.emailConsentStatus,
+                    adoptionPending = response.adoptionPending,
+                    optedOut = response.optedOut,
+                ) == IdentityReconcile.Plan.DROP_EMAIL_FLAG
+            ) {
+                // 3.2.2: an explicit "no email on file" means the local flag is
+                // stale (the account was reset server-side). Drop it so the gate
+                // below lands on email capture instead of an auto-claim the
+                // backend will refuse — which left the person on a Day-1
+                // dashboard that never advanced (Skape, Oct 2026).
+                preferencesStorage.saveEmailSubmitted(false)
             }
         } catch (e: AvafliError.GeoBlocked) {
             // US-only geo-fence: a dedicated, honest state — never the generic
