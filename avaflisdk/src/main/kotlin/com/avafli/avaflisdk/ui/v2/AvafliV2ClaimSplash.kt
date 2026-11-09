@@ -42,6 +42,12 @@ internal fun AvafliV2WinnerSplashScreen(
     accent: Color,
     logoUrl: String?,
     prizeHeadline: String,
+    /**
+     * 3.3.0 — network-giveaway sponsor line from the claim block
+     * (`prizeClaim.sponsorDisclosure`); null for exclusive giveaways → nothing
+     * rendered, layout identical.
+     */
+    sponsorDisclosure: String? = null,
     onContinue: () -> Unit,
     onClose: () -> Unit,
 ) {
@@ -94,19 +100,30 @@ internal fun AvafliV2WinnerSplashScreen(
                     .padding(vertical = 14.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                AvafliAutoSizeText(
-                    prizeHeadline,
-                    style = AvafliV2Font.inter(
-                        28.sp, FontWeight.Black,
-                        tracking = (-0.8).sp,
-                        color = AvafliV2Color.gunmetal,
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    AvafliAutoSizeText(
+                        prizeHeadline,
+                        style = AvafliV2Font.inter(
+                            28.sp, FontWeight.Black,
+                            tracking = (-0.8).sp,
+                            color = AvafliV2Color.gunmetal,
+                            textAlign = TextAlign.Center,
+                        ),
+                        maxLines = 2,
+                        minScale = 0.6f,
                         textAlign = TextAlign.Center,
-                    ),
-                    maxLines = 2,
-                    minScale = 0.6f,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                )
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+                    // 3.3.0: network-giveaway sponsor line directly under the
+                    // prize, same muted treatment as the Day-1 capture strip.
+                    // Null for exclusive giveaways → nothing rendered.
+                    AvafliV2SponsorDisclosure(
+                        text = sponsorDisclosure,
+                        color = AvafliV2Color.gunmetal.copy(alpha = 0.7f),
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(top = 2.dp).padding(horizontal = 16.dp),
+                    )
+                }
             }
 
             Text(

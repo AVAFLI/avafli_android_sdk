@@ -20,6 +20,11 @@ rebrand and use the former WINR names.
   views auto-open / `present()` show). No change for exclusive giveaways:
   when the field is absent nothing is rendered and no layout shifts. Nothing
   for the host app to do.
+- Winner splash and claim screens show the sponsor line from the claim block.
+  The `prizeClaim` block carries the same optional `scope` /
+  `sponsorDisclosure` fields (the draw clears the app's network pointer, so
+  the winner's `giveaway` payload cannot supply them); both are exposed on
+  `PrizeClaimBlock` and absent for exclusive giveaways.
 
 ## 3.2.2 — 2026-10-19
 

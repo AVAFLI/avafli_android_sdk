@@ -61,6 +61,9 @@ internal fun AvafliV2WinnerClaimFlow(
                     description = claim.prizeDescription,
                     value = claim.prizeValue.toInt(),
                 ),
+                // 3.3.0: sponsor line rides the claim block (the draw clears
+                // the app's network pointer, so `giveaway` can't supply it).
+                sponsorDisclosure = claim.sponsorDisclosure,
                 onContinue = onContinue,
                 onClose = onClose,
             )

@@ -37,6 +37,20 @@ data class PrizeClaimBlock(
      * form then opens directly, exactly as before.
      */
     val verification: ClaimVerificationBlock? = null,
+    /**
+     * 3.3.0 — network giveaway only: `"network"` when the prize was drawn
+     * from the shared network giveaway (Avafli LLC is the Sponsor of Record).
+     * Absent for exclusive giveaways. Carried on the claim block because the
+     * draw clears the app's network pointer, so the winner's `giveaway`
+     * payload has nothing to borrow the disclosure from.
+     */
+    val scope: String? = null,
+    /**
+     * 3.3.0 — the Sponsor-of-Record line (e.g. "Sponsored by Avafli LLC") the
+     * winner splash shows under the prize headline. Absent for exclusive
+     * giveaways → nothing rendered.
+     */
+    val sponsorDisclosure: String? = null,
 ) {
     val isPending: Boolean get() = status == "pending"
 }

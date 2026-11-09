@@ -131,6 +131,67 @@ class NetworkGiveawayDisclosureTest {
         assertNull(giveaway.sponsorDisclosure)
     }
 
+    // ── prizeClaim block (the winner's splash reads the sponsor line here —
+    //    the draw clears the app's network pointer, so `giveaway` can't supply it) ──
+
+    private fun enqueueRegisterDeviceWithClaim(claimJson: String) {
+        coEvery { networkClient.post("registerDevice", any()) } returns jsonObj(
+            """
+            {
+              "token": "t",
+              "refreshToken": "r",
+              "uuid": "u",
+              "giveaway": ${giveawayJson()},
+              "prizeClaim": $claimJson
+            }
+            """
+        )
+    }
+
+    @Test
+    fun `network prizeClaim block parses scope and sponsorDisclosure`() = runTest {
+        enqueueRegisterDeviceWithClaim(
+            """
+            {
+              "status": "pending",
+              "giveawayId": "gw_net",
+              "prizeDescription": "Cash",
+              "prizeValue": 1000,
+              "scope": "network",
+              "sponsorDisclosure": "Sponsored by Avafli LLC"
+            }
+            """
+        )
+        val claim = api.registerDevice("key", "fp", "com.example", "UTC").prizeClaim
+        assertNotNull(claim)
+        assertEquals("network", claim!!.scope)
+        assertEquals("Sponsored by Avafli LLC", claim.sponsorDisclosure)
+        // Siblings untouched.
+        assertTrue(claim.isPending)
+        assertEquals("gw_net", claim.giveawayId)
+        assertEquals("Cash", claim.prizeDescription)
+        assertEquals(1000.0, claim.prizeValue, 0.0)
+    }
+
+    @Test
+    fun `exclusive prizeClaim block without the fields parses them as null`() = runTest {
+        enqueueRegisterDeviceWithClaim(
+            """
+            {
+              "status": "pending",
+              "giveawayId": "gw_1",
+              "prizeDescription": "Cash",
+              "prizeValue": 1000
+            }
+            """
+        )
+        val claim = api.registerDevice("key", "fp", "com.example", "UTC").prizeClaim
+        assertNotNull(claim)
+        assertNull(claim!!.scope)
+        assertNull(claim.sponsorDisclosure)
+        assertTrue(claim.isPending)
+    }
+
     // ── Model defaults + cache round-trip ──
 
     @Test
