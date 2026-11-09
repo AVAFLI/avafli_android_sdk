@@ -124,7 +124,7 @@ internal fun AvafliV2DashboardScreen(
                 prizeValue = giveaway?.prizeValue?.toDoubleOrNull()?.toInt() ?: 0,
                 prizeDescription = giveaway?.prizeDescription ?: "",
                 visitMode = visitMode,
-                // 3.3.0: network-giveaway sponsor line (null → nothing rendered).
+                // 3.3.0: shared-giveaway sponsor line (null → nothing rendered).
                 sponsorDisclosure = giveaway?.sponsorDisclosure,
                 modifier = Modifier.padding(horizontal = 22.dp),
             )

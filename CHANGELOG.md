@@ -9,10 +9,10 @@ rebrand and use the former WINR names.
 
 ### Added
 
-- **Network giveaway sponsor disclosure.** The giveaway payload (the
+- **Shared giveaway sponsor disclosure.** The giveaway payload (the
   `giveaway` object on `registerDevice` and `getActiveGiveaway`) may now carry
   `scope: "network"` and `sponsorDisclosure` (e.g. "Sponsored by Avafli LLC")
-  when the app is served the shared network giveaway, for which Avafli LLC is
+  when the app is served the shared giveaway, for which Avafli LLC is
   the Sponsor of Record. Both are exposed on `Giveaway` (`scope`,
   `sponsorDisclosure`, plus an `isNetwork` convenience), and the SDK shows
   the sponsor line as a small muted single line directly under the prize on

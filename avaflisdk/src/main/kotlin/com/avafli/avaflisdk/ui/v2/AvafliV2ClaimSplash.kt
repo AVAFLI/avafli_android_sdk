@@ -43,7 +43,7 @@ internal fun AvafliV2WinnerSplashScreen(
     logoUrl: String?,
     prizeHeadline: String,
     /**
-     * 3.3.0 — network-giveaway sponsor line from the claim block
+     * 3.3.0 — shared-giveaway sponsor line from the claim block
      * (`prizeClaim.sponsorDisclosure`); null for exclusive giveaways → nothing
      * rendered, layout identical.
      */
@@ -114,7 +114,7 @@ internal fun AvafliV2WinnerSplashScreen(
                         textAlign = TextAlign.Center,
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
-                    // 3.3.0: network-giveaway sponsor line directly under the
+                    // 3.3.0: shared-giveaway sponsor line directly under the
                     // prize, same muted treatment as the Day-1 capture strip.
                     // Null for exclusive giveaways → nothing rendered.
                     AvafliV2SponsorDisclosure(

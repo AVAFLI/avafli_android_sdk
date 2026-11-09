@@ -38,8 +38,8 @@ data class PrizeClaimBlock(
      */
     val verification: ClaimVerificationBlock? = null,
     /**
-     * 3.3.0 — network giveaway only: `"network"` when the prize was drawn
-     * from the shared network giveaway (Avafli LLC is the Sponsor of Record).
+     * 3.3.0 — shared giveaway only: `"network"` when the prize was drawn
+     * from the shared shared giveaway (Avafli LLC is the Sponsor of Record).
      * Absent for exclusive giveaways. Carried on the claim block because the
      * draw clears the app's network pointer, so the winner's `giveaway`
      * payload has nothing to borrow the disclosure from.

@@ -18,7 +18,7 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * 3.3.0 — contract tests for the network-giveaway fields on the giveaway
+ * 3.3.0 — contract tests for the shared-giveaway fields on the giveaway
  * payload: `scope` ("network" | "publisher" | absent) and `sponsorDisclosure`
  * (the Sponsor-of-Record line the SDK must show under the prize). Both are
  * OPTIONAL; an exclusive giveaway omits them and parses exactly as before.
@@ -68,7 +68,7 @@ class NetworkGiveawayDisclosureTest {
     // ── getActiveGiveaway ──
 
     @Test
-    fun `network giveaway parses scope and sponsorDisclosure`() = runTest {
+    fun `shared giveaway parses scope and sponsorDisclosure`() = runTest {
         enqueueActiveGiveaway(
             giveawayJson(""", "scope": "network", "sponsorDisclosure": "Sponsored by Avafli LLC" """)
         )
@@ -93,7 +93,7 @@ class NetworkGiveawayDisclosureTest {
     }
 
     @Test
-    fun `explicit publisher scope is not a network giveaway`() = runTest {
+    fun `explicit publisher scope is not a shared giveaway`() = runTest {
         enqueueActiveGiveaway(giveawayJson(""", "scope": "publisher" """))
         val giveaway = api.getActiveGiveaway().giveaway!!
         assertEquals("publisher", giveaway.scope)

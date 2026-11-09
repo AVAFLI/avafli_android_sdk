@@ -36,7 +36,7 @@ data class Giveaway(
      */
     val latestWinner: GiveawayWinner? = null,
     /**
-     * 3.3.0 — `"network"` when this is the network giveaway (one shared prize
+     * 3.3.0 — `"network"` when this is the shared giveaway (one shared prize
      * pool across many publisher apps; Avafli LLC is the Sponsor of Record).
      * Absent or `"publisher"` for a normal exclusive giveaway.
      */
@@ -48,7 +48,7 @@ data class Giveaway(
      */
     val sponsorDisclosure: String? = null
 ) {
-    /** True when this is the shared network giveaway (`scope == "network"`). */
+    /** True when this is the shared shared giveaway (`scope == "network"`). */
     val isNetwork: Boolean
         get() = scope == "network"
 }

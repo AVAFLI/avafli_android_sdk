@@ -331,7 +331,7 @@ private fun PrizeStrip(giveaway: Giveaway?) {
                 style = AvafliV2Font.inter(16.sp, color = AvafliV2Color.gunmetal),
             )
         }
-        // 3.3.0: network-giveaway sponsor line directly under the prize.
+        // 3.3.0: shared-giveaway sponsor line directly under the prize.
         // Null for exclusive giveaways → nothing rendered, strip unchanged.
         AvafliV2SponsorDisclosure(
             text = giveaway?.sponsorDisclosure,

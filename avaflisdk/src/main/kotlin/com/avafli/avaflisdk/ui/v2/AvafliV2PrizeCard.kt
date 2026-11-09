@@ -59,7 +59,7 @@ internal fun AvafliV2PrizeCard(
     prizeDescription: String,
     visitMode: Boolean = false,
     /**
-     * 3.3.0 — network-giveaway sponsor line ("Sponsored by Avafli LLC").
+     * 3.3.0 — shared-giveaway sponsor line ("Sponsored by Avafli LLC").
      * Null/blank for exclusive giveaways: nothing is rendered and the card
      * layout is byte-for-byte what it was before.
      */
@@ -92,7 +92,7 @@ internal fun AvafliV2PrizeCard(
 
 /**
  * 3.3.0 — the sponsor-of-record line under the prize headline. Legally
- * required wherever a network-giveaway prize is shown; a null/blank
+ * required wherever a shared-giveaway prize is shown; a null/blank
  * disclosure emits NOTHING (no spacer, no padding) so exclusive giveaways
  * are unchanged. 11sp Inter Medium, muted secondary text, single line.
  */
@@ -258,7 +258,7 @@ private fun Headline(
                     "CASH PRIZE",
                     style = AvafliV2Font.inter(19.sp, FontWeight.Black, tracking = (-0.57).sp, color = Color.White),
                 )
-                // 3.3.0: network-giveaway sponsor line; emits nothing when null.
+                // 3.3.0: shared-giveaway sponsor line; emits nothing when null.
                 // The Column's -5dp spacing tucks the big caps together; the
                 // small line gets its own breathing room on top.
                 AvafliV2SponsorDisclosure(
@@ -292,7 +292,7 @@ private fun Headline(
                         style = AvafliV2Font.inter(15.sp, FontWeight.Black, color = accent),
                     )
                 }
-                // 3.3.0: network-giveaway sponsor line; emits nothing when null.
+                // 3.3.0: shared-giveaway sponsor line; emits nothing when null.
                 AvafliV2SponsorDisclosure(
                     text = sponsorDisclosure,
                     color = AvafliV2Color.textSecondary,
