@@ -36,6 +36,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.avafli.avaflisdk.R
@@ -57,6 +58,12 @@ internal fun AvafliV2PrizeCard(
     prizeValue: Int,
     prizeDescription: String,
     visitMode: Boolean = false,
+    /**
+     * 3.3.0 — network-giveaway sponsor line ("Sponsored by Avafli LLC").
+     * Null/blank for exclusive giveaways: nothing is rendered and the card
+     * layout is byte-for-byte what it was before.
+     */
+    sponsorDisclosure: String? = null,
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -77,9 +84,34 @@ internal fun AvafliV2PrizeCard(
             accent = accent,
             prizeValue = prizeValue,
             prizeDescription = prizeDescription,
+            sponsorDisclosure = sponsorDisclosure,
             modifier = Modifier.align(Alignment.BottomCenter),
         )
     }
+}
+
+/**
+ * 3.3.0 — the sponsor-of-record line under the prize headline. Legally
+ * required wherever a network-giveaway prize is shown; a null/blank
+ * disclosure emits NOTHING (no spacer, no padding) so exclusive giveaways
+ * are unchanged. 11sp Inter Medium, muted secondary text, single line.
+ */
+@Composable
+internal fun AvafliV2SponsorDisclosure(
+    text: String?,
+    color: Color,
+    textAlign: TextAlign,
+    modifier: Modifier = Modifier,
+) {
+    if (text.isNullOrBlank()) return
+    Text(
+        text.trim(),
+        style = AvafliV2Font.inter(11.sp, FontWeight.Medium, color = color, textAlign = textAlign),
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        textAlign = textAlign,
+        modifier = modifier,
+    )
 }
 
 @Composable
@@ -194,6 +226,7 @@ private fun Headline(
     accent: Color,
     prizeValue: Int,
     prizeDescription: String,
+    sponsorDisclosure: String?,
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -225,6 +258,15 @@ private fun Headline(
                     "CASH PRIZE",
                     style = AvafliV2Font.inter(19.sp, FontWeight.Black, tracking = (-0.57).sp, color = Color.White),
                 )
+                // 3.3.0: network-giveaway sponsor line; emits nothing when null.
+                // The Column's -5dp spacing tucks the big caps together; the
+                // small line gets its own breathing room on top.
+                AvafliV2SponsorDisclosure(
+                    text = sponsorDisclosure,
+                    color = AvafliV2Color.textSecondary,
+                    textAlign = TextAlign.End,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
             }
         } else {
             // Centered "Win a {Prize}" + accent "$X.00 VALUE!".
@@ -250,6 +292,13 @@ private fun Headline(
                         style = AvafliV2Font.inter(15.sp, FontWeight.Black, color = accent),
                     )
                 }
+                // 3.3.0: network-giveaway sponsor line; emits nothing when null.
+                AvafliV2SponsorDisclosure(
+                    text = sponsorDisclosure,
+                    color = AvafliV2Color.textSecondary,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 3.dp),
+                )
             }
         }
     }

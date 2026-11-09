@@ -331,6 +331,14 @@ private fun PrizeStrip(giveaway: Giveaway?) {
                 style = AvafliV2Font.inter(16.sp, color = AvafliV2Color.gunmetal),
             )
         }
+        // 3.3.0: network-giveaway sponsor line directly under the prize.
+        // Null for exclusive giveaways → nothing rendered, strip unchanged.
+        AvafliV2SponsorDisclosure(
+            text = giveaway?.sponsorDisclosure,
+            color = AvafliV2Color.gunmetal.copy(alpha = 0.7f),
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = 2.dp),
+        )
     }
 }
 

@@ -5,6 +5,22 @@ will be documented in this file. Entries for 2.9.6 and earlier predate the
 rebrand and use the former WINR names.
 
 
+## 3.3.0 — 2026-11-08
+
+### Added
+
+- **Network giveaway sponsor disclosure.** The giveaway payload (the
+  `giveaway` object on `registerDevice` and `getActiveGiveaway`) may now carry
+  `scope: "network"` and `sponsorDisclosure` (e.g. "Sponsored by Avafli LLC")
+  when the app is served the shared network giveaway, for which Avafli LLC is
+  the Sponsor of Record. Both are exposed on `Giveaway` (`scope`,
+  `sponsorDisclosure`, plus an `isNetwork` convenience), and the SDK shows
+  the sponsor line as a small muted single line directly under the prize on
+  the dashboard prize card and the Day-1 email-capture prize strip (the same
+  views auto-open / `present()` show). No change for exclusive giveaways:
+  when the field is absent nothing is rendered and no layout shifts. Nothing
+  for the host app to do.
+
 ## 3.2.2 — 2026-10-19
 
 ### Fixed

@@ -34,8 +34,24 @@ data class Giveaway(
      * Most recent drawn winner for this giveaway chain — drives the
      * "WE HAVE A WINNER!" banner + winners dialog. Absent → no banner.
      */
-    val latestWinner: GiveawayWinner? = null
-)
+    val latestWinner: GiveawayWinner? = null,
+    /**
+     * 3.3.0 — `"network"` when this is the network giveaway (one shared prize
+     * pool across many publisher apps; Avafli LLC is the Sponsor of Record).
+     * Absent or `"publisher"` for a normal exclusive giveaway.
+     */
+    val scope: String? = null,
+    /**
+     * 3.3.0 — Sponsor-of-record line the SDK MUST show wherever the prize is
+     * presented, e.g. "Sponsored by Avafli LLC". Only sent for network
+     * giveaways; null for exclusive giveaways (nothing is rendered).
+     */
+    val sponsorDisclosure: String? = null
+) {
+    /** True when this is the shared network giveaway (`scope == "network"`). */
+    val isNetwork: Boolean
+        get() = scope == "network"
+}
 
 @Serializable
 data class GiveawayWinner(
