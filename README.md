@@ -20,6 +20,7 @@ Avafli lets you add daily-entry sweepstakes and prize experiences to your app in
 - **Cross-device verified adoption** — When a typed email matches an existing account, the SDK confirms a 6-digit code before merging the streak across devices
 - **Soft email verification** — A brand-new typed email shows a persistent, dismissible "Verify your email" chip; it never blocks play or the prize draw; confirming early means no code step if they win
 - **Winner claim flow** — "WE HAVE A WINNER!" banner and an in-drawer prize-claim flow (6-digit email code, name, shipping address incl. DC, optional photo, claim number)
+- **Network giveaway sponsor line** — When a publisher opts into the shared network giveaway (Avafli LLC as Sponsor of Record), a small "Sponsored by Avafli LLC" line renders under the prize; exclusive giveaways show nothing extra
 - **Visit mode** — A never-resetting streak variant for low-frequency apps
 - **Push reminders** — Drive re-engagement with daily nudges (FCM); requests POST_NOTIFICATIONS on Android 13+
 - **Server-driven branding** — Logo, prize image, and primary color update without app releases
@@ -284,6 +285,10 @@ Before the claim form opens, a winner enters a **6-digit code** sent to the emai
 A winner who closes the drawer can always get back to their claim. While a claim is pending, the auto-open is not held back by the once-per-day mark, the unregistered impression cap (no impression is counted) or `RETURNING_USERS_ONLY`: the drawer opens on every app launch, and when the app returns to the foreground if at least 30 minutes have passed since it last opened for the claim. `holdAutoOpen()`, the opt-out, a suspended account and the `autoOpenEnabled` kill switch still apply. With `autoOpen = NEVER` (client or server) nothing opens by itself — call `Avafli.present(activity)`, which lands on the winner splash while a claim is pending. Once the claim is submitted the normal once-per-day rules apply again.
 
 A pending claim needs no active giveaway. A giveaway has ended by the time its winner is drawn, so unless the next one is already running the winner arrives with a claim and nothing else: the drawer still opens (automatically, or through `Avafli.present(activity)`) on the winner splash, and closing or finishing the winner flow closes the drawer. Without a pending claim, no active giveaway still means nothing opens and `present()` reports `AvafliError.NoGiveaway`.
+
+### Network giveaways: sponsor disclosure (3.3.0)
+
+A publisher can opt into the **network giveaway** — one shared prize pool across many Avafli apps, with Avafli LLC as Sponsor of Record. The served giveaway then carries `scope: "network"` and a short `sponsorDisclosure` string (for example "Sponsored by Avafli LLC"), and so does the winner's `prizeClaim` block. The SDK shows that line, small and muted, directly under the prize wherever the prize is presented: the Day-1 email-capture strip, the dashboard prize card and the winner splash. The disclosure is legally required and cannot be turned off. For an exclusive (publisher-sponsored) giveaway both fields are absent and nothing changes — the drawer looks exactly as it did in 3.2.2. Nothing for the host app to do.
 
 ## Push Notifications
 
