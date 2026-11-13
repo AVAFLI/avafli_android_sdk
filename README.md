@@ -155,9 +155,10 @@ Everything below is built into the drawer; there is nothing to wire up.
     app), the SDK asks for a **6-digit code** emailed to that address before
     merging the streak across devices. Someone who leaves mid-way picks up at
     the code screen next time.
-  - If the platform's email-verification flag is on, a brand-new address shows a
-    dismissible "Verify your email" chip on the dashboard. It never blocks play
-    or the draw; winners prove their inbox at claim time instead.
+  - If the platform's email-verification flag is on (it is off today), a
+    brand-new address shows a dismissible "Verify your email" chip on the
+    dashboard. It never blocks play or the draw; winners prove their inbox at
+    claim time instead. With it off there is no chip.
 - **Every day — the dashboard.** The drawer opens once per calendar day, claims
   that day's entries automatically and celebrates: the day tile checks off, the
   total counts up, a "YOU'RE ON A ROLL!" toast ("YOU'RE IN!" on Day 1). The only
