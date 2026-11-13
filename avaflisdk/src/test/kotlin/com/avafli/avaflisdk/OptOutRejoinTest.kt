@@ -411,9 +411,13 @@ class OptOutRejoinTest {
     }
 
     // ── Where the SDK itself performs the delete ──
+    //
+    // 3.3.1: there is no public optOut(); Avafli.optOut() is internal (reachable
+    // here because tests share the module) and the Privacy Policy screen's
+    // confirmOptOut() below is the only production path.
 
     @Test
-    fun `optOut stores the moment the block lifts`() = runTest(dispatcher) {
+    fun `the internal optOut stores the moment the block lifts`() = runTest(dispatcher) {
         configure()
         advanceUntilIdle()
         coEvery { api.optOut() } returns true

@@ -4,19 +4,32 @@ All notable changes to the Avafli Android SDK are documented in this file.
 Entries for 2.9.6 and earlier predate the Avafli rename (see 3.0.0) and use
 the product's former names.
 
-## Unreleased
+## 3.3.1 — 2026-11-13
+
+### Removed
+
+- **`Avafli.optOut()` — breaking for any app that called it.** A host app can
+  no longer erase a person's Avafli data on their behalf. The only deletion
+  path is the person's own "Delete my data & stop participating" action on
+  the Privacy Policy screen inside the experience, which still performs the
+  same identity-wide erasure, silences the drawer on that device, and allows
+  a rejoin as a brand-new participant after 24 hours (`optedOutUntil`
+  handling unchanged). If your app called `optOut()` from its own
+  delete-account flow, remove the call; there is nothing to replace it with
+  and nothing else for the host app to do. (`AvafliError.NotInitialized` is
+  now raised only by `present()` before `configure()`.)
 
 ### Docs
 
-- README rewritten against the 3.3.0 code: requirements (minSdk 26,
+- README rewritten against the 3.3.x code: requirements (minSdk 26,
   compileSdk 35, Kotlin 2.0+, no Compose needed in the host app), exact
   JitPack coordinate, `Application.onCreate` configuration with the sandbox
   key in debug builds, the user-facing flow (capture, streak ladder, visit
   mode, winner claim with the 6-digit code and the 3-day default claim
-  window, shared-giveaway sponsor line), presentation control, FCM
-  forwarding, `optOut()` + 24-hour rejoin, the analytics events and their
-  parameters, a testing checklist and a complete host-facing API reference
-  with the `AvafliError` cases.
+  window, shared-giveaway sponsor line, in-drawer "Delete my data" + 24-hour
+  rejoin), presentation control, FCM forwarding, the analytics events and
+  their parameters, a testing checklist and a complete host-facing API
+  reference with the `AvafliError` cases.
 - Example app: the SDK is now configured in `ExampleApplication.onCreate`
   (registered in the manifest) with placeholder sandbox/live keys selected by
   `BuildConfig.DEBUG` — the committed live key and the certificate-pinning

@@ -6,7 +6,7 @@
 [![API](https://img.shields.io/badge/minSdk-26-brightgreen.svg)](https://developer.android.com/tools/releases/platforms#8.0)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.1-7F52FF.svg?logo=kotlin&logoColor=white)](https://kotlinlang.org)
 
-Version **3.3.0** · [Changelog](CHANGELOG.md) · [Dashboard](https://sdk.avafli.com/dashboard) · [Docs](https://sdk.avafli.com/android) · [info@avafli.com](mailto:info@avafli.com)
+Version **3.3.1** · [Changelog](CHANGELOG.md) · [Dashboard](https://sdk.avafli.com/dashboard) · [Docs](https://sdk.avafli.com/android) · [info@avafli.com](mailto:info@avafli.com)
 
 Avafli adds a daily-entry sweepstakes to your app. After `Avafli.configure(...)`
 the SDK opens a bottom drawer once a day, captures the user's email (Day 1),
@@ -58,12 +58,12 @@ dependencyResolutionManagement {
 
 ```kotlin
 dependencies {
-    implementation("com.github.AVAFLI:avafli_android_sdk:v3.3.0")
+    implementation("com.github.AVAFLI:avafli_android_sdk:v3.3.1")
 }
 ```
 
 That coordinate is the JitPack build of this repository (Maven group
-`com.avafli`, artifact `avafli-sdk`, version `3.3.0` in `gradle.properties`).
+`com.avafli`, artifact `avafli-sdk`, version `3.3.1` in `gradle.properties`).
 
 ## Configure
 
@@ -189,9 +189,13 @@ Everything below is built into the drawer; there is nothing to wire up.
   location" state instead of claiming.
 - **Branding** comes from the dashboard: logo, prize image and primary colour
   update without an app release. The rest of the design is fixed.
-- **Privacy.** The Privacy Policy page inside the drawer has a "Delete my data &
-  stop participating" section (see [Account deletion](#account-deletion)). The
-  SDK collects no advertising identifier.
+- **Delete my data.** Users delete their Avafli data themselves from the
+  Privacy Policy screen inside the experience ("Delete my data & stop
+  participating"): the erasure is identity-wide, the drawer stays silent on
+  that device for 24 hours, and after that they may join again as a brand-new
+  participant. There is nothing for the host app to do, and no host-app call
+  for it — only the person can erase their own data.
+- **Privacy.** The SDK collects no advertising identifier.
 
 ## Controlling presentation
 
@@ -299,31 +303,6 @@ Both calls are no-ops when `enablePushReminders` is `false`. If
 permission dialog; with any other context it still registers the token but
 leaves the permission to you.
 
-## Account deletion
-
-Users can delete their Avafli data themselves from the Privacy Policy page
-inside the drawer — no integration required. If your app has its own
-delete-account flow, call `optOut()` from it so the user's Avafli data goes
-with their account:
-
-```kotlin
-// optOut() is a suspend function returning Result<Unit>
-lifecycleScope.launch {
-    Avafli.optOut()
-        .onSuccess { /* erased; the drawer stays silent on this device for 24 hours */ }
-        .onFailure { e -> /* AvafliError.NotInitialized if configure() never ran, else the network/server error */ }
-}
-```
-
-What it does: a right-to-delete erasure on the backend — identity-wide (all the
-person's devices), PII anonymised including prize-claim records, entries and
-streaks forfeited and not restorable. De-identified entry records are kept as
-evidence that the drawing was fair. For 24 hours that email and this device
-cannot register and the experience stays silent (this survives a reinstall).
-After 24 hours the person may join again as a brand-new participant: on the
-next `configure()` or foreground the SDK clears what it held for the old
-profile and registers afresh. Nothing for the host app to do.
-
 ## Analytics
 
 Forward the SDK's events to your own analytics by passing an
@@ -380,8 +359,7 @@ Use your `avafli_test_…` key and `debugLogging = true`, then filter Logcat by
 7. **Push.** Call `registerForPushNotifications(activity)` → the Android 13+
    permission dialog appears and `Push token registered successfully` is logged.
 8. **Delete my data.** Dashboard → Privacy Policy → "Delete my data" → the
-   drawer closes and does not reopen; `optOut()` from your own flow behaves the
-   same. A rejoin is possible 24 hours later.
+   drawer closes and does not reopen. A rejoin is possible 24 hours later.
 9. **Winner flow.** Ask Avafli ([info@avafli.com](mailto:info@avafli.com)) to
    draw a winner in your sandbox tenant → the next open shows the splash, the
    code step and the claim form end to end.
@@ -404,7 +382,6 @@ drawer and are not needed for integration.
 | `holdAutoOpen()` / `releaseAutoOpen()` | Defer / resume the once-a-day auto-open. Safe before `configure()`. |
 | `registerForPushNotifications(context: Context)` | Fetch the FCM token and register it; requests `POST_NOTIFICATIONS` on Android 13+ when given an Activity. No-op if `enablePushReminders` is `false`. |
 | `onNewToken(token: String)` | Forward a (new) FCM token. No-op if `enablePushReminders` is `false`. |
-| `suspend optOut(): Result<Unit>` | Right-to-delete erasure + 24-hour silence on this device. See [Account deletion](#account-deletion). |
 
 ### `data class AvafliConfiguration`
 
@@ -447,7 +424,7 @@ drawer and are not needed for integration.
 
 | Error | When |
 | --- | --- |
-| `NotInitialized` | `present()` / `optOut()` before `configure()` |
+| `NotInitialized` | `present()` before `configure()` |
 | `InvalidPublisherKey` | Registration attempted without a key (declared; not reachable through the public API) |
 | `NoGiveaway` | `present()` with no active giveaway and no pending claim |
 | `OptedOut` | `present()` for a user who deleted their data (within the 24 hours) |

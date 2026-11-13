@@ -694,14 +694,24 @@ object Avafli {
     }
 
     /**
-     * Right-To-Delete opt-out: erases the person on the backend (identity-wide,
-     * PII anonymized; entries and streaks are forfeited and cannot be restored)
-     * and silences the experience on this device. For 24 hours that email and
-     * this device cannot register; after that the person may join again as a
-     * brand-new participant with no connection to the old profile. Wire this to
-     * the opt-out action in your privacy-policy flow.
+     * @internal Right-To-Delete erasure — NOT part of the public API (3.3.1).
+     * A host app must never be able to erase a person's Avafli data; the only
+     * deletion path is the person's own "Delete my data & stop participating"
+     * action on the Privacy Policy screen inside the experience. That path is
+     * the legal WebView's `avafli://delete` (legacy `winr://delete`) bridge →
+     * [AvafliExperienceViewModel.showOptOutConfirmation] →
+     * [AvafliExperienceViewModel.confirmOptOut], which performs these same
+     * steps against the ViewModel's own api/prefs. This entry point is the
+     * singleton-scoped equivalent, kept internal for the SDK's own use and its
+     * tests.
+     *
+     * Erases the person on the backend (identity-wide, PII anonymized; entries
+     * and streaks are forfeited and cannot be restored) and silences the
+     * experience on this device. For 24 hours that email and this device
+     * cannot register; after that the person may join again as a brand-new
+     * participant with no connection to the old profile.
      */
-    suspend fun optOut(): Result<Unit> {
+    internal suspend fun optOut(): Result<Unit> {
         val currentApi = api ?: return Result.failure(AvafliError.NotInitialized())
         return try {
             currentApi.optOut()
@@ -780,10 +790,13 @@ object Avafli {
     // the same day farmed unlimited entries. It also destroyed the records proving the
     // drawing was fair, and left prize-claim PII orphaned.
     //
-    // Use `optOut()` instead. It is the correct erasure: identity-wide, PII scrubbed
-    // everywhere including prize claims, tombstoned so it survives a reinstall, and
-    // the email and device stay blocked for 24 hours (3.2.0) — long enough that
-    // delete -> re-register can never farm a second entry the same day.
+    // The in-experience "Delete my data" action (AvafliExperienceViewModel
+    // .confirmOptOut, raised by the Privacy Policy WebView's delete bridge) is
+    // the one erasure: identity-wide, PII scrubbed everywhere including prize
+    // claims, tombstoned so it survives a reinstall, and the email and device
+    // stay blocked for 24 hours (3.2.0) — long enough that delete -> re-register
+    // can never farm a second entry the same day. 3.3.1 removed the public
+    // `optOut()` as well: a host app cannot erase a person's data on their behalf.
 
     // --- Internal API for Activity/ViewModel ---
 
