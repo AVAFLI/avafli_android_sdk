@@ -1,8 +1,29 @@
 # Changelog
 
-All notable changes to the Avafli Android SDK (formerly the WINR Android SDK)
-will be documented in this file. Entries for 2.9.6 and earlier predate the
-rebrand and use the former WINR names.
+All notable changes to the Avafli Android SDK are documented in this file.
+Entries for 2.9.6 and earlier predate the Avafli rename (see 3.0.0) and use
+the product's former names.
+
+## Unreleased
+
+### Docs
+
+- README rewritten against the 3.3.0 code: requirements (minSdk 26,
+  compileSdk 35, Kotlin 2.0+, no Compose needed in the host app), exact
+  JitPack coordinate, `Application.onCreate` configuration with the sandbox
+  key in debug builds, the user-facing flow (capture, streak ladder, visit
+  mode, winner claim with the 6-digit code and the 3-day default claim
+  window, shared-giveaway sponsor line), presentation control, FCM
+  forwarding, `optOut()` + 24-hour rejoin, the analytics events and their
+  parameters, a testing checklist and a complete host-facing API reference
+  with the `AvafliError` cases.
+- Example app: the SDK is now configured in `ExampleApplication.onCreate`
+  (registered in the manifest) with placeholder sandbox/live keys selected by
+  `BuildConfig.DEBUG` — the committed live key and the certificate-pinning
+  override are gone — and `MainActivity` gains an "Open Avafli" button that
+  demonstrates `Avafli.present(activity)` with its callback.
+- KDoc: `AvafliConfiguration` parameters and `AvafliEnvironment` describe the
+  sandbox-key model (Production is the only backend).
 
 
 ## 3.3.0 — 2026-11-08

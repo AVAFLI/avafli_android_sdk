@@ -1,6 +1,7 @@
 package com.avafli.avafliexample
 
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
@@ -13,48 +14,19 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.avafli.avaflisdk.Avafli
-import com.avafli.avaflisdk.AvafliConfiguration
-import com.avafli.avaflisdk.AvafliEnvironment
-import com.avafli.avaflisdk.AvafliOptions
-import com.avafli.avaflisdk.AvafliUser
 
 /**
- * Example activity demonstrating Avafli SDK integration.
+ * The SDK is configured in [ExampleApplication]; this Activity needs no Avafli
+ * code for the default behaviour (the drawer auto-opens once a day).
  *
- * Integration is configure-only: the V2 experience AUTO-OPENS on the first
- * app-open of each calendar day — the `Avafli.configure(...)` call below is the
- * entire integration. Publishers that need control over WHEN it opens set
- * `AvafliConfiguration.autoOpen` and call `Avafli.present(activity)` (see the
- * README's "Controlling when the drawer opens").
- *
- * To demo the auto-open again, clear the app's data (Settings > Apps > Avafli
- * Example > Storage > Clear data) and relaunch.
+ * The button shows the one optional call a publisher may want:
+ * `Avafli.present(activity)` opens the drawer on demand (a rewards button, the
+ * end of onboarding). Pair it with `AvafliAutoOpen.NEVER` to own the timing.
  */
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // Configure Avafli SDK — this is the entire integration.
-        Avafli.configure(
-            AvafliConfiguration(
-                context = this,
-                // Replace with your publisher API key from the Avafli Dashboard.
-                // Never commit a real key to source control.
-                apiKey = "winr_live_50b1b3b801a843d5e1f99593fcad4d14",   // demo key for this example app
-                environment = AvafliEnvironment.Production,
-                user = AvafliUser(
-                    id = "android-example-user",
-                    firstName = "Example",
-                    lastName = "User"
-                ),
-                options = AvafliOptions(
-                    debugLogging = true,
-                    enableCertificatePinning = false // Disabled until pin rotation is automated
-                )
-            )
-        )
-
         setContent {
             ExampleApp()
         }
@@ -94,7 +66,7 @@ class MainActivity : ComponentActivity() {
                     Spacer(modifier = Modifier.height(24.dp))
 
                     Text(
-                        text = "🏆 Avafli SDK Demo",
+                        text = "Avafli SDK Demo",
                         style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.Bold
                     )
@@ -102,12 +74,29 @@ class MainActivity : ComponentActivity() {
                     Spacer(modifier = Modifier.height(16.dp))
 
                     Text(
-                        text = "The Avafli experience opens itself automatically on the " +
-                            "first app-open of each day — no launch code required. " +
-                            "To see the auto-open again, clear the app's data and relaunch.",
+                        text = "The Avafli drawer opens itself on the first app-open of each " +
+                            "day. To see it again today, tap the button, or clear the " +
+                            "app's data and relaunch to replay Day 1.",
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                     )
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    Button(onClick = {
+                        // Publisher-initiated open. The callback receives today's
+                        // grant when entries are claimed during this open, or an
+                        // AvafliError (never thrown) when the drawer cannot open.
+                        Avafli.present(this@MainActivity) { result ->
+                            result
+                                .onSuccess { grant ->
+                                    Log.i(TAG, "Day ${grant.streakDay}: +${grant.entries} entries (total ${grant.totalEntries})")
+                                }
+                                .onFailure { e -> Log.w(TAG, "Avafli did not open: ${e.message}") }
+                        }
+                    }) {
+                        Text("Open Avafli")
+                    }
 
                     Spacer(modifier = Modifier.height(32.dp))
 
@@ -119,5 +108,9 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    private companion object {
+        const val TAG = "AvafliExample"
     }
 }

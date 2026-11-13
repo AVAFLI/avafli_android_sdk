@@ -1,114 +1,48 @@
 # Avafli Android SDK
-**Drop-in sweepstakes, prizing, and gamification for your Android app**
+
+**Drop-in daily-entry sweepstakes for your Android app — one `configure()` call.**
 
 [![JitPack](https://jitpack.io/v/AVAFLI/avafli_android_sdk.svg)](https://jitpack.io/#AVAFLI/avafli_android_sdk)
-[![API](https://img.shields.io/badge/API-26%2B-brightgreen.svg)](https://android-arsenal.com/api?level=26)
-[![Kotlin](https://img.shields.io/badge/Kotlin-2.1%2B-7F52FF.svg?logo=kotlin&logoColor=white)](https://kotlinlang.org)
-[![Compose](https://img.shields.io/badge/Jetpack%20Compose-Material%203-4285F4.svg?logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
+[![API](https://img.shields.io/badge/minSdk-26-brightgreen.svg)](https://developer.android.com/tools/releases/platforms#8.0)
+[![Kotlin](https://img.shields.io/badge/Kotlin-2.1-7F52FF.svg?logo=kotlin&logoColor=white)](https://kotlinlang.org)
+
+Version **3.3.0** · [Changelog](CHANGELOG.md) · [Dashboard](https://sdk.avafli.com/dashboard) · [Docs](https://sdk.avafli.com/android) · [info@avafli.com](mailto:info@avafli.com)
+
+Avafli adds a daily-entry sweepstakes to your app. After `Avafli.configure(...)`
+the SDK opens a bottom drawer once a day, captures the user's email (Day 1),
+claims that day's entries automatically, shows the streak, and — if the user is
+drawn — walks them through the prize claim. Prizes, branding and timing rules
+are managed from the [Avafli Dashboard](https://sdk.avafli.com/dashboard); the
+app ships once.
+
+**Contents:** [Requirements](#requirements) · [Install](#install) · [Configure](#configure) ·
+[What the user sees](#what-the-user-sees) · [Controlling presentation](#controlling-presentation) ·
+[Push reminders](#push-reminders-fcm) · [Account deletion](#account-deletion) ·
+[Analytics](#analytics) · [Testing checklist](#testing-checklist) · [API reference](#api-reference)
 
 ---
 
-## Overview
+## Requirements
 
-Avafli lets you add daily-entry sweepstakes and prize experiences to your app in under 20 lines of code. The V2 experience is a bottom drawer that opens itself on the first app-open of each day, claims the user's daily entries automatically, and celebrates the result. You integrate once; prize configuration and branding are managed server-side from the Avafli dashboard.
+| | |
+| --- | --- |
+| Android | `minSdk 26` (Android 8.0) or higher in your app |
+| `compileSdk` | 35 or higher (the SDK is compiled against API 35) |
+| Kotlin / JVM | Kotlin 2.0+ (the SDK is built with Kotlin 2.1.0), Java 17 toolchain |
+| Android Gradle Plugin | 8.x (built with 8.7.3), AndroidX enabled |
+| UI toolkit | None required on your side. The drawer is Jetpack Compose + Material 3 internally and is pulled in transitively (Compose BOM 2024.12.01); your app can be Views, Compose or anything else. |
+| Firebase Cloud Messaging | Optional — only for push reminders (see [Push reminders](#push-reminders-fcm)) |
+| API key | From your dashboard: `avafli_live_…` for release builds and `avafli_test_…` for debug builds. Keys issued before the Avafli rename keep their original prefix and stay valid. No key yet? [Pricing](https://sdk.avafli.com/pricing) · [info@avafli.com](mailto:info@avafli.com) |
 
-**Key capabilities:**
-- **Daily entry sweepstakes** — Users earn entries every day they engage
-- **V2 auto-open experience** — The bottom-drawer experience opens itself on the first app-open of each day and grants entries automatically
-- **Daily streak + auto-claim** — Entries climb a +10/day ladder; the drawer auto-opens once per day and claims that day's entries (publishers can take over the timing with `autoOpen` + `Avafli.present()`, see below)
-- **Email capture** — The SDK captures an email through its own opt-in screen, with an UNCHECKED-by-default marketing-consent tick and a publisher-configurable age gate
-- **Cross-device verified adoption** — When a typed email matches an existing account, the SDK confirms a 6-digit code before merging the streak across devices
-- **Soft email verification** — A brand-new typed email shows a persistent, dismissible "Verify your email" chip; it never blocks play or the prize draw; confirming early means no code step if they win
-- **Winner claim flow** — "WE HAVE A WINNER!" banner and an in-drawer prize-claim flow (6-digit email code, name, shipping address incl. DC, optional photo, claim number)
-- **Shared giveaway sponsor line** — When a publisher opts into the shared giveaway (Avafli LLC as Sponsor of Record), a small "Sponsored by Avafli LLC" line renders under the prize; exclusive giveaways show nothing extra
-- **Visit mode** — A never-resetting streak variant for low-frequency apps
-- **Push reminders** — Drive re-engagement with daily nudges (FCM); requests POST_NOTIFICATIONS on Android 13+
-- **Server-driven branding** — Logo, prize image, and primary color update without app releases
-- **GDPR/CCPA compliant** — Built-in consent flows, RTD opt-out via `optOut()`, and a self-serve "Delete my data & stop participating" section inside the in-app Privacy Policy
-- **No ad tracking** — The SDK collects no advertising identifiers (no Google advertising ID)
-- **Analytics forwarding** — Route SDK events to your existing analytics stack
+Nothing to add to your manifest: the SDK's manifest merges in `INTERNET`,
+`ACCESS_NETWORK_STATE`, `POST_NOTIFICATIONS` (requested at runtime only when
+push reminders are enabled) and its own translucent, non-exported
+`AvafliExperienceActivity`. R8/ProGuard rules ship as consumer rules — no
+`-keep` lines needed.
 
-## Quick Start
+## Install
 
-```kotlin
-import com.avafli.avaflisdk.Avafli
-import com.avafli.avaflisdk.AvafliAutoOpen
-import com.avafli.avaflisdk.AvafliConfiguration
-import com.avafli.avaflisdk.AvafliOptions
-import com.avafli.avaflisdk.AvafliUser
-
-val config = AvafliConfiguration(
-    context = applicationContext,
-    apiKey = "YOUR_API_KEY",  // debug builds: use your avafli_test_ sandbox key
-    autoOpen = AvafliAutoOpen.ALWAYS,  // or RETURNING_USERS_ONLY / NEVER
-    user = AvafliUser(
-        id = "user_123",              // only id is required — pass whatever identity you have
-        firstName = "Jane",
-        lastName = "Doe",
-        email = "jane@example.com"    // include it when you have it — pre-fills & locks the capture form (consent stays explicit)
-    ),
-    // Nobody signed in? use user = AvafliUser.GUEST
-    options = AvafliOptions(
-        debugLogging = false,         // true while integrating
-        enablePushReminders = true    // streak reminders via YOUR Firebase project (upload the key in your dashboard)
-    )
-)
-Avafli.configure(config)
-
-// Done — auto-opens once a day. To open it yourself: Avafli.present()
-// Push reminders: forward your FCM token from your FirebaseMessagingService:
-//   Avafli.onNewToken(token)
-```
-
-> **Auto-open:** After `configure()`, the SDK presents the experience automatically once per calendar day (after registration and on activity resumes — a new day re-opens it even if the app stayed in memory). It can be disabled remotely via the dashboard's `experience.autoOpenEnabled` kill switch; unregistered users see at most 3 auto-opens until they submit an email, and RTD opted-out users do not see it. To decide when/how the drawer appears yourself, see [Controlling when the drawer opens](#controlling-when-the-drawer-opens).
-
-### Identity — pass what you have, the SDK captures the rest
-
-Only `id` is required. Construct an `AvafliUser` from whatever identity data you
-already hold — even just an id — and the SDK fills in the gaps: it captures the
-email through its own screen, and the name at prize-claim time if the user wins.
-There are three cases:
-
-**1. Signed-in user without an email (the common case, and Avafli's main value).**
-Pass the id plus whatever you have and OMIT `email`. The SDK shows its capture
-screen and the user types their email — so you capture an address you didn't
-have before:
-
-```kotlin
-user = AvafliUser(id = "user_123", firstName = "Jane", lastName = "Doe")   // no email
-```
-
-Even just `AvafliUser(id = "user_123")` is valid — name is collected later at
-prize-claim, only if they win.
-
-**2. Signed-in user with an email.** Pass `email` too and it pre-fills and
-**locks** the capture field (consent is still an explicit tick inside the flow).
-`email` is a plain `String`:
-
-```kotlin
-user = AvafliUser(id = "user_123", firstName = "Jane", lastName = "Doe", email = "jane@example.com")
-```
-
-**3. No signed-in user at all.** Pass `AvafliUser.GUEST`:
-
-```kotlin
-Avafli.configure(AvafliConfiguration(
-    context = applicationContext,
-    apiKey = "YOUR_API_KEY",
-    user = AvafliUser.GUEST,
-))
-```
-
-The SDK mints a stable per-install guest id (`avafli_guest_…`) for attribution —
-never fabricate placeholder ids yourself. The experience is fully functional
-for guests. When the user signs in, call `configure` again with the real user:
-attribution upgrades in place and the streak carries over automatically.
-
-## Installation
-
-### 1. Add JitPack repository
-
-In your project-level `settings.gradle.kts`:
+**1. JitPack repository** — project-level `settings.gradle.kts`:
 
 ```kotlin
 dependencyResolutionManagement {
@@ -120,9 +54,7 @@ dependencyResolutionManagement {
 }
 ```
 
-### 2. Add dependency
-
-In your app-level `build.gradle.kts`:
+**2. Dependency** — app-level `build.gradle.kts`:
 
 ```kotlin
 dependencies {
@@ -130,184 +62,228 @@ dependencies {
 }
 ```
 
-> **Note:** Contact [AVAFLI](https://sdk.avafli.com/pricing) to obtain an API key.
+That coordinate is the JitPack build of this repository (Maven group
+`com.avafli`, artifact `avafli-sdk`, version `3.3.0` in `gradle.properties`).
 
-## Configuration
+## Configure
 
-Initialize the SDK with your API key and user:
-
-```kotlin
-val config = AvafliConfiguration(
-    context = applicationContext,
-    apiKey = "avafli_live_xxxxxxxxxx",
-    autoOpen = AvafliAutoOpen.ALWAYS,  // or RETURNING_USERS_ONLY / NEVER
-    environment = AvafliEnvironment.Production,
-    user = AvafliUser(
-        id = "user_abc123",
-        firstName = "Jane",
-        lastName = "Doe",
-        phone = "+15551234567"  // optional
-    ),
-    options = AvafliOptions(
-        debugLogging = true,
-        analyticsAdapter = myAdapter,
-        enablePushReminders = true
-    )
-)
-
-Avafli.configure(config)
-```
-
-### AvafliConfiguration
-
-| Parameter | Type | Required | Description |
-| --------- | ---- | -------- | ----------- |
-| `context` | `Context` | ✅ | Application or Activity context |
-| `apiKey` | `String` | ✅ | Your Avafli API key from the dashboard |
-| `user` | `AvafliUser` | ✅ | The authenticated user |
-| `options` | `AvafliOptions?` | — | Optional behavior toggles |
-| `autoOpen` | `AvafliAutoOpen` | — | `ALWAYS` (default), `RETURNING_USERS_ONLY`, or `NEVER` — see [Controlling when the drawer opens](#controlling-when-the-drawer-opens) |
-
-> **App ID:** The SDK auto-detects your Android application ID from the host `Context` (`context.packageName`). You do not pass it manually.
-
-### AvafliOptions
-
-| Parameter | Type | Default | Description |
-| --------- | ---- | ------- | ----------- |
-| `debugLogging` | `Boolean` | `false` | Enable verbose logging |
-| `analyticsAdapter` | `AnalyticsAdapter?` | `null` | Routes SDK events to your analytics stack |
-| `enablePushReminders` | `Boolean` | `true` | Enables streak reminder push notifications (requires FCM in the host app) |
-| `enableCertificatePinning` | `Boolean` | `true` | Certificate pinning for backend calls (recommended for production) |
-| `networkTimeoutSeconds` | `Long` | `30` | Custom timeout for network requests |
-
-### AvafliUser
-
-| Parameter | Type | Required | Description |
-| --------- | ---- | -------- | ----------- |
-| `id` | `String` | ✅ | Unique, stable user identifier (the only required field) |
-| `firstName` | `String` | — | User's first name; captured at prize-claim if omitted |
-| `lastName` | `String` | — | User's last name; captured at prize-claim if omitted |
-| `phone` | `String?` | — | Phone number in E.164 format |
-| `email` | `String?` | — | If passed, pre-fills and locks the capture field; if omitted, the SDK captures it |
-
-> **Email:** Omit it and the SDK captures an address through its own opt-in
-> screen (the common case). Pass it and that address pre-fills and locks —
-> consent is still an explicit tick inside the flow. See the three identity
-> cases above.
-
-## Test in Development: Your Sandbox Key
-
-Your publisher dashboard shows two API keys:
-
-| Key | Use it in |
-| --- | --------- |
-| `avafli_live_…` | Release builds — your real giveaway |
-| `avafli_test_…` | Debug/dev builds and CI — an isolated sandbox |
-
-The sandbox key hits the **same production backend** with identical behavior —
-registration, streaks, entries, the full experience — but every user and entry
-lands in a separate sandbox tenant with its own always-active test giveaway.
-That means:
-
-- Your developers and testers **can never enter (or win) your real giveaway.**
-- Sandbox usage **never counts toward your MAU** or your bill.
-- Your registered bundle IDs work with both keys automatically.
-
-Swap keys per build configuration and nothing else about your integration
-changes.
-
-## The Experience
-
-The V2 experience presents itself automatically once per calendar day (first app-open of the day). Entries are claimed automatically when it opens, and the celebration is the first thing the user sees: the dashboard opens with today's grant already showing — the day tile checks off with a confetti burst, the total counts up and pops, and the bar leads with a "YOU'RE ON A ROLL!" toast before settling into the come-back message. There is no button to tap to collect entries (the pill just reads GOT IT and closes) — after `configure()`, the SDK handles everything: presentation timing, entry claiming, and celebration. Publishers who need to control the timing (for example, not over a first-run onboarding) use the options in the next section. Brand-new users first submit their email, then land straight on the same celebrating dashboard — the toast just reads "YOU'RE IN!" on Day 1.
-
-## Controlling when the drawer opens
-
-By default nothing changes: the SDK registers the device on `configure()` and auto-opens the drawer once per calendar day when eligible. Three optional controls let you decide when and how it appears instead. **In every mode, device registration and analytics (DAU/MAU, `lastSeenAt`, SDK version) still run inside `configure()`** — only the presentation timing changes.
-
-### `AvafliConfiguration.autoOpen`
-
-| Value | Behavior |
-| ----- | -------- |
-| `AvafliAutoOpen.ALWAYS` (default) | Auto-open once per calendar day when eligible — today's behavior. |
-| `AvafliAutoOpen.RETURNING_USERS_ONLY` | Skip the auto-open for the session in which this device registered for the first time (so a first-run onboarding is never interrupted). Every later launch auto-opens as normal. |
-| `AvafliAutoOpen.NEVER` | The SDK never auto-opens; you call `Avafli.present(activity)`. |
-
-The dashboard can also set a server-side mode (`experience.autoOpenMode`); the effective mode is the most restrictive of the server's and yours (`NEVER` > `RETURNING_USERS_ONLY` > `ALWAYS`), and `experience.autoOpenEnabled = false` remains the hard kill switch.
-
-### `Avafli.present(activity, callback)`
-
-Opens the drawer on demand — from a button, a rewards screen, or the end of onboarding. It applies the same guards as the auto-open (configured, not opted out, publisher not suspended, an active giveaway exists, not already on screen) and waits for an in-flight registration rather than racing it; failures are reported to the optional `callback`, never thrown. An explicit `present()` bypasses the once-per-day mark and the unregistered impression cap, does not count an impression, and on close writes the once-per-day mark so the auto-open does not pop again the same day.
-
-### `Avafli.holdAutoOpen()` / `Avafli.releaseAutoOpen()`
-
-`holdAutoOpen()` may be called before `configure()`; while held, the once-a-day auto-open is deferred and nothing is burned (no mark, no impression). `present()` still works while held. `releaseAutoOpen()` clears the hold and immediately re-runs the eligibility check. Both are safe before `configure()` and idempotent.
-
-### Example: show the drawer after onboarding
+Call `Avafli.configure(...)` once, as early as possible — `Application.onCreate()`
+is the right place. `configure()` registers the device with the backend (this is
+also what powers your dashboard's DAU/MAU), then auto-opens the drawer when it is
+eligible (see [Controlling presentation](#controlling-presentation)). The SDK
+keeps only the application context and watches Activity lifecycle itself, so you
+never pass an Activity to `configure()`; the drawer opens over whichever of your
+Activities is in the foreground.
 
 ```kotlin
-// Application / first Activity — register on launch, but don't pop over onboarding.
-Avafli.configure(
-    AvafliConfiguration(
-        context = this,
-        apiKey = "avafli_live_xxxxxxxxxx",
-        user = AvafliUser(id = "user_abc123"),
-        // NEVER = you own the timing entirely; RETURNING_USERS_ONLY = only the
-        // very first session is skipped and later launches auto-open as usual.
-        autoOpen = AvafliAutoOpen.RETURNING_USERS_ONLY,
-    )
-)
+// ExampleApplication.kt
+import android.app.Application
+import com.avafli.avaflisdk.Avafli
+import com.avafli.avaflisdk.AvafliAutoOpen
+import com.avafli.avaflisdk.AvafliConfiguration
+import com.avafli.avaflisdk.AvafliOptions
+import com.avafli.avaflisdk.AvafliUser
 
-// Last onboarding screen — open it yourself when the user is ready.
-fun onOnboardingFinished(activity: Activity) {
-    Avafli.present(activity)
+class ExampleApplication : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        Avafli.configure(
+            AvafliConfiguration(
+                context = this,
+                // Sandbox key in debug builds, live key in release builds.
+                apiKey = if (BuildConfig.DEBUG) "avafli_test_XXXXXXXX" else "avafli_live_XXXXXXXX",
+                // Only `id` is required. Pass what you have; the SDK captures the rest.
+                user = AvafliUser(
+                    id = "user_123",
+                    firstName = "Jane",             // optional — asked at prize claim if missing
+                    lastName = "Doe",               // optional
+                    email = "jane@example.com",     // optional — pre-fills AND locks the capture field
+                ),
+                autoOpen = AvafliAutoOpen.ALWAYS,   // default; or RETURNING_USERS_ONLY / NEVER
+                options = AvafliOptions(
+                    debugLogging = BuildConfig.DEBUG,  // Logcat tag "Avafli-SDK"
+                    enablePushReminders = true,        // default; needs FCM in your app, see below
+                ),
+            )
+        )
+    }
 }
 ```
 
-## Email Capture & Verification
+Register the class in `AndroidManifest.xml` (`<application android:name=".ExampleApplication" …>`).
+`BuildConfig` needs `buildFeatures { buildConfig = true }` in your module when
+you use it for the key switch.
 
-Email is captured inside the SDK's own opt-in screen (see the identity section above). The screen shows a publisher-configurable **age gate** — an affirmative tick that gates the CTA — and a **marketing-consent** checkbox that is **unchecked by default** and never gates entry (declining it costs neither the entry nor, if drawn, winner contact).
+### Identity: pass what you have
 
-Two verification paths run from that screen:
+| Situation | What to pass | What the SDK does |
+| --- | --- | --- |
+| Signed-in user, no email on file | `AvafliUser(id = "user_123")` (+ name if known) | Shows its own email-capture screen on Day 1 — you end up with an address you did not have |
+| Signed-in user with a verified email | `AvafliUser(id = "user_123", email = "jane@example.com")` | Pre-fills the capture field and **locks** it (consent is still an explicit tick). A malformed value is ignored and the field stays editable |
+| Nobody signed in | `AvafliUser.GUEST` | Mints a stable per-install guest id (`avafli_guest_…`). Never fabricate placeholder ids yourself |
 
-- **Cross-device verified adoption.** When the typed email matches an existing Avafli account (from another device or install), the SDK asks for a **6-digit code** emailed to that address before the two identities are merged — so a streak follows the person across devices without letting anyone attach to someone else's record.
-- **Soft email verification (2.7.0+).** A brand-new, never-before-seen typed email surfaces a persistent, dismissible **"Verify your email"** chip on the dashboard. It **never blocks play or the prize draw** — every active account is eligible. Confirming early just means the person skips the code step if they win.
+When a guest signs in later, call `Avafli.configure(...)` again with the real
+user: attribution upgrades in place and the streak (device-anchored) carries
+over. Calling `configure()` more than once is safe.
 
-## Winner Experience
+### Sandbox vs live keys
 
-When one of your users is drawn as a giveaway winner, the drawer automatically opens on a winner splash instead of the dashboard, then walks them through a prize-claim form (name, shipping address, optional photo) and a confirmation with their claim number. This requires no integration work — the flow appears only for the drawn winner and disappears once their claim is submitted.
+Your dashboard shows two keys. Both hit the same production backend with
+identical behaviour; the sandbox key puts every user and entry in an isolated
+sandbox tenant with its own always-active test giveaway.
 
-### Prize claims
+| Key | Use in | Effect |
+| --- | --- | --- |
+| `avafli_live_…` | Release builds | Your real giveaway, counts toward MAU |
+| `avafli_test_…` | Debug builds, CI | Testers can never enter or win the real giveaway; never counts toward MAU or billing |
 
-Before the claim form opens, a winner enters a **6-digit code** sent to the email address on their account — proof that they control that inbox. Winners who proved it earlier (for example through the cross-device code) skip the step. The state lives on the server, so a winner who closes the drawer, restarts the app or switches device picks up exactly where they left off. There is nothing for the host app to do.
+Your registered application IDs work with both keys. The SDK reads the
+application ID from the `Context` (`packageName`) — register it in the dashboard
+or registration fails with an `ERROR`-level Logcat line and the drawer never
+appears.
 
-### Getting back to a pending claim
+## What the user sees
 
-A winner who closes the drawer can always get back to their claim. While a claim is pending, the auto-open is not held back by the once-per-day mark, the unregistered impression cap (no impression is counted) or `RETURNING_USERS_ONLY`: the drawer opens on every app launch, and when the app returns to the foreground if at least 30 minutes have passed since it last opened for the claim. `holdAutoOpen()`, the opt-out, a suspended account and the `autoOpenEnabled` kill switch still apply. With `autoOpen = NEVER` (client or server) nothing opens by itself — call `Avafli.present(activity)`, which lands on the winner splash while a claim is pending. Once the claim is submitted the normal once-per-day rules apply again.
+Everything below is built into the drawer; there is nothing to wire up.
 
-A pending claim needs no active giveaway. A giveaway has ended by the time its winner is drawn, so unless the next one is already running the winner arrives with a claim and nothing else: the drawer still opens (automatically, or through `Avafli.present(activity)`) on the winner splash, and closing or finishing the winner flow closes the drawer. Without a pending claim, no active giveaway still means nothing opens and `present()` reports `AvafliError.NoGiveaway`.
+- **Day 1 — email capture.** A capture screen with an age gate (minimum age is
+  configured per publisher in the dashboard; default 18) and a marketing-consent
+  checkbox that is **unchecked by default** and never gates entry. Official
+  Rules and the Privacy Policy open inside the drawer (in-app WebView). Submit
+  claims Day 1 entries immediately.
+  - If the typed email already belongs to an Avafli account (another device or
+    app), the SDK asks for a **6-digit code** emailed to that address before
+    merging the streak across devices. Someone who leaves mid-way picks up at
+    the code screen next time.
+  - If the platform's email-verification flag is on, a brand-new address shows a
+    dismissible "Verify your email" chip on the dashboard. It never blocks play
+    or the draw; winners prove their inbox at claim time instead.
+- **Every day — the dashboard.** The drawer opens once per calendar day, claims
+  that day's entries automatically and celebrates: the day tile checks off, the
+  total counts up, a "YOU'RE ON A ROLL!" toast ("YOU'RE IN!" on Day 1). The only
+  button is GOT IT. Entries follow the giveaway's **streak ladder**, configured
+  in the dashboard (the default ladder is +10 entries per consecutive day for 30
+  days: 10, 20 … 300). Miss a day and the streak resets — unless the giveaway
+  uses **visit mode**, a never-resetting variant for low-frequency apps.
+- **"WE HAVE A WINNER!" banner** on the dashboard with the latest winner —
+  shown only when enabled for your app in the dashboard (off by default).
+- **Winner flow.** When one of your users is drawn, the next open lands on a
+  winner splash instead of the dashboard (a pending claim opens even if the
+  giveaway has already ended and nothing else is running). Before the claim
+  form, the winner enters a **6-digit code** sent to the email on their account
+  (skipped if they proved that inbox earlier). The form collects name, optional
+  phone, a US shipping address (50 states + DC; address autocomplete when you
+  add a Google Places key in the dashboard), an optional photo and an optional
+  story/share step, and ends with a claim number. Progress lives on the server,
+  so closing the drawer, reinstalling or switching device resumes where they
+  were. Winners have a **claim window** to submit — 3 days (72 hours) by
+  default, configurable per giveaway in the dashboard (1–60 days); an expired
+  claim is not redrawn automatically.
+- **Shared giveaway sponsor line (3.3.0).** If you opt your app into the shared
+  giveaway (one prize pool across many Avafli apps, Avafli LLC as Sponsor of
+  Record), a small "Sponsored by Avafli LLC" line appears under the prize on the
+  capture screen, the dashboard and the winner splash. It is legally required
+  and cannot be turned off. Exclusive giveaways show nothing extra.
+- **US only.** The backend geo-fences every request; outside the US (or when
+  the location cannot be verified) the drawer shows a "not available in your
+  location" state instead of claiming.
+- **Branding** comes from the dashboard: logo, prize image and primary colour
+  update without an app release. The rest of the design is fixed.
+- **Privacy.** The Privacy Policy page inside the drawer has a "Delete my data &
+  stop participating" section (see [Account deletion](#account-deletion)). The
+  SDK collects no advertising identifier.
 
-### Shared giveaways: sponsor disclosure (3.3.0)
+## Controlling presentation
 
-A publisher can opt into the **shared giveaway** — one shared prize pool across many Avafli apps, with Avafli LLC as Sponsor of Record. The served giveaway then carries `scope: "network"` and a short `sponsorDisclosure` string (for example "Sponsored by Avafli LLC"), and so does the winner's `prizeClaim` block. The SDK shows that line, small and muted, directly under the prize wherever the prize is presented: the Day-1 email-capture strip, the dashboard prize card and the winner splash. The disclosure is legally required and cannot be turned off. For an exclusive (publisher-sponsored) giveaway both fields are absent and nothing changes — the drawer looks exactly as it did in 3.2.2. Nothing for the host app to do.
+By default: register on `configure()`, auto-open once per calendar day (after
+registration finishes, and on any Activity resume — a new day re-opens it even
+if the app stayed in memory). Three controls change *when* it appears. Device
+registration and analytics run inside `configure()` in every mode.
 
-## Push Notifications
+### `AvafliConfiguration.autoOpen`
 
-Drive re-engagement with daily reminders. Publishers forward their FCM token to Avafli:
+| Value | Behaviour |
+| --- | --- |
+| `AvafliAutoOpen.ALWAYS` (default) | Auto-open once per calendar day when eligible |
+| `AvafliAutoOpen.RETURNING_USERS_ONLY` | Skip the auto-open for the session in which this device registered for the first time (never interrupt a first-run onboarding); every later launch auto-opens |
+| `AvafliAutoOpen.NEVER` | Never auto-open; you call `Avafli.present(activity)` |
 
-### 1. Setup Firebase Cloud Messaging
+The dashboard can set a server-side mode too; the effective mode is the most
+restrictive of yours and the server's (`NEVER` > `RETURNING_USERS_ONLY` >
+`ALWAYS`), and the dashboard's auto-open kill switch always wins.
 
-Follow the [Firebase Android setup guide](https://firebase.google.com/docs/cloud-messaging/android/client) if you haven't already.
+### `Avafli.present(activity, callback)`
 
-### 2. Register for Notifications
+Opens the drawer now — from a button, a rewards screen, the end of onboarding.
 
 ```kotlin
-// After Avafli.configure() — no-op if AvafliOptions.enablePushReminders is false
-Avafli.registerForPushNotifications(context)
+Avafli.present(this) { result ->          // `this` = the current Activity
+    result.onSuccess { grant -> /* today's entries were claimed in this open: grant.entries, grant.streakDay, grant.totalEntries */ }
+          .onFailure { e -> /* AvafliError — see the table in the API reference */ }
+}
 ```
 
-### 3. Forward FCM Token
+- Same guards as the auto-open: configured, user not opted out, publisher not
+  suspended, an active giveaway (or a pending prize claim), not already on
+  screen. Failures go to the optional callback — never thrown.
+- If `configure()`'s registration is still in flight, `present()` waits for it,
+  then opens.
+- Bypasses the once-per-day mark and the unregistered-impression cap and does
+  not count an impression. When the drawer closes, the once-per-day mark is
+  written so the auto-open does not pop again that day.
+- The callback fires with `Result.success(grant)` only if today's entries were
+  claimed during that open (not when they were already claimed earlier). A
+  second `present()` while the drawer is open is a no-op and does not invoke
+  the callback.
+
+### `Avafli.holdAutoOpen()` / `Avafli.releaseAutoOpen()`
+
+For boot flows (splash, onboarding, a sign-in wall). Both are safe before
+`configure()` and idempotent.
 
 ```kotlin
+Avafli.holdAutoOpen()          // e.g. first thing in Application.onCreate
+Avafli.configure(config)       // registers; the drawer stays closed
+// … onboarding …
+Avafli.releaseAutoOpen()       // re-runs the eligibility check immediately
+```
+
+While held nothing is burned — no once-per-day mark, no impression — and
+`present()` still works.
+
+### Eligibility rules the auto-open applies
+
+- Once per calendar day (device local date), after registration succeeded.
+- Users who have not submitted an email see at most **3** auto-opens in total
+  (dashboard-configurable), then silence until they register.
+- Opted-out users and suspended publishers never see it.
+- **Pending prize claim:** while a claim is pending the once-per-day mark, the
+  impression cap and `RETURNING_USERS_ONLY` no longer hold the drawer back — it
+  opens once per app launch and, on return to the foreground, at most every 30
+  minutes until the claim is submitted. `holdAutoOpen()`, `NEVER`, the opt-out
+  and the kill switch still apply (on `NEVER`, open it with `present()`; it lands
+  on the winner splash).
+- If `configure()`'s registration failed with a network error, the next Activity
+  resume retries it and then runs the eligibility check.
+
+## Push reminders (FCM)
+
+Streak reminders are sent from **your** Firebase project through Avafli's
+backend. The SDK's only job is to hand your FCM token to Avafli; schedules and
+copy are configured in the dashboard.
+
+1. Set up [Firebase Cloud Messaging](https://firebase.google.com/docs/cloud-messaging/android/client)
+   in your app (the SDK compiles against `firebase-messaging` but does not bundle
+   it — your app provides it at runtime).
+2. Upload your FCM service-account key in the [Avafli Dashboard](https://sdk.avafli.com/dashboard).
+3. Keep `AvafliOptions.enablePushReminders = true` (the default) and forward tokens:
+
+```kotlin
+// After configure(), from an Activity: fetches the current token and, on
+// Android 13+, requests POST_NOTIFICATIONS if not yet granted.
+Avafli.registerForPushNotifications(this)
+
+// Keep the backend current when FCM rotates the token:
 class MyFirebaseMessagingService : FirebaseMessagingService() {
     override fun onNewToken(token: String) {
         super.onNewToken(token)
@@ -316,113 +292,187 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
 }
 ```
 
-### 4. Upload FCM Service Account Key
+Both calls are no-ops when `enablePushReminders` is `false`. If
+`firebase-messaging` is not on the runtime classpath,
+`registerForPushNotifications()` logs at debug level and does nothing.
+`registerForPushNotifications()` needs an Activity context to show the
+permission dialog; with any other context it still registers the token but
+leaves the permission to you.
 
-Upload your FCM service account key via the [Avafli Dashboard](https://sdk.avafli.com/dashboard) to enable push notifications. Reminder schedules and messaging are configured server-side from the dashboard.
+## Account deletion
 
-## Customization
+Users can delete their Avafli data themselves from the Privacy Policy page
+inside the drawer — no integration required. If your app has its own
+delete-account flow, call `optOut()` from it so the user's Avafli data goes
+with their account:
 
-The V2 experience is hardcoded to the Avafli design; publishers customize exactly three things through the [Avafli Dashboard](https://sdk.avafli.com/dashboard):
+```kotlin
+// optOut() is a suspend function returning Result<Unit>
+lifecycleScope.launch {
+    Avafli.optOut()
+        .onSuccess { /* erased; the drawer stays silent on this device for 24 hours */ }
+        .onFailure { e -> /* AvafliError.NotInitialized if configure() never ran, else the network/server error */ }
+}
+```
 
-- **Logo** — Shown in the drawer header
-- **Prize image** — Art for the dashboard prize card
-- **Primary color** — Accent for CTAs, streak tiles, and highlights
-
-Plus prize configuration (active giveaways, the entry ladder) and push reminder schedules.
-
-Changes apply instantly across all app installations without requiring an app update.
+What it does: a right-to-delete erasure on the backend — identity-wide (all the
+person's devices), PII anonymised including prize-claim records, entries and
+streaks forfeited and not restorable. De-identified entry records are kept as
+evidence that the drawing was fair. For 24 hours that email and this device
+cannot register and the experience stays silent (this survives a reinstall).
+After 24 hours the person may join again as a brand-new participant: on the
+next `configure()` or foreground the SDK clears what it held for the old
+profile and registers afresh. Nothing for the host app to do.
 
 ## Analytics
 
-Forward Avafli events to your existing analytics stack:
+Forward the SDK's events to your own analytics by passing an
+`AnalyticsAdapter` in `AvafliOptions`. The interface has three methods; the SDK
+currently calls only `trackEvent` (implement the other two as no-ops).
+`ConsoleAnalyticsAdapter` logs everything to Logcat (tag `Avafli-Analytics`)
+for development.
 
 ```kotlin
+import com.avafli.avaflisdk.services.analytics.AnalyticsAdapter
+
 class MyAnalyticsAdapter : AnalyticsAdapter {
-    override fun trackEvent(name: String, params: Map<String, Any?>) {
-        // Forward to Amplitude, Mixpanel, Segment, etc.
-        analytics.track(name, params)
-    }
-
-    override fun trackScreenView(screenName: String) {
-        // Track screen views
-    }
-
-    override fun setUserProperty(key: String, value: String) {
-        // Set user properties
-    }
+    override fun trackEvent(name: String, params: Map<String, Any?>) { analytics.track(name, params) }
+    override fun trackScreenView(screenName: String) {}
+    override fun setUserProperty(key: String, value: String) {}
 }
 
-// Pass during configuration
-val options = AvafliOptions(
-    analyticsAdapter = MyAnalyticsAdapter()
-)
+AvafliOptions(analyticsAdapter = MyAnalyticsAdapter())
 ```
 
-**Events emitted by the SDK:**
-- `avafli_daily_entry_claimed` — Daily entries awarded (auto-claimed on open). Params: `day`, `entries`.
-- `avafli_email_verified` / `avafli_adoption_restaged` — Email verification confirmed / an abandoned cross-device adoption re-staged
-- `avafli_winner_claim_shown` / `avafli_prize_claim_submitted` — Winner claim flow shown / submitted
-- `avafli_opted_out` — Right-to-delete opt-out completed
+| Event | When | Params |
+| --- | --- | --- |
+| `avafli_daily_entry_claimed` | Today's entries were claimed (auto-claim on open, or an offline retry that landed later) | `day`, `entries`, optional `weekly_bonus`, `monthly_bonus`, `milestone_day`; `recovered_offline = true` on a retry |
+| `avafli_email_verified` | The user confirmed the email-verification code | — |
+| `avafli_adoption_restaged` | A parked cross-device link re-opened on the code screen | — |
+| `avafli_winner_claim_shown` | The winner splash was shown | `giveaway_id` |
+| `avafli_prize_claim_submitted` | The claim form was submitted | `giveaway_id`, `claim_number` |
+| `avafli_opted_out` | The user deleted their data from inside the drawer | — |
 
-## Account deletion in your app
+Events emitted while offline are buffered (last 100, persisted) and flushed on
+reconnect with `original_timestamp` / `original_timestamp_ms` added.
 
-If your app has its own delete-account flow, call `optOut()` from it so the
-user's Avafli data is erased along with their account. Users can also delete
-their data themselves at any time from the Privacy Policy screen inside the
-experience — no integration required.
+## Testing checklist
 
-```kotlin
-// From your delete-account flow (optOut is a suspend function)
-lifecycleScope.launch {
-    Avafli.optOut()
-        .onSuccess { /* Avafli data erased, experience silenced for 24 hours */ }
-        .onFailure { error -> /* Handle error */ }
-}
-```
+Use your `avafli_test_…` key and `debugLogging = true`, then filter Logcat by
+`Avafli-SDK`.
 
-The erasure is identity-wide (one call covers all of the person's devices)
-and includes prize-claim records. Entries and streaks are forfeited and cannot
-be restored. De-identified entry records are retained as the legally required
-evidence that drawings were fair (GDPR Art. 17(3)): the person is erased, the
-proof is kept.
+1. **Registration.** First launch logs `Device registered successfully`. An
+   `ERROR` line mentioning the API key or bundle ID means the key is wrong or the
+   application ID is not registered in the dashboard.
+2. **Day 1.** The drawer opens on the capture screen; submit an email → the
+   dashboard shows Day 1 claimed with the "YOU'RE IN!" toast.
+3. **Day 2.** Change the device date to tomorrow (or wait), relaunch → the
+   drawer opens by itself and Day 2 is claimed. Same day again → it does not
+   re-open (once per day).
+4. **Reset.** To replay Day 1: clear the app's data (Settings → Apps → your app →
+   Storage → Clear data). The sandbox tenant lets you register as many test
+   users as you like.
+5. **Presentation control.** With `autoOpen = NEVER`, nothing opens by itself
+   and `Avafli.present(activity)` opens the drawer; the callback receives the
+   grant on the first open of the day.
+6. **Unregistered cap.** Close the capture screen without submitting on three
+   different days → the fourth day stays quiet until an email is submitted.
+7. **Push.** Call `registerForPushNotifications(activity)` → the Android 13+
+   permission dialog appears and `Push token registered successfully` is logged.
+8. **Delete my data.** Dashboard → Privacy Policy → "Delete my data" → the
+   drawer closes and does not reopen; `optOut()` from your own flow behaves the
+   same. A rejoin is possible 24 hours later.
+9. **Winner flow.** Ask Avafli ([info@avafli.com](mailto:info@avafli.com)) to
+   draw a winner in your sandbox tenant → the next open shows the splash, the
+   code step and the claim form end to end.
+10. **Release build.** Switch to the live key and confirm nothing else changed.
+    Release builds log only `WARN`/`ERROR`.
 
-### Delete my data: rejoining after 24 hours
+## API reference
 
-For 24 hours after a deletion, that email and that device cannot register, and
-the experience stays silent on the device (this survives a reinstall). After
-24 hours the person may join again as a **brand-new participant** with no
-connection to the old profile: on the next `configure()` or return to the
-foreground the SDK clears what it held for the old profile, registers the
-device afresh, and the person sees the normal email-capture flow. There is
-nothing for the host app to do.
+Package `com.avafli.avaflisdk`. Everything the host app uses is below; the
+remaining public types (`domain.Giveaway`, `domain.SdkConfig`,
+`domain.PrizeClaimBlock`, `domain.StreakEngine`, …) are wire models used by the
+drawer and are not needed for integration.
 
-## API Reference
+### `object Avafli`
 
-### Core Methods
+| Member | Description |
+| --- | --- |
+| `configure(configuration: AvafliConfiguration)` | Single entry point. Registers the device, then auto-opens per `autoOpen`. Safe to call again (e.g. after sign-in). |
+| `present(activity: Activity, callback: ((Result<DailyEntryGrant>) -> Unit)? = null)` | Open the drawer now. See [Controlling presentation](#controlling-presentation). |
+| `holdAutoOpen()` / `releaseAutoOpen()` | Defer / resume the once-a-day auto-open. Safe before `configure()`. |
+| `registerForPushNotifications(context: Context)` | Fetch the FCM token and register it; requests `POST_NOTIFICATIONS` on Android 13+ when given an Activity. No-op if `enablePushReminders` is `false`. |
+| `onNewToken(token: String)` | Forward a (new) FCM token. No-op if `enablePushReminders` is `false`. |
+| `suspend optOut(): Result<Unit>` | Right-to-delete erasure + 24-hour silence on this device. See [Account deletion](#account-deletion). |
 
-| Method | Returns | Description |
-| ------ | ------- | ----------- |
-| `Avafli.configure(config)` | `Unit` | Initialize the SDK; the experience auto-opens once per day (per `autoOpen`) |
-| `Avafli.present(activity, callback?)` | `Unit` | Open the experience now (publisher-initiated); see [Controlling when the drawer opens](#controlling-when-the-drawer-opens) |
-| `Avafli.holdAutoOpen()` | `Unit` | Defer the once-a-day auto-open (safe before `configure()`) |
-| `Avafli.releaseAutoOpen()` | `Unit` | Clear the hold and re-run the auto-open check |
-| `Avafli.optOut()` | `suspend Result<Unit>` | RTD opt-out — erase the person's data and silence the experience (they may rejoin as a new participant after 24 hours) |
+### `data class AvafliConfiguration`
 
-### Push Notifications
+| Parameter | Type | Default | Description |
+| --- | --- | --- | --- |
+| `context` | `Context` | required | Any context; the SDK keeps `applicationContext` |
+| `apiKey` | `String` | required | `avafli_live_…` or `avafli_test_…` |
+| `user` | `AvafliUser` | required | Your user, or `AvafliUser.GUEST` |
+| `options` | `AvafliOptions` | `AvafliOptions()` | See below |
+| `autoOpen` | `AvafliAutoOpen` | `ALWAYS` | `ALWAYS`, `RETURNING_USERS_ONLY`, `NEVER` |
+| `environment` | `AvafliEnvironment` | `Production` | The only value; there is no separate staging backend — use the sandbox key instead |
 
-| Method | Returns | Description |
-| ------ | ------- | ----------- |
-| `Avafli.registerForPushNotifications(context)` | `Unit` | Register for push notifications |
-| `Avafli.onNewToken(token)` | `Unit` | Forward an FCM token to Avafli |
+### `data class AvafliUser`
 
-For detailed API documentation, see the [Avafli Docs](https://sdk.avafli.com/android).
+| Parameter | Type | Default | Description |
+| --- | --- | --- | --- |
+| `id` | `String` | required | Your stable user id (the only required field). `AvafliUser.GUEST` for no signed-in user |
+| `firstName`, `lastName` | `String` | `""` | Optional; collected at prize claim if missing |
+| `phone` | `String?` | `null` | Optional, E.164 |
+| `email` | `String?` | `null` | Optional; pre-fills and locks the capture field. Never records consent |
 
-## Links
+### `data class AvafliOptions`
 
-- **Dashboard:** [https://sdk.avafli.com/dashboard](https://sdk.avafli.com/dashboard)
-- **Documentation:** [https://sdk.avafli.com/android](https://sdk.avafli.com/android)
-- **Support:** [info@avafli.com](mailto:info@avafli.com)
+| Parameter | Type | Default | Description |
+| --- | --- | --- | --- |
+| `debugLogging` | `Boolean` | `false` | `DEBUG`/`INFO` lines on Logcat tag `Avafli-SDK` (`WARN`/`ERROR` always log) |
+| `analyticsAdapter` | `AnalyticsAdapter?` | `null` | Receives the events in [Analytics](#analytics) |
+| `enablePushReminders` | `Boolean` | `true` | Gates `registerForPushNotifications()` / `onNewToken()` |
+| `enableCertificatePinning` | `Boolean` | `true` | Pins the backend's CA chain (Google Trust Services root + intermediate) |
+| `networkTimeoutSeconds` | `Long` | `30` | Connect/read/write timeout |
+
+### `enum class AvafliAutoOpen` — `ALWAYS`, `RETURNING_USERS_ONLY`, `NEVER`
+
+### `data class DailyEntryGrant` (delivered to the `present()` callback)
+
+`entries: Int`, `streakDay: Int`, `totalEntries: Int`, `weeklyBonusEntries: Int?`,
+`monthlyBonusEntries: Int?`, `milestone: Milestone?` (`day`, `bonusEntries`, `badge`), `doubled: Boolean`.
+
+### `sealed class AvafliError : Exception`
+
+| Error | When |
+| --- | --- |
+| `NotInitialized` | `present()` / `optOut()` before `configure()` |
+| `InvalidPublisherKey` | Registration attempted without a key (declared; not reachable through the public API) |
+| `NoGiveaway` | `present()` with no active giveaway and no pending claim |
+| `OptedOut` | `present()` for a user who deleted their data (within the 24 hours) |
+| `ServiceUnavailable` | Publisher account or key suspended/revoked — the SDK goes quiet |
+| `GeoBlocked` | Request from outside the US (or location unverifiable) |
+| `AlreadyClaimed` | Declared for the "already claimed today" case; 3.3.0 handles that server answer internally and never raises it |
+| `NetworkError` | Transport failure (offline, timeout) — retried same-day automatically |
+| `ServerError(code, message)` | Non-2xx from the backend after the SDK's own retries |
+| `TokenRefreshFailed` | Session could not be refreshed; the drawer shows a retry state |
+| `RegistrationFailed(message)` | Malformed registration response |
+| `Unknown(message, cause)` | Anything else (e.g. `present()` on a finishing Activity) |
+
+### `interface services.analytics.AnalyticsAdapter`
+
+`trackEvent(name: String, params: Map<String, Any?> = emptyMap())`,
+`trackScreenView(screenName: String)`, `setUserProperty(key: String, value: String)`.
+`ConsoleAnalyticsAdapter` is a ready-made Logcat implementation.
 
 ---
+
+## Example app
+
+[`example/`](example) is the quick start above as a runnable project:
+`ExampleApplication` configures the SDK, `MainActivity` has an "Open Avafli"
+button that calls `Avafli.present(this)`. Put your sandbox and live keys in
+`ExampleApplication.kt` and run `./gradlew :example:assembleDebug`.
 
 © 2026 Avafli. All Rights Reserved.

@@ -37,6 +37,8 @@ android {
 
     buildFeatures {
         compose = true
+        // BuildConfig.DEBUG picks the sandbox key in debug builds (ExampleApplication).
+        buildConfig = true
     }
 }
 

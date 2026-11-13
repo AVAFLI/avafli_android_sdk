@@ -5,10 +5,12 @@ import android.content.Context
 /**
  * Configuration for the Avafli SDK.
  *
- * @param context Application or Activity context
- * @param apiKey Your publisher API key
- * @param environment Target environment (default: Production)
- * @param user The authenticated user for this session
+ * @param context Any context — the SDK keeps only `applicationContext`
+ * @param apiKey Your publisher API key (`avafli_live_…` for release builds,
+ *   `avafli_test_…` sandbox key for debug builds)
+ * @param environment Backend to talk to. [AvafliEnvironment.Production] is the
+ *   only value; test against the sandbox key, not a separate environment
+ * @param user The signed-in user (only `id` is required) or [AvafliUser.GUEST]
  * @param options Additional configuration options
  * @param autoOpen When the SDK auto-opens the experience (default
  *   [AvafliAutoOpen.ALWAYS] — once per calendar day, today's behavior). See
